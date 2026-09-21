@@ -17,8 +17,45 @@ node_modules/
 # VS Code
 .vscode/
 
+# .NET build output (all projects and configurations)
+[Bb]in/
+[Oo]bj/
+.verify-bin/
+
+# Visual Studio and local IDE state
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test and coverage output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Local runtime databases and SQLite sidecars
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+
+# Machine-specific settings; keep shared appsettings files tracked
+appsettings.Local.json
+appsettings.*.Local.json
+
 # Logs
 *.log
+[Ll]ogs/
 
 # Editor backups
 *~

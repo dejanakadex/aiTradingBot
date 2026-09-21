@@ -1,10 +1,21 @@
 # TrdBot
 
-AI-assisted trading bot starter repository (layered .NET 9 solution).
+AI-assisted trading bot (layered .NET 9 solution).
 
-This repo provides a scaffold and several implemented components to accelerate development
-of a trading engine: domain models, application interfaces, an event-driven pipeline,
-EF Core persistence (SQLite), a feature engine and a deterministic pattern detector.
+The solution includes an event-driven analysis/strategy/risk pipeline, conditional IBKR
+integration, exit management, EF Core persistence (SQLite), and a Blazor dashboard.
+
+## Review and development plan
+
+Ongoing work uses one branch: `trading-bot-v2`.
+
+- [Detailed project review](docs/PROJECT_REVIEW.md) — code findings, evidence, test gaps and verification limits (Croatian).
+- [Proposed v2 plan](docs/V2_PLAN.md) — implementation phases and acceptance criteria, pending confirmation (Croatian).
+
+The review found gaps in daily-risk inputs, broker/exit lifecycle handling and data freshness.
+Existing safety components should be read together with those findings. The review/cleanup
+commit changes repository hygiene and documentation only. Build/test results have not been
+verified in the review environment because the .NET SDK was unavailable.
 
 ## Quick start
 
@@ -51,8 +62,36 @@ dotnet test TradingBot.Tests/TradingBot.Tests.csproj
 
 ## Configuration
 
-- Database connection string: set in `TradingBot.Web/appsettings.json` or provide an environment variable `ConnectionStrings:TradingBot`.
-- Ensure the configured SQLite data directory exists if using a file path.
+- Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
+- The persistence registration creates the configured SQLite directory; startup applies migrations.
+- Supply account-specific configuration and API keys through environment variables or your local secret configuration. Keep shared settings free of credentials.
+- `appsettings.Local.json` patterns are ignored for local use, but the host does not automatically load those files; use an explicitly configured provider or environment variables.
+
+### IBKR build prerequisite
+
+The real adapter is compiled only when the official `CSharpAPI.dll` exists. The default
+`IbkrApiDll` path is `C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll`.
+An explicit path can be supplied when building/testing:
+
+```powershell
+dotnet build TradingBot.sln -p:IbkrApiDll="C:\path\to\CSharpAPI.dll"
+dotnet test TradingBot.sln -p:IbkrApiDll="C:\path\to\CSharpAPI.dll"
+```
+
+Without that DLL, the unavailable/fallback broker services are used. Passing tests in that
+configuration does not verify the real adapter. Generated copies of broker DLLs in `bin`
+are not a substitute for this prerequisite.
+
+### Repository hygiene
+
+`bin`, `obj`, `.vs`, `.verify-bin`, test/coverage output, logs and runtime SQLite databases
+are ignored. Restore/build regenerates build output; migrations initialize a new database.
+Source files, migrations, shared settings and web assets remain tracked.
+
+Before switching an existing checkout to the cleanup branch, stop the app and back up your
+local `TradingBot.Web/Data/trading.db` and its SQLite sidecars together. Those files were
+previously tracked, so switching branches can remove them. The cleanup removes them from
+the current Git tree and does not erase earlier commits.
 
 ## Project layout (key folders)
 
@@ -69,21 +108,21 @@ dotnet test TradingBot.Tests/TradingBot.Tests.csproj
 - Logging wired with Microsoft Logging + NLog config (`TradingBot.Web/nlog.config`).
 - Persistence implemented with EF Core + SQLite; migrations present.
 - Eventing via bounded `System.Threading.Channels` (`TradingEventBus`).
-- `FeatureEngine` and `PatternDetector` implemented; unit tests exist and pass locally.
+- `FeatureEngine` and `PatternDetector` implemented; unit tests exist. See the review for current verification limits.
 - `MarketSnapshotService` builds structured AI-ready market context across 1m, 5m and 15m candles without making trade decisions.
 - `OpenAiMarketAnalyzer` evaluates structured market snapshots with schema-constrained AI output and persists analysis records; unavailable or invalid AI results default to `REJECT` / no trade.
 - `OpenAiTradeCritic` reviews proposed AI trade analysis for rejection reasons and persists critic results; AI errors, timeouts or malformed responses default to rejected.
 - `StrategyEngine` applies configurable strategy rules, calculates entry/stop/target/reward-risk and persists every approved or rejected setup; it does not submit orders or calculate final account position size.
-- `RiskEngine` and `PositionSizer` deterministically enforce account, exposure and loss limits before any order can be considered; uncertainty defaults to rejected and every risk decision is persisted.
-- `OrderManager` submits only already-approved orders through the execution abstraction, tracks broker status/fills, persists broker order IDs and executions, and prevents duplicate submissions.
+- `RiskEngine` and `PositionSizer` implement deterministic account, exposure and loss checks. Production history wiring and the zero-capacity sizing case still need correction (R01–R02).
+- `OrderManager` implements approved-order submission, broker status/fill persistence and duplicate checks. Crash recovery, real partial-fill handling and exit coordination have open findings (R03–R07).
 - Broker-state reconciliation gates startup readiness: trading remains disabled until IBKR positions/open orders are compared with SQLite open trades/orders and reconciled.
 - Market data subscription startup waits for the engine to become `Ready`, seeds configured historical candles and subscribes to configured symbols/timeframes for live candle flow. Defaults are `SPY` on `1m`, `5m` and `15m`.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.
 - The Blazor dashboard shows engine/broker/market/AI/risk/P&L status with realtime refresh and control actions for pause, resume, close-current-position request and kill switch.
 - Blazor analytics pages show recent trades and pattern performance with filters for symbol, pattern, date range, market regime, VWAP context, 15m trend and AI decisions.
 - Paper trading safety mode adds explicit operating modes: `AnalysisOnly`, `PaperTrading` and `LiveTrading`. The default is `AnalysisOnly`, and live trading requires explicit configuration.
-- Post-trade analysis storage records the complete decision context for completed trades, calculates P/L, fees, MFE/MAE and holding duration, and exposes read-only performance/losing-condition analysis services. Recommendations require manual approval and never change production strategy configuration automatically.
-- Operational reliability pass added dependency health checks, readiness endpoints, startup configuration validation, graceful shutdown logging, visible database/IBKR/OpenAI failure paths, bounded approved-plan channel overflow handling and stronger concurrent duplicate-order protection. Trading continues to fail closed when dependencies are unavailable or uncertain.
+- Post-trade analysis storage and query services exist, including P/L, fees, MFE/MAE and holding duration. Automatic invocation from the completed-trade lifecycle is still missing (R11).
+- Dependency health checks, readiness endpoints, startup validation, shutdown logging and bounded channels are implemented. The review identifies remaining gaps in fail-closed behavior and operational controls.
 - AI usage optimization gates OpenAI calls with deterministic pattern quality before analysis and calls the AI critic only for valid high-confidence BUY analyzer results. Skipped calls are persisted as pipeline decision records, and OpenAI token usage is stored in SQLite for dashboard statistics.
 - `IIbkrAdapter` boundary, `IbkrConnectionService` and a conditional concrete IB/TWS adapter are implemented. The real adapter is compiled when the official TWS C# API DLL is installed at the configured path.
 
@@ -176,19 +215,19 @@ Short technical notes for Codex
 - Market snapshots: `IMarketSnapshotService` combines 15m broader direction, 5m setup/pullback context and 1m entry timing into a structured `MarketSnapshot` for later AI analysis. It includes candles, features, patterns, support/resistance candidates, trend, volume, volatility, current price when available and spread when supplied.
 - AI analysis: `IAiMarketAnalyzer` is analysis-only. It sends structured snapshot data to OpenAI using JSON schema response format, validates the response, logs duration/token usage when available, persists the analysis to SQLite and defaults to no trade (`REJECT`) on unavailable or invalid AI output.
 - AI trade criticism: `IAiTradeCritic` is rejection-focused. It reviews the snapshot, detected pattern and AI analysis for risks such as higher-timeframe weakness, sell volume, false breakout risk, poor reward/risk, excessive volatility, poor liquidity, large spread, timeframe conflicts and weak pattern structure. It never submits orders and defaults to rejected when unavailable or invalid.
-- AI cost controls: `TradingSettings.MinimumPatternQualityForAiAnalysis` defaults to `0.6`; candidates below this deterministic `PatternCandidate.Confidence` threshold skip OpenAI and persist `PatternRejectedBeforeAi`. Candidates at or above threshold persist `PatternSentToAi` and call the market analyzer. The critic runs only when analyzer action is `BUY`, analyzer confidence is at least `TradingSettings.MinimumAiConfidence`, and the analyzer result is not a safe fallback. WAIT, REJECT, low-confidence BUY, timeout and invalid analyzer results stop before critic and persist `CriticSkipped`.
+- AI cost controls: `PatternQualityGate` uses `PatternDetectorOptions.MinimumTradeSetupQuality` and per-pattern thresholds to decide whether a candidate reaches OpenAI. `TradingSettings.MinimumPatternQualityForAiAnalysis` remains in settings/telemetry but is not the active gate. The critic runs only for an actionable, sufficiently confident BUY; WAIT, REJECT and safe fallbacks skip it.
 - AI context sizing: `OpenAiSettings.MarketContext` controls rich snapshot candle history sent to AI. Defaults are 60 one-minute candles, 50 five-minute candles and 40 fifteen-minute candles while preserving OHLCV, indicators, volume, volatility, VWAP, support/resistance, trend and pattern context.
-- AI usage telemetry: each actual OpenAI API attempt records an `AiApiUsageRecord` with request type (`MarketAnalyzer` or `TradeCritic`), symbol, pattern, timestamp, input/output/total tokens, cached input tokens when present, duration, model and success/failure. The dashboard shows today's AI calls, analyzer/critic split and token totals. Pricing fields are configurable but default to zero and no model prices are hard-coded.
+- AI usage telemetry: analyzer/critic calls store token, model, prompt-version, duration and success/failure records. Retries currently share one record per completed service call rather than one per HTTP attempt (R15). Dashboard pricing is configurable and is not an authoritative bill.
 - Strategy engine: `IStrategyEngine` receives the snapshot, pattern, AI analysis and critic result. It creates a `TradeSignal` only when configured rules pass for AI confidence, pattern quality, critic approval, reward/risk, spread, market regime and trading hours. It persists all decisions, including rejected setups and reasons, and leaves final position sizing to later risk management.
-- Risk engine: `IRiskEngine` receives the strategy decision, IBKR account info, current broker positions, today's completed trades and open orders. It is deterministic and cannot be overridden by AI. `IPositionSizer` sizes from maximum allowed risk divided by entry-stop distance, then enforces maximum position value, buying power and leverage. `IRiskEngine` also enforces trading enabled, daily loss, open position and consecutive-loss limits, persists every `RiskDecision` and defaults to `Reject` when inputs are unavailable.
-- Order management: `IOrderManager` receives only already-approved `OrderRequest` objects and uses `IOrderExecutionService` as the broker execution abstraction. It supports limit buys, stop-loss/take-profit bracket-style workflows through separate broker-side submissions, cancel, status lookup and broker status/fill updates. It does not assume fills after submission, tracks partial fills, persists broker order IDs, average fill price and commissions when available, records executions and rejects safely on adapter disconnects.
+- Risk engine: `IRiskEngine` accepts strategy, account, positions, completed trades and open orders; `IPositionSizer` calculates quantity from risk and exposure limits. The production caller currently supplies an empty completed-trade list, and zero leverage capacity is filtered out by the sizer (R01–R02).
+- Order management: `IOrderManager` supports approved limit buys, parent-linked bracket orders, cancellation, status and execution persistence. The conditional broker adapter and lifecycle require the partial-fill, cancellation, metadata and idempotency corrections in R03–R07.
 - Broker reconciliation: startup state moves through `Starting`, `Connecting`, `Reconciling`, then `Ready` only when broker positions/open orders match SQLite open trades/orders. Mismatches such as broker-only SPY shares or local-only open orders keep the engine `Degraded` or `Faulted` with trading disabled. The web app exposes `GET /api/reconciliation/status` for readiness/status monitoring.
 - Background pipeline: hosted services consume channels with cancellation propagation and per-message exception isolation. `CandlePatternDetectionBackgroundService` consumes candles and publishes patterns. `PatternDecisionBackgroundService` gates on engine `Ready` plus `TradingSettings.Enabled`, builds snapshots and runs AI/critic/strategy/risk before publishing approved plans. `ApprovedOrderExecutionBackgroundService` consumes approved plans and calls `IOrderManager`, which uses the centralized execution guard before any broker submission.
-- Dashboard: the Blazor home page is a functional operations dashboard backed by `IDashboardService`. It shows application, IBKR and trading engine state, current market/position context, latest AI/critic info, daily trade statistics, exposure, leverage and daily loss versus limit. UI controls call `ITradingControlService`; destructive actions require browser confirmation, are logged and persisted to `BotSessions`, and never call IBKR directly.
+- Dashboard: the Blazor home page shows engine, broker, market, AI, risk and position status. Controls call `ITradingControlService` and persist audit records. Close Current Position currently pauses and records a request without submitting an exit; reconnect can override a manual pause/kill state (R08).
 - Trade analytics: `/trades` lists recent trades with timestamp, symbol, pattern, AI confidence, entry/exit, quantity, gross P/L, fees, net P/L and result. `/patterns` shows aggregate pattern statistics plus decision audit rows linking pattern candidates, AI/critic/strategy/risk decisions and actual outcomes. Read services use bounded EF Core projections/grouping rather than loading whole tables for statistics.
-- Operating modes: startup logs the selected operating mode. `AnalysisOnly` runs the complete analysis pipeline but stores hypothetical trades instead of calling `IOrderManager`. `PaperTrading` allows broker submission only when `IbkrSettings.AccountId` matches `PaperAccountId`. `LiveTrading` is blocked unless `TradingSettings.LiveTradingExplicitlyEnabled` is true. Mode changes go through `IOperatingModeService`, are logged and persisted, and AI components have no access to change the mode.
-- Post-trade analysis: `IPostTradeAnalysisService` persists completed-trade context into `PostTradeAnalysisRecords`, including `MarketSnapshot`, `PatternCandidate`, AI analysis, critic analysis, strategy/risk decisions, order data, execution data and calculated trade result metrics. Query methods answer pattern success questions such as Double Bottom overall, Double Bottom above VWAP and Hammer with bullish 15m trend through EF Core filters/grouping. Losing-condition summaries and improvement recommendations are analysis-only; they do not mutate configuration or strategy code.
-- Reliability: health checks distinguish web liveness, SQLite connectivity, IBKR connection status, trading-engine readiness and OpenAI configuration availability. Startup validates option ranges and blocks accidental live mode unless explicitly enabled. Reconciliation exceptions mark the engine `Faulted` with trading disabled. OpenAI analysis/critic components return no-trade/reject on request, parsing or persistence uncertainty. Order submission uses idempotency keys plus keyed in-process locks to prevent concurrent duplicate submissions.
+- Operating modes: `AnalysisOnly` stores hypothetical trades instead of submitting broker orders. `PaperTrading` requires a broker environment verified as paper; `LiveTrading` additionally requires `LiveTradingExplicitlyEnabled`. Runtime mode/account transitions need the lifecycle corrections described in R08.
+- Post-trade analysis: `IPostTradeAnalysisService` can persist complete context and calculate P/L, fees, MFE/MAE and holding duration. Its store method has no production caller yet (R11); read-only analysis does not automatically change strategy configuration.
+- Reliability: health checks separate process liveness, database connectivity, broker connection, trading readiness and OpenAI configuration. Startup validates options. Existing fail-closed and idempotency mechanisms have the integration gaps documented in the review; they are not a completed verification of trading safety.
 
 What to give Codex for fastest, highest-quality results
 
@@ -200,10 +239,10 @@ What to give Codex for fastest, highest-quality results
 
 Suggested next tasks
 
-- Validate the real IBKR market-data subscription flow during market hours or with delayed data permissions enabled.
-- Expand `PatternDetector` unit tests to cover negative and edge cases.
-- Add integration tests that simulate streaming `MarketBar` data and assert persistence + event bus publication.
-- Connect `MarketSnapshotService` and `IAiMarketAnalyzer` to the strategy/risk flow once the final decision contract is defined.
+- Confirm the [v2 plan](docs/V2_PLAN.md).
+- Establish a reproducible build/test baseline, including the conditional real IBKR adapter.
+- Fix risk/lifecycle findings and add end-to-end callback/restart scenarios.
+- Validate timestamps, quotes and replay before extending data collection and model evaluation.
 
 ## Contact points in the code (where to modify)
 
@@ -228,8 +267,3 @@ dotnet test TradingBot.Tests/TradingBot.Tests.csproj --filter FullyQualifiedName
 ## License
 
 See `LICENSE` in repository root.
-
----
-
-If you'd like, I will commit this `README.md` update and push a branch; or I can also scaffold a concrete `IIbkrAdapter` once you add the official IBApi package. Tell me which you prefer.
-
