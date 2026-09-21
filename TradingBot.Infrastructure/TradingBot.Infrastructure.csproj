@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TradingBot.Application\TradingBot.Application.csproj" />
+    <ProjectReference Include="..\TradingBot.Domain\TradingBot.Domain.csproj" />
+    <ProjectReference Include="..\TradingBot.Persistence\TradingBot.Persistence.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <IbkrApiDll Condition="'$(IbkrApiDll)' == ''">C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll</IbkrApiDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.14" />
+    <PackageReference Include="Google.Protobuf" Version="3.29.5" Condition="Exists('$(IbkrApiDll)')" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(IbkrApiDll)')">
+    <DefineConstants>$(DefineConstants);IBKR_API_AVAILABLE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(IbkrApiDll)')">
+    <Reference Include="CSharpAPI">
+      <HintPath>$(IbkrApiDll)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

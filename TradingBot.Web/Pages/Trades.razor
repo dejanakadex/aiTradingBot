@@ -1,0 +1,62 @@
+@page "/trades"
+@inject TradingBot.Application.Interfaces.ITradeDashboardService TradeDashboardService
+
+<PageTitle>Trades</PageTitle>
+
+<section class="table-page">
+    <header class="dashboard-header">
+        <div>
+            <h1>Trades</h1>
+            <p>Recent completed and open trades</p>
+        </div>
+    </header>
+
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Symbol</th>
+                    <th>Pattern</th>
+                    <th>AI Conf.</th>
+                    <th>Entry</th>
+                    <th>Exit</th>
+                    <th>Qty</th>
+                    <th>Gross P/L</th>
+                    <th>Fees</th>
+                    <th>Net P/L</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var trade in _trades)
+                {
+                    <tr>
+                        <td>@trade.TimestampUtc.ToLocalTime().ToString("g")</td>
+                        <td>@trade.Symbol</td>
+                        <td>@trade.Pattern</td>
+                        <td>@FormatPercent(trade.AiConfidence)</td>
+                        <td>@trade.Entry.ToString("0.####")</td>
+                        <td>@(trade.Exit?.ToString("0.####") ?? "-")</td>
+                        <td>@trade.Quantity.ToString("0.####")</td>
+                        <td>@trade.GrossProfitLoss.ToString("0.00")</td>
+                        <td>@trade.Fees.ToString("0.00")</td>
+                        <td>@trade.NetProfitLoss.ToString("0.00")</td>
+                        <td>@trade.TradeResult</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<TradingBot.Domain.Models.TradeDashboardRow> _trades = Array.Empty<TradingBot.Domain.Models.TradeDashboardRow>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _trades = await TradeDashboardService.GetTradesAsync();
+    }
+
+    private static string FormatPercent(decimal? value) => value.HasValue ? value.Value.ToString("P0") : "-";
+}

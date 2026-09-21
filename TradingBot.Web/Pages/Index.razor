@@ -1,0 +1,387 @@
+@page "/"
+@implements IDisposable
+@using System.Globalization
+@using TradingBot.Domain.Enums
+@inject TradingBot.Application.Interfaces.IDashboardService DashboardService
+@inject TradingBot.Application.Interfaces.ITradingControlService TradingControlService
+@inject IJSRuntime Js
+
+<PageTitle>Trading Dashboard</PageTitle>
+
+<div class="dashboard-shell">
+    <header class="dashboard-header">
+        <div>
+            <h1>Trading Dashboard</h1>
+            <p>@(_snapshot?.UpdatedAtUtc.ToLocalTime().ToString("g"))</p>
+        </div>
+        <div class="state-strip">
+            <span class="state-pill">@(_snapshot?.ApplicationState ?? "Loading")</span>
+            <span class="state-pill state-mode">@(_snapshot?.OperatingMode ?? "AnalysisOnly")</span>
+            <span class="state-pill">@(_snapshot?.TradingEngineState.ToString() ?? "Starting")</span>
+            <span class="@TradingClass">@TradingLabel</span>
+        </div>
+    </header>
+
+    <section class="control-bar">
+        <button class="btn btn-secondary" @onclick="PauseTradingAsync">Pause Trading</button>
+        <button class="btn btn-primary" @onclick="ResumeTradingAsync">Resume Trading</button>
+        <button class="btn btn-warning" @onclick="CloseCurrentPositionAsync">Close Current Position</button>
+        <button class="btn btn-danger" @onclick="KillSwitchAsync">Kill Switch</button>
+    </section>
+
+    <section class="@($"pipeline-progress progress-shell-{ProgressShellState}")" aria-label="Candle to order progress">
+        <div class="progress-copy">
+            <strong>@CurrentFlowTitle</strong>
+            <span>@CurrentFlowStatus</span>
+        </div>
+        <div class="progress-track">
+            @{
+                var steps = BuildFlowSteps();
+            }
+            @for (var i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                <div class="@($"progress-step progress-{step.State}")">
+                    <span class="progress-dot"></span>
+                    <span class="progress-label">@step.Title</span>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="dashboard-grid">
+        <div class="panel">
+            <h2>State</h2>
+            <dl>
+                <dt>IBKR</dt><dd>@IbkrLabel</dd>
+                <dt>Mode</dt><dd>@(_snapshot?.OperatingMode ?? "AnalysisOnly")</dd>
+                <dt>Engine</dt><dd>@(_snapshot?.TradingEngineState.ToString() ?? "Starting")</dd>
+                <dt>Trading</dt><dd>@TradingLabel</dd>
+                <dt>Verification</dt><dd>@(_snapshot?.IbkrEnvironmentVerification ?? "Unknown")</dd>
+                <dt>Account</dt><dd>@(_snapshot?.ConnectedAccountId ?? "-")</dd>
+                <dt>Reconciliation</dt><dd>@(_snapshot?.ReconciliationState ?? "Starting")</dd>
+                @if (!string.IsNullOrWhiteSpace(_snapshot?.ReconciliationMessage))
+                {
+                    <dt>Reason</dt><dd>@_snapshot.ReconciliationMessage</dd>
+                }
+                <dt>Kill switch</dt><dd>@(_snapshot?.KillSwitchActive == true ? "Active" : "Off")</dd>
+                <dt>Live explicit</dt><dd>@(_snapshot?.LiveTradingExplicitlyEnabled == true ? "Yes" : "No")</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Market</h2>
+            <dl>
+                <dt>Symbol</dt><dd>@(_snapshot?.CurrentSymbol ?? "-")</dd>
+                <dt>Price</dt><dd>@FormatMoney(_snapshot?.CurrentPrice)</dd>
+                <dt>Position</dt><dd>@FormatNumber(_snapshot?.CurrentPosition)</dd>
+                <dt>Data</dt><dd>@(_snapshot?.MarketDataStatus ?? "No candles yet")</dd>
+                <dt>Configured</dt><dd>@(_snapshot?.ConfiguredMarketData ?? "-")</dd>
+                <dt>Latest candle</dt><dd>@FormatDateTime(_snapshot?.LatestCandleUtc)</dd>
+                <dt>Candles today</dt><dd>@(_snapshot?.CandlesToday.ToString() ?? "0")</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Context</h2>
+            <dl>
+                <dt>15m trend</dt><dd>@(_snapshot?.FifteenMinuteTrend ?? "Unknown")</dd>
+                <dt>5m context</dt><dd>@(_snapshot?.FiveMinuteMarketContext ?? "Unknown")</dd>
+                <dt>1m pattern</dt><dd>@(_snapshot?.OneMinuteDetectedPattern ?? "None")</dd>
+            </dl>
+        </div>
+
+        <div class="panel pattern-gate-panel">
+            <h2>Pre-AI Gate</h2>
+            <div class="gate-summary">
+                <div>
+                    <span>Sent to AI</span>
+                    <strong>@(_snapshot?.PatternsSentToAiToday.ToString() ?? "0")</strong>
+                </div>
+                <div>
+                    <span>Rejected before AI</span>
+                    <strong>@(_snapshot?.PatternsRejectedBeforeAiToday.ToString() ?? "0")</strong>
+                </div>
+            </div>
+            <dl>
+                <dt>Latest</dt><dd>@FormatDateTime(_snapshot?.LatestPipelineDecisionUtc)</dd>
+                <dt>Decision</dt><dd>@(_snapshot?.LatestPipelineDecision ?? "None")</dd>
+            </dl>
+            @if (_snapshot?.RecentPatternGateRejections?.Count > 0)
+            {
+                <div class="gate-rejections">
+                    @foreach (var rejection in _snapshot.RecentPatternGateRejections)
+                    {
+                        <div class="gate-rejection">
+                            <div>
+                                <strong>@FormatGateTitle(rejection)</strong>
+                                <span>@FormatDateTime(rejection.TimestampUtc)</span>
+                            </div>
+                            <p>@rejection.Reason</p>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="empty-note">No pre-AI rejections today.</p>
+            }
+        </div>
+
+        <div class="panel">
+            <h2>AI Review</h2>
+            <dl>
+                <dt>Analyzer model</dt><dd>@(_snapshot?.AnalyzerModel ?? "-")</dd>
+                <dt>Analyzer prompt</dt><dd>@(_snapshot?.AnalyzerPrompt ?? "-")</dd>
+                <dt>Analyzer decision</dt><dd>@(_snapshot?.LatestAnalyzerDecision ?? "None")</dd>
+                <dt>Analysis</dt><dd>@(_snapshot?.LatestAiAnalysis ?? "None")</dd>
+                <dt>Confidence</dt><dd>@FormatPercent(_snapshot?.AnalyzerConfidence)</dd>
+                <dt>Analyzer today</dt><dd>@FormatAnalyzerBreakdown()</dd>
+                <dt>Critic model</dt><dd>@(_snapshot?.CriticModel ?? "-")</dd>
+                <dt>Critic prompt</dt><dd>@(_snapshot?.CriticPrompt ?? "-")</dd>
+                <dt>Critic</dt><dd>@(_snapshot?.LatestCriticDecision ?? "None")</dd>
+                <dt>Pipeline</dt><dd>@(_snapshot?.LatestPipelineDecision ?? "None")</dd>
+                @if (!string.IsNullOrWhiteSpace(_snapshot?.LatestPipelineDecisionReason))
+                {
+                    <dt>Pipeline reason</dt><dd>@_snapshot.LatestPipelineDecisionReason</dd>
+                }
+                <dt>Strategy</dt><dd>@(_snapshot?.LatestStrategyDecision ?? "None")</dd>
+                <dt>Risk</dt><dd>@(_snapshot?.LatestRiskDecision ?? "None")</dd>
+                <dt>Order</dt><dd>@(_snapshot?.LatestOrderStatus ?? "None")</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>AI Usage</h2>
+            <dl>
+                <dt>Calls</dt><dd>@(_snapshot?.AiCallsToday.ToString() ?? "0")</dd>
+                <dt>Analyzer / critic</dt><dd>@(_snapshot?.AnalyzerCallsToday.ToString() ?? "0") / @(_snapshot?.CriticCallsToday.ToString() ?? "0")</dd>
+                <dt>Critic skipped</dt><dd>@(_snapshot?.CriticSkippedToday.ToString() ?? "0")</dd>
+                <dt>Input tokens</dt><dd>@(_snapshot?.InputTokensToday.ToString() ?? "0")</dd>
+                <dt>Output tokens</dt><dd>@(_snapshot?.OutputTokensToday.ToString() ?? "0")</dd>
+                <dt>Analyzer tokens</dt><dd>@(_snapshot?.AnalyzerInputTokensToday.ToString() ?? "0") / @(_snapshot?.AnalyzerOutputTokensToday.ToString() ?? "0")</dd>
+                <dt>Critic tokens</dt><dd>@(_snapshot?.CriticInputTokensToday.ToString() ?? "0") / @(_snapshot?.CriticOutputTokensToday.ToString() ?? "0")</dd>
+                <dt>AI cost</dt><dd>@FormatMoney(_snapshot?.AiEstimatedCostToday)</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Today</h2>
+            <dl>
+                <dt>Trades</dt><dd>@(_snapshot?.TodaysTrades.ToString() ?? "0")</dd>
+                <dt>Wins</dt><dd>@(_snapshot?.Wins.ToString() ?? "0")</dd>
+                <dt>Losses</dt><dd>@(_snapshot?.Losses.ToString() ?? "0")</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>P/L</h2>
+            <dl>
+                <dt>Gross</dt><dd>@FormatMoney(_snapshot?.GrossProfitLoss)</dd>
+                <dt>Fees</dt><dd>@FormatMoney(_snapshot?.Fees)</dd>
+                <dt>Net</dt><dd>@FormatMoney(_snapshot?.NetProfitLoss)</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Exposure</h2>
+            <dl>
+                <dt>Exposure</dt><dd>@FormatMoney(_snapshot?.CurrentExposure)</dd>
+                <dt>Leverage</dt><dd>@FormatNumber(_snapshot?.CurrentLeverage)</dd>
+                <dt>Daily loss</dt><dd>@FormatMoney(_snapshot?.DailyLoss) / @FormatMoney(_snapshot?.DailyLossLimit)</dd>
+            </dl>
+        </div>
+    </section>
+</div>
+
+@code {
+    private TradingBot.Domain.Models.DashboardSnapshot? _snapshot;
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource _cts = new();
+    private string? _loadError;
+
+    private string IbkrLabel => _snapshot?.IbkrConnectionState
+        ?? (_loadError == null ? "Loading" : $"Dashboard error: {_loadError}");
+    private string TradingLabel => _snapshot?.TradingEnabled == true ? "Enabled" : "Disabled";
+    private string TradingClass => _snapshot?.TradingEnabled == true ? "state-pill state-ok" : "state-pill state-off";
+    private TradingBot.Domain.Models.TradingPipelineActivitySnapshot PipelineActivity => _snapshot?.PipelineActivity ?? new();
+    private string CurrentFlowTitle => PipelineActivity.Title;
+    private string CurrentFlowStatus => BuildCurrentFlowStatus();
+    private string ProgressShellState => CssState(PipelineActivity.State);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        _ = RefreshLoopAsync();
+    }
+
+    private async Task RefreshLoopAsync()
+    {
+        if (_timer == null) return;
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _snapshot = await DashboardService.GetSnapshotAsync(_cts.Token);
+            _loadError = null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _loadError = ex.Message;
+        }
+    }
+
+    private async Task PauseTradingAsync()
+    {
+        if (await ConfirmAsync("Pause new trading?"))
+        {
+            await TradingControlService.PauseTradingAsync("Dashboard request", _cts.Token);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ResumeTradingAsync()
+    {
+        if (await ConfirmAsync("Resume trading only after confirming broker state is safe?"))
+        {
+            await TradingControlService.ResumeTradingAsync("Dashboard request", _cts.Token);
+            await LoadAsync();
+        }
+    }
+
+    private async Task CloseCurrentPositionAsync()
+    {
+        if (await ConfirmAsync("Request close current position? This action is logged and trading will pause."))
+        {
+            await TradingControlService.CloseCurrentPositionAsync("Dashboard request", _cts.Token);
+            await LoadAsync();
+        }
+    }
+
+    private async Task KillSwitchAsync()
+    {
+        if (await ConfirmAsync("Activate kill switch and disable new trading immediately?"))
+        {
+            await TradingControlService.KillSwitchAsync("Dashboard request", _cts.Token);
+            await LoadAsync();
+        }
+    }
+
+    private async Task<bool> ConfirmAsync(string message)
+    {
+        return await Js.InvokeAsync<bool>("confirm", message);
+    }
+
+    private static readonly CultureInfo UsCurrency = CultureInfo.GetCultureInfo("en-US");
+
+    private static string FormatMoney(decimal? value) => value.HasValue ? value.Value.ToString("C2", UsCurrency) : "-";
+    private static string FormatNumber(decimal? value) => value.HasValue ? value.Value.ToString("0.####") : "-";
+    private static string FormatPercent(decimal? value) => value.HasValue ? value.Value.ToString("P0") : "-";
+    private static string FormatDateTime(DateTime? value) => value.HasValue ? value.Value.ToLocalTime().ToString("g") : "-";
+    private static string FormatGateTitle(TradingBot.Domain.Models.PatternGateRejectionSnapshot rejection)
+    {
+        var quality = rejection.Quality.HasValue ? $" / Q {rejection.Quality.Value:P0}" : string.Empty;
+        var timeframe = string.IsNullOrWhiteSpace(rejection.Timeframe) ? string.Empty : $" / {rejection.Timeframe}";
+        return $"{rejection.Symbol} {rejection.Pattern}{timeframe}{quality}";
+    }
+
+    private string FormatAnalyzerBreakdown()
+    {
+        if (_snapshot == null) return "BUY 0 / WAIT 0 / REJECT 0";
+        return $"BUY {_snapshot.AnalyzerBuyToday} / WAIT {_snapshot.AnalyzerWaitToday} / REJECT {_snapshot.AnalyzerRejectToday}";
+    }
+
+    private IReadOnlyList<FlowStep> BuildFlowSteps()
+    {
+        var stages = new[]
+        {
+            TradingPipelineStage.WaitingForCandle,
+            TradingPipelineStage.ReceivingCandle,
+            TradingPipelineStage.FetchingMarketContext,
+            TradingPipelineStage.PatternAnalysis,
+            TradingPipelineStage.AiAnalyzer,
+            TradingPipelineStage.AiCritic,
+            TradingPipelineStage.StrategyAndRisk,
+            TradingPipelineStage.OrderExecution
+        };
+
+        return stages
+            .Select(stage => new FlowStep(TitleFor(stage), StepStateFor(stage)))
+            .ToArray();
+    }
+
+    private string BuildCurrentFlowStatus()
+    {
+        var activity = PipelineActivity;
+        var parts = new[]
+        {
+            activity.Status,
+            string.IsNullOrWhiteSpace(activity.Symbol) ? null : activity.Symbol,
+            string.IsNullOrWhiteSpace(activity.Pattern) ? null : activity.Pattern
+        };
+
+        return string.Join(" / ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private string StepStateFor(TradingPipelineStage stage)
+    {
+        var activity = PipelineActivity;
+        if (activity.State == TradingPipelineActivityState.Waiting)
+        {
+            return stage == TradingPipelineStage.WaitingForCandle ? "active" : "waiting";
+        }
+
+        if (stage < activity.Stage) return "done";
+        if (stage > activity.Stage) return "waiting";
+        return CssState(activity.State);
+    }
+
+    private static string CssState(TradingPipelineActivityState state)
+    {
+        return state switch
+        {
+            TradingPipelineActivityState.Active => "active",
+            TradingPipelineActivityState.Completed => "done",
+            TradingPipelineActivityState.Rejected => "warning",
+            TradingPipelineActivityState.Error => "error",
+            _ => "waiting"
+        };
+    }
+
+    private static string TitleFor(TradingPipelineStage stage)
+    {
+        return stage switch
+        {
+            TradingPipelineStage.WaitingForCandle => "Waiting",
+            TradingPipelineStage.ReceivingCandle => "Candle",
+            TradingPipelineStage.FetchingMarketContext => "Fetching",
+            TradingPipelineStage.PatternAnalysis => "Pattern",
+            TradingPipelineStage.AiAnalyzer => "AI Analyzer",
+            TradingPipelineStage.AiCritic => "Critic",
+            TradingPipelineStage.StrategyAndRisk => "Rules",
+            TradingPipelineStage.OrderExecution => "Order",
+            _ => "Pipeline"
+        };
+    }
+
+    private sealed record FlowStep(string Title, string State);
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

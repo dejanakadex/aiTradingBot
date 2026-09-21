@@ -17,9 +17,6 @@ node_modules/
 # VS Code
 .vscode/
 
-# Visual Studio
-.vs/
-
 # Logs
 *.log
 
@@ -29,8 +26,6 @@ node_modules/
 # Build
 dist/
 build/
-bin/
-obj/
 
 # Secrets
 *.pem

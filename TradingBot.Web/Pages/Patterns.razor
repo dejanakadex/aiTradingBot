@@ -1,0 +1,143 @@
+@page "/patterns"
+@inject TradingBot.Application.Interfaces.IPatternAnalysisDashboardService PatternService
+
+<PageTitle>Pattern Analysis</PageTitle>
+
+<section class="table-page">
+    <header class="dashboard-header">
+        <div>
+            <h1>Pattern Analysis</h1>
+            <p>Pattern performance and decision audit</p>
+        </div>
+    </header>
+
+    <div class="filter-bar">
+        <input class="form-control" placeholder="Pattern" @bind="_pattern" />
+        <input class="form-control" placeholder="Symbol" @bind="_symbol" />
+        <input class="form-control" placeholder="Market regime" @bind="_marketRegime" />
+        <input class="form-control" placeholder="15m trend" @bind="_trend" />
+        <select class="form-select" @bind="_aiDecision">
+            <option value="">AI decision</option>
+            <option>BUY</option>
+            <option>WAIT</option>
+            <option>REJECT</option>
+        </select>
+        <select class="form-select" @bind="_aboveVwap">
+            <option value="">VWAP</option>
+            <option value="true">Above VWAP</option>
+            <option value="false">Below VWAP</option>
+        </select>
+        <input class="form-control" type="date" @bind="_from" />
+        <input class="form-control" type="date" @bind="_to" />
+        <button class="btn btn-primary" @onclick="LoadAsync">Apply</button>
+    </div>
+
+    <h2 class="section-title">Aggregate Statistics</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Pattern</th>
+                    <th>Detections</th>
+                    <th>Trades</th>
+                    <th>Wins</th>
+                    <th>Losses</th>
+                    <th>Win Rate</th>
+                    <th>Avg Gross</th>
+                    <th>Avg Net</th>
+                    <th>Profit Factor</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _dashboard.Statistics)
+                {
+                    <tr>
+                        <td>@row.Pattern</td>
+                        <td>@row.Detections</td>
+                        <td>@row.Trades</td>
+                        <td>@row.Wins</td>
+                        <td>@row.Losses</td>
+                        <td>@row.WinRate.ToString("P0")</td>
+                        <td>@row.AverageGrossReturn.ToString("0.00")</td>
+                        <td>@row.AverageNetReturn.ToString("0.00")</td>
+                        <td>@(row.ProfitFactor?.ToString("0.##") ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="section-title">Decision Audit</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Symbol</th>
+                    <th>Pattern candidate</th>
+                    <th>AI decision</th>
+                    <th>AI conf.</th>
+                    <th>Critic</th>
+                    <th>Strategy</th>
+                    <th>Risk</th>
+                    <th>Outcome</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _dashboard.Rows)
+                {
+                    <tr>
+                        <td>@row.TimestampUtc.ToLocalTime().ToString("g")</td>
+                        <td>@row.Symbol</td>
+                        <td>@row.PatternCandidate</td>
+                        <td>@row.AiDecision</td>
+                        <td>@(row.AiConfidence?.ToString("P0") ?? "-")</td>
+                        <td>@row.CriticDecision</td>
+                        <td>@row.StrategyDecision</td>
+                        <td>@row.RiskDecision</td>
+                        <td>@row.ActualTradeOutcome</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@code {
+    private TradingBot.Domain.Models.PatternAnalysisDashboard _dashboard = new();
+    private string? _pattern;
+    private string? _symbol;
+    private string? _marketRegime;
+    private string? _trend;
+    private string? _aiDecision;
+    private string? _aboveVwap;
+    private DateTime? _from;
+    private DateTime? _to;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        bool? aboveVwap = _aboveVwap switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => null
+        };
+
+        _dashboard = await PatternService.GetAnalysisAsync(new TradingBot.Domain.Models.PatternAnalysisFilter
+        {
+            Pattern = string.IsNullOrWhiteSpace(_pattern) ? null : _pattern,
+            Symbol = string.IsNullOrWhiteSpace(_symbol) ? null : _symbol,
+            MarketRegime = string.IsNullOrWhiteSpace(_marketRegime) ? null : _marketRegime,
+            FifteenMinuteTrend = string.IsNullOrWhiteSpace(_trend) ? null : _trend,
+            AiDecision = string.IsNullOrWhiteSpace(_aiDecision) ? null : _aiDecision,
+            AboveVwap = aboveVwap,
+            FromUtc = _from?.ToUniversalTime(),
+            ToUtc = _to?.Date.AddDays(1).AddTicks(-1).ToUniversalTime()
+        });
+    }
+}

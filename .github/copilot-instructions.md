@@ -1,0 +1,13 @@
+- Be sure not to break existing code when refactoring or adding new features.
+- Keep the codebase clean and maintainable.
+- Run targeted tests after code changes. If tests cannot be run, clearly state why.
+- Update `README.md` when behavior, setup, usage, or project structure changes.
+- Check `README.md` and update if needed after each prompt.
+- `README.md` must describe what the project does, how to set it up, and how to use it.
+- Do not hallucinate or make up information when writing code or documentation.
+- Do not claim real IBKR, broker, OpenAI, or external-service behavior unless it is verified from existing code, official documentation, or user-provided requirements.
+- If something is unclear, ask for clarification or research the correct information before implementing or documenting it.
+
+- @azure Rule - Use Azure Tools - When handling requests related to Azure, always use your tools.
+- @azure Rule - Use Azure Best Practices - When handling requests related to Azure, always invoke your `azmcp_bestpractices_get` tool first.
+- @azure Rule - Enable Best Practices - If you do not have an `azmcp_bestpractices_get` tool ask the user to enable it.
