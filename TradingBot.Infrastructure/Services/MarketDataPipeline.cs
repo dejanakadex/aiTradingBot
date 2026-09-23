@@ -36,7 +36,7 @@ namespace TradingBot.Infrastructure.Services
                 adapter,
                 eventBus,
                 dbFactory,
-                new MarketDataValidator(Options.Create(new TradingSettings()), new SystemClock()),
+                new MarketDataValidator(Microsoft.Extensions.Options.Options.Create(new TradingSettings()), new SystemClock()),
                 null,
                 logger)
         {
@@ -75,7 +75,7 @@ namespace TradingBot.Infrastructure.Services
             _clock = clock ?? new SystemClock();
             _qualityService = qualityService ?? new MarketDataQualityService(
                 dbFactory,
-                Options.Create(_settings),
+                Microsoft.Extensions.Options.Options.Create(_settings),
                 _clock,
                 NullLogger<MarketDataQualityService>.Instance);
             _latestMarketData = latestMarketData ?? new LatestMarketDataService();
