@@ -267,10 +267,11 @@ namespace TradingBot.Tests
 
         private static IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> CreateInMemoryFactory(out SqliteConnection connection)
         {
-            connection = new SqliteConnection("Data Source=:memory:");
+            var connectionString = $"Data Source=market-data-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            connection = new SqliteConnection(connectionString);
             connection.Open();
             var options = new DbContextOptionsBuilder<TradingBot.Persistence.TradingBotDbContext>()
-                .UseSqlite(connection)
+                .UseSqlite(connectionString)
                 .Options;
 
             var factory = new SimpleDbContextFactory(options);
