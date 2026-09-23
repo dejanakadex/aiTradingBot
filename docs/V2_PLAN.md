@@ -2,6 +2,8 @@
 
 Status: **prijedlog za potvrdu**. Dosad odobreno i napravljeno: pregled, čišćenje i zajednički branch `trading-bot-v2`. Funkcionalna implementacija počinje nakon potvrde ovog plana.
 
+Napredak 2026-09-23: dodani su .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. CI Release build prolazi bez upozorenja i grešaka, uz 195/195 prolaznih testova. U fazi 0 ostaje provjera conditional IBKR adaptera sa službenim `CSharpAPI.dll`.
+
 Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Sve faze koriste isti branch, uz male opisne commitove. Potvrda plana ne uključuje automatsko uključivanje live trgovanja.
 
 ## Cilj

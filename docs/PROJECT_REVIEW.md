@@ -208,6 +208,7 @@ Minimalni redoslijed:
 
 - Pregled izvornog koda i call-site pretrage; provjera da uklonjeni sadržaj pripada generiranim mapama ili runtime bazi.
 - `dotnet test TradingBot.sln --no-restore` nije pokrenuo testove: `dotnet: command not found` (exit 127). SDK nije dostupan; pokušaj dohvata službenog instalacijskog programa istekao je na proxy vezi. Build, test prolaznost i runtime ponašanje nisu potvrđeni.
+- Naknadno je solution prebačen na .NET 10 LTS i provjeren kroz GitHub Actions: Release build završio je bez upozorenja i grešaka, a prošlo je svih 195 testova bez preskočenih testova. Ta provjera koristi fallback kompilaciju bez službenog IBKR DLL-a.
 - Nisu slani OpenAI zahtjevi niti broker nalozi; nisu mijenjani trading kod, postavke ili migracije.
 - Ograničena pretraga credential obrazaca u izvornim tekstualnim datotekama nije našla podudaranja. To nije potpuni pregled Git povijesti, baze ili binarnih datoteka.
 - Prošli su `git diff --check` i `git diff --cached --check`, XML/JSON provjera praćenih project/config datoteka, provjera lokalnih dokumentacijskih poveznica i ignore pravila. Sve prethodno praćene datoteke izvan dogovorenog čišćenja, README-a i `.gitignore` uspoređene su s osnovnim commitom i ostale su identične bajt po bajt. Nakon dodavanja dvaju dokumenata branch ima 273 praćene datoteke.

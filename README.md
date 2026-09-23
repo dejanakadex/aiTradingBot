@@ -1,5 +1,7 @@
 # TrdBot
 
+[![CI](https://github.com/dejanakadex/aiTradingBot/actions/workflows/ci.yml/badge.svg?branch=trading-bot-v2)](https://github.com/dejanakadex/aiTradingBot/actions/workflows/ci.yml)
+
 AI-assisted trading bot (layered .NET 10 LTS solution).
 
 The solution includes an event-driven analysis/strategy/risk pipeline, conditional IBKR
@@ -14,8 +16,8 @@ Ongoing work uses one branch: `trading-bot-v2`.
 
 The review found gaps in daily-risk inputs, broker/exit lifecycle handling and data freshness.
 Existing safety components should be read together with those findings. The review/cleanup
-commit changes repository hygiene and documentation only. Build/test results have not been
-verified in the review environment because the .NET SDK was unavailable.
+commit changes repository hygiene and documentation only. The current .NET 10 CI build is
+verified on GitHub Actions; see the workflow badge and Continuous integration section below.
 
 ## Quick start
 
