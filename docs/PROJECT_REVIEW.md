@@ -189,7 +189,7 @@ Izvor: [MarketDataSubscriptionHostedService.cs](../TradingBot.Infrastructure/Bac
 - Trading raspored pokriva sate/dane, ali nema kalendar blagdana i ranih zatvaranja tržišta.
 - Web nema ugrađenu autentikaciju/autorizaciju za dashboard kontrole. Ako se izlaže mreži, pristup treba ograničiti i autentificirati; lokalni launch profil sam po sebi nije dokaz javne izloženosti.
 - Startup mijenja DB shemu i radi dodatni schema repair. Postoje testovi poznatih repair slučajeva; treba dodati backup/restore i upgrade iz stvarnih prethodnih shema. SQLite je prihvatljiv početak za trenutni opseg, ali tick/L2 volumen treba odvojeno izmjeriti.
-- Realni broker kod kompajlira se samo kad postoji `CSharpAPI.dll` na konfiguriranoj putanji. Običan test bez DLL-a ne dokazuje ni kompilaciju adaptera. Nema CI workflowa ni `global.json`; ovisnosti miješaju major verzije 9 i 10. To treba uskladiti i verificirati, bez pretpostavke da samo miješanje nužno uzrokuje kvar.
+- Realni broker kod kompajlira se samo kad postoji `CSharpAPI.dll` na konfiguriranoj putanji. Običan test bez DLL-a ne dokazuje ni kompilaciju adaptera. Naknadni commit na radnom branchu dodaje .NET 10 `global.json`, usklađuje Microsoft pakete i uvodi CI; zasebna provjera s broker DLL-om i dalje je potrebna.
 
 ## Testna strategija nakon potvrde plana
 

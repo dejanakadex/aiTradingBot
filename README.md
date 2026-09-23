@@ -1,6 +1,6 @@
 # TrdBot
 
-AI-assisted trading bot (layered .NET 9 solution).
+AI-assisted trading bot (layered .NET 10 LTS solution).
 
 The solution includes an event-driven analysis/strategy/risk pipeline, conditional IBKR
 integration, exit management, EF Core persistence (SQLite), and a Blazor dashboard.
@@ -20,7 +20,7 @@ verified in the review environment because the .NET SDK was unavailable.
 ## Quick start
 
 Prerequisites
-- .NET 9 SDK: https://dotnet.microsoft.com
+- .NET 10 SDK: https://dotnet.microsoft.com
 
 Restore, build and run the Blazor server frontend:
 
@@ -59,6 +59,20 @@ Run a single test project:
 ```powershell
 dotnet test TradingBot.Tests/TradingBot.Tests.csproj
 ```
+
+## Continuous integration
+
+GitHub Actions runs restore, Release build and the complete test project on pushes and pull
+requests targeting `main` or `trading-bot-v2`. Test results and coverage output are retained
+as workflow artifacts for 14 days. The workflow uses `global.json`, so local development and
+CI resolve the same .NET 10 SDK feature band policy.
+
+Dependabot checks NuGet packages weekly and GitHub Actions monthly, opening update pull
+requests against `trading-bot-v2`.
+
+The standard CI build exercises the broker-unavailable compilation path because the official
+IBKR `CSharpAPI.dll` is not stored in the repository. Use the explicit `IbkrApiDll` build shown
+below to compile and test the real adapter in an environment where the official DLL is installed.
 
 ## Configuration
 
