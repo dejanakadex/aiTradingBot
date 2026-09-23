@@ -111,6 +111,37 @@ namespace TradingBot.Infrastructure.Services
             return records.Select(ToSnapshot).ToArray();
         }
 
+        public async Task<IReadOnlyList<MarketDataQualityIncidentSnapshot>> GetRecentIncidentsAsync(
+            int count = 100,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var records = await db.MarketDataQualityIncidentRecords
+                .AsNoTracking()
+                .OrderByDescending(item => item.RecordedAtUtc)
+                .ThenByDescending(item => item.Id)
+                .Take(Math.Clamp(count, 1, 500))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return records.Select(record => new MarketDataQualityIncidentSnapshot
+            {
+                Id = record.Id,
+                EventId = record.EventId,
+                StreamKey = record.StreamKey,
+                InstrumentId = record.InstrumentId,
+                Symbol = record.Symbol,
+                Kind = record.Kind,
+                Timeframe = record.Timeframe,
+                Source = record.Source,
+                EventTimeUtc = ToUtc(record.EventTimeUtc),
+                ReceivedTimeUtc = ToUtc(record.ReceivedTimeUtc),
+                Sequence = record.Sequence,
+                Status = record.Status,
+                Reason = record.Reason,
+                RecordedAtUtc = ToUtc(record.RecordedAtUtc)
+            }).ToArray();
+        }
+
         private MarketDataQualityAssessment Assess(
             CanonicalMarketDataEvent marketEvent,
             MarketDataStreamStateRecord? state,

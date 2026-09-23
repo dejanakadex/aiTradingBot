@@ -178,6 +178,8 @@ try
         Results.Ok(await registry.GetAllAsync(cancellationToken)));
     app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetStreamsAsync(cancellationToken)));
+    app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>
+        Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
     if (TradingBot.Web.DevelopmentEndpointGuard.ShouldExposeDevelopmentEndpoints(app.Environment))
     {

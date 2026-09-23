@@ -47,10 +47,14 @@ GET /api/health/ready
 GET /api/health/trading-ready
 GET /api/reconciliation/status
 GET /api/instruments
+GET /api/market-data/streams
+GET /api/market-data/incidents
+GET /api/market-data/latest
 ```
 
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
 `/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
+The market-data endpoints expose persisted stream health, recent quality incidents, and the in-memory latest bid/ask/trade plus 5s/15s aggregates.
 
 Run unit tests:
 
@@ -137,6 +141,9 @@ the current Git tree and does not erase earlier commits.
 - Market data subscription startup waits for the engine to become `Ready`, seeds configured historical candles and subscribes to every enabled `TradingSettings.Instruments` entry using its configured timeframes. The checked-in fail-closed example contains SPY on `1m`, `5m` and `15m`; legacy `Symbols` remains a temporary compatibility fallback.
 - A persistent instrument registry synchronizes configuration at startup, records every onboarding status transition and preserves progress across restarts. New enabled instruments begin at `BackfillPending`; configuration changes reset onboarding safely, while removed instruments remain disabled for audit.
 - Instrument-level `TradingEnabled` is only a requested permission. Paper/live order submission also requires the matching persisted readiness state, and no startup path automatically grants `LiveEnabled`.
+- Canonical `market-data-v2` events carry instrument ID, event/receive time, source, sequence and finality for bid, ask, trade and bar data. Persisted stream state makes stale, future, duplicate, out-of-order and gap conditions explicit.
+- Only final `Healthy` candles reach pattern analysis. Gap candles may be retained for research but are blocked from trading; a second guard in the pattern worker rejects any unhealthy candle.
+- Healthy level-one events maintain latest bid/ask/trade, spread and rolling 5s/15s aggregates; `MarketSnapshotService` combines them with its 1m/5m/15m candle context.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.
 - The Blazor dashboard shows engine/broker/market/AI/risk/P&L status with realtime refresh and control actions for pause, resume, close-current-position request and kill switch.
 - Blazor analytics pages show recent trades and pattern performance with filters for symbol, pattern, date range, market regime, VWAP context, 15m trend and AI decisions.
@@ -157,6 +164,8 @@ High-priority files to open for Codex:
 - `TradingBot.Persistence/TradingBotDbContext.cs`
 - `TradingBot.Infrastructure/Services/TradingEventBus.cs`
 - `TradingBot.Infrastructure/Services/MarketDataPipeline.cs`
+- `TradingBot.Infrastructure/Services/MarketDataQualityService.cs`
+- `TradingBot.Infrastructure/Services/LatestMarketDataService.cs`
 - `TradingBot.Infrastructure/Services/PatternDetector.cs`
 - `TradingBot.Infrastructure/Services/MarketSnapshotService.cs`
 - `TradingBot.Infrastructure/Services/OpenAiMarketAnalyzer.cs`
@@ -214,6 +223,7 @@ High-priority files to open for Codex:
 - `TradingBot.Application/Interfaces/IPostTradeAnalysisService.cs`
 - `TradingBot.Application/Interfaces/ITradingControlService.cs`
 - `TradingBot.Application/Interfaces/IInstrumentRegistryService.cs`
+- `TradingBot.Application/Interfaces/IMarketDataQualityService.cs`
 - `TradingBot.Application/Interfaces/IOperatingModeService.cs`
 - `TradingBot.Tests/PatternDetectorTests.cs`
 - `TradingBot.Tests/MarketSnapshotServiceTests.cs`
@@ -228,17 +238,19 @@ High-priority files to open for Codex:
 - `TradingBot.Tests/PostTradeAnalysisServiceTests.cs`
 - `TradingBot.Tests/AiPipelineOptimizationTests.cs`
 - `TradingBot.Tests/InstrumentRegistryServiceTests.cs`
+- `TradingBot.Tests/CanonicalMarketDataTests.cs`
 
 Short technical notes for Codex
 
 - EF Core: uses `IDbContextFactory<TradingBotDbContext>` and SQLite. Candle entity is uniquely indexed on `(Symbol, Timeframe, TimestampUtc)` to prevent duplicates.
 - Event bus: `TradingEventBus` uses bounded `Channel<T>` with configurable full-mode strategies (Wait, DropOldest, DropNewest, Reject). Keep `TryPublish` non-blocking for IB callbacks.
-- IBKR: `IIbkrAdapter` is the broker boundary. The conditional concrete adapter uses the official TWS C# API when available, and publishes normalized `MarketBar` DTOs through market-data subscriptions.
+- IBKR: `IIbkrAdapter` is the broker boundary. The conditional concrete adapter uses the official TWS C# API when available, publishes completed streaming bars and requests level-one bid/ask/last events from the 1m subscription. The standard CI build cannot compile this conditional path without the official DLL.
+- Canonical market data: `MarketDataQualityService` persists stream checkpoints and incidents, blocks non-final/stale/future/duplicate/out-of-order/invalid events, and retains gap bars only for research. Raw quote/trade tick persistence is deferred to the partitioned dataset storage in plan point 5.
 - Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false; `TradingExecutionGuard` joins it with persisted per-instrument readiness before paper/live submission, while global `AnalysisOnly` remains active.
 - Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Actual resumable historical backfill and automatic status advancement are intentionally deferred to plan point 4.
 - Pipeline identity: every pattern has a deterministic `SignalId` plus a per-run `CorrelationId`, `InstrumentId`, `StrategyId` and explicit market-data/feature/pattern/strategy contract versions. The same context is propagated into strategy and risk audit JSON.
 - Pattern detection: deterministic rules implemented for Hammer, Bullish Engulfing, Double Bottom, BreakoutAndRetest, VWAP Reclaim. Options are in `PatternDetectorOptions`.
-- Market snapshots: `IMarketSnapshotService` combines 15m broader direction, 5m setup/pullback context and 1m entry timing into a structured `MarketSnapshot` for later AI analysis. It includes candles, features, patterns, support/resistance candidates, trend, volume, volatility, current price when available and spread when supplied.
+- Market snapshots: `IMarketSnapshotService` combines 15m broader direction, 5m setup/pullback context and 1m entry timing into a structured `MarketSnapshot` for later AI analysis. It includes candles, features, patterns, support/resistance candidates, trend, volume and volatility, and automatically uses the latest healthy canonical trade/bid/ask for current price and spread when available.
 - AI analysis: `IAiMarketAnalyzer` is analysis-only. It sends structured snapshot data to OpenAI using JSON schema response format, validates the response, logs duration/token usage when available, persists the analysis to SQLite and defaults to no trade (`REJECT`) on unavailable or invalid AI output.
 - AI trade criticism: `IAiTradeCritic` is rejection-focused. It reviews the snapshot, detected pattern and AI analysis for risks such as higher-timeframe weakness, sell volume, false breakout risk, poor reward/risk, excessive volatility, poor liquidity, large spread, timeframe conflicts and weak pattern structure. It never submits orders and defaults to rejected when unavailable or invalid.
 - AI cost controls: `PatternQualityGate` uses `PatternDetectorOptions.MinimumTradeSetupQuality` and per-pattern thresholds to decide whether a candidate reaches OpenAI. `TradingSettings.MinimumPatternQualityForAiAnalysis` remains in settings/telemetry but is not the active gate. The critic runs only for an actionable, sufficiently confident BUY; WAIT, REJECT and safe fallbacks skip it.

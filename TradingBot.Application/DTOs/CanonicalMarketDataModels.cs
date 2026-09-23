@@ -52,6 +52,24 @@ namespace TradingBot.Application.DTOs
         public int Version { get; init; }
     }
 
+    public sealed record MarketDataQualityIncidentSnapshot
+    {
+        public long Id { get; init; }
+        public string EventId { get; init; } = string.Empty;
+        public string StreamKey { get; init; } = string.Empty;
+        public string InstrumentId { get; init; } = string.Empty;
+        public string Symbol { get; init; } = string.Empty;
+        public MarketDataEventKind Kind { get; init; }
+        public string Timeframe { get; init; } = string.Empty;
+        public string Source { get; init; } = string.Empty;
+        public DateTime EventTimeUtc { get; init; }
+        public DateTime ReceivedTimeUtc { get; init; }
+        public long? Sequence { get; init; }
+        public MarketDataQualityStatus Status { get; init; }
+        public string Reason { get; init; } = string.Empty;
+        public DateTime RecordedAtUtc { get; init; }
+    }
+
     public sealed record ShortIntervalBarSnapshot
     {
         public int IntervalSeconds { get; init; }

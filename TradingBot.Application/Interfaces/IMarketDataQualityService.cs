@@ -10,6 +10,9 @@ namespace TradingBot.Application.Interfaces
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<MarketDataStreamSnapshot>> GetStreamsAsync(CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<MarketDataQualityIncidentSnapshot>> GetRecentIncidentsAsync(
+            int count = 100,
+            CancellationToken cancellationToken = default);
     }
 
     public interface ILatestMarketDataService

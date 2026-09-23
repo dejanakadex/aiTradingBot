@@ -43,6 +43,7 @@ namespace TradingBot.Tests
             Assert.Equal(MarketDataQualityStatus.OutOfOrder, barState.Status);
             Assert.Equal(3, barState.LastSequence);
             Assert.False(barState.IsHealthy);
+            Assert.Equal(4, (await service.GetRecentIncidentsAsync()).Count);
         }
 
         [Fact]

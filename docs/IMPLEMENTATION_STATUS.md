@@ -9,8 +9,9 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 0 — Razvojni baseline | Završeno | .NET 10 LTS, clean repository, GitHub Actions, Dependabot i početnih 195/195 testova. Realni IBKR adapter još treba zaseban build sa službenim DLL-om. |
 | 1 — Multi-instrument temelj | Završeno | Nova `Instruments` konfiguracija, legacy `Symbols` fallback, per-instrument timeframeovi/metadata, stabilni signal/correlation identiteti i verzije pipeline ugovora. CI: 200/200 testova, 0 warninga i 0 grešaka. |
 | 2 — Registry i onboarding | Završeno | Persistirani registry, auditirane tranzicije, broker metadata, idempotentan startup sync i per-instrument execution gate. CI: 206/206 testova, 0 warninga i 0 grešaka. |
-| 3 — Canonical market data | Sljedeće | Jedinstveni market-data ugovor s event/source vremenom, bid/ask/trade podacima, finalnošću i eksplicitnom kvalitetom. |
-| 4–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 3 — Canonical market data | Završeno | Verzija `market-data-v2`: instrument/event/receive/source identitet, bid/ask/trade/bar događaji, finalnost, persistirani stream statusi i fail-closed quality gate. CI: 213/213 testova, 0 warninga i 0 grešaka. |
+| 4 — Historical backfill | Sljedeće | Resumable segmenti, pacing, retry, checkpoint, deduplikacija i mjerljiv gap report po instrumentu/timeframeu. |
+| 5–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -56,6 +57,30 @@ Verifikacija: [GitHub Actions run 35850209592](https://github.com/dejanakadex/ai
 - Statusne promjene namjerno nisu izložene kao javni mutacijski API. Orkestracija onboardinga bit će dodana uz workere koji mogu dokazati kriterij pojedine tranzicije.
 - Zadana konfiguracija i dalje koristi globalni `AnalysisOnly`, a SPY nema instrument-level trading dopuštenje.
 
-## Sljedeći checkpoint — točka 3
+## Točka 3 — izvedeno
 
-Definirati canonical market-data događaj za svaki instrument: bid/ask/trade, source/event i receive vrijeme, finalnost bara, sequence/kvalitetu te eksplicitna stale, out-of-order i gap stanja. Ti podaci moraju biti temelj i za live collection i za kasniji historical replay.
+Verifikacija: [GitHub Actions run 35914113645](https://github.com/dejanakadex/aiTradingBot/actions/runs/35914113645) — .NET 10 Release build, 213/213 testova, bez warninga i grešaka.
+
+- Dodan je canonical `market-data-v2` ugovor za `Bid`, `Ask`, `Trade` i `Bar`; svaki događaj nosi `EventId`, stabilni `InstrumentId`, symbol, event/receive vrijeme, source, opcionalni sequence i finalnost.
+- IBKR 1m subscription u realnom adapteru uz završene barove traži level-one bid/ask/last podatke i šalje ih kroz isti canonical quality gate.
+- Candle persistence sada sprema instrument ID, receive vrijeme, source, finalnost i quality status uz postojeći event timestamp/OHLCV.
+- `MarketDataQualityService` provjerava konfigurirani instrument, shape, buduće/stale vrijeme, finalnost, duplikate, sequence/event-time redoslijed i gapove po streamu.
+- Stream stanje i svaki incident trajno se spremaju u `MarketDataStreamStateRecords` i `MarketDataQualityIncidentRecords`, uključujući stanje nakon restarta.
+- Stale, future, non-final, duplicate, invalid i out-of-order događaji ne ulaze u candle/trading pipeline. Gap bar se smije spremiti za research, ali ne smije pokrenuti pattern ili trade.
+- Pattern worker ima dodatnu obranu i odbija svaki candle koji nije finalan i `Healthy`.
+- Ispravljena je stara rupa u kojoj se već spremljeni duplikat mogao ponovno objaviti analysis pipelineu.
+- Najnoviji zdravi bid/ask/trade podaci daju current price i spread za `MarketSnapshot`, uz postojeći 1m/5m/15m kontekst.
+- In-memory 5s i 15s OHLCV/trade-count agregati pripremaju kratki kontekst za budući scalping/replay tok.
+- Read-only endpointi `GET /api/market-data/streams`, `GET /api/market-data/incidents` i `GET /api/market-data/latest` izlažu trenutno i povijesno quality stanje.
+
+## Odluke i ograničenja točke 3
+
+- Sirovi quote/trade tickovi namjerno se ne spremaju u operativni SQLite. Particionirani raw/research storage dolazi u točki 5; SQLite čuva stream stanje, incidente i završene barove.
+- Latest quote/trade i 5s/15s agregati su operativni in-memory prikaz te se nakon restarta ponovno pune iz live feeda. Persistirani quality checkpoint ostaje sačuvan.
+- Standardni CI nema službeni IBKR `CSharpAPI.dll`, pa verificira broker-unavailable build. Level-one callback u realnom adapteru mora se dodatno kompilirati i smoke-testirati u okruženju sa službenim DLL-om.
+- Gap provjera sada pokriva sequence i očekivani razmak barova unutar istog UTC datuma. Trading calendar, session segmenti, pacing i automatski gap-fill pripadaju točkama 4 i 6.
+- Ova točka ne pokreće veliki historical backfill niti mijenja fail-closed `AnalysisOnly`/instrument trading dopuštenja.
+
+## Sljedeći checkpoint — točka 4
+
+Izgraditi resumable historical backfill po instrumentu i timeframeu: segment plan, IBKR pacing, retry/backoff, trajni checkpoint, idempotentna deduplikacija i gap report. Live collection mora moći nastaviti paralelno, a onboarding status smije napredovati tek nakon provjerljivog rezultata backfilla.
