@@ -81,7 +81,7 @@ namespace TradingBot.Infrastructure.Services
                 approved ? sizing.RiskAmount : 0m,
                 decidedAt,
                 reasons,
-                strategyDecision?.Context);
+                strategyDecision.Context);
 
             await PersistAsync(strategyDecision, accountInfo, currentPositions, todaysCompletedTrades, openOrders, decision, cancellationToken).ConfigureAwait(false);
 
