@@ -307,20 +307,23 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        public async Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest historicalRequest, CancellationToken cancellationToken = default)
         {
-            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count), "count must be greater than zero.");
+            ArgumentNullException.ThrowIfNull(historicalRequest);
+            var startUtc = ToUtc(historicalRequest.StartUtc);
+            var endUtc = ToUtc(historicalRequest.EndUtc);
+            if (endUtc <= startUtc) throw new ArgumentOutOfRangeException(nameof(historicalRequest), "Historical request end must be after start.");
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
-            var request = new HistoricalBarsRequest(symbol, NormalizeTimeframe(timeframe));
+            var request = new HistoricalBarsRequest(historicalRequest.Symbol, NormalizeTimeframe(historicalRequest.Timeframe));
             _historicalRequests[requestId] = request;
 
             client.reqHistoricalData(
                 requestId,
-                BuildStockContract(symbol),
-                string.Empty,
-                BuildDuration(timeframe, count),
-                ToIbkrBarSize(timeframe),
+                BuildStockContract(historicalRequest.Symbol),
+                endUtc.ToString("yyyyMMdd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture),
+                BuildDuration(startUtc, endUtc),
+                ToIbkrBarSize(historicalRequest.Timeframe),
                 "TRADES",
                 1,
                 2,
@@ -432,6 +435,12 @@ namespace TradingBot.Infrastructure.Services
                         ? errorMsg
                         : $"{errorMsg}; advancedOrderRejectJson present"
                 });
+            }
+
+            if (_historicalRequests.TryGetValue(id, out var historicalRequest))
+            {
+                historicalRequest.Completion.TrySetException(
+                    new InvalidOperationException($"IBKR historical data error {errorCode}: {errorMsg}"));
             }
 
             if (errorCode is 1100 or 1300)
@@ -917,6 +926,21 @@ namespace TradingBot.Infrastructure.Services
 
             return $"{Math.Max(secondsPerBar * (count + 2), secondsPerBar)} S";
         }
+
+        private static string BuildDuration(DateTime startUtc, DateTime endUtc)
+        {
+            var duration = endUtc - startUtc;
+            return duration.TotalDays >= 1d
+                ? $"{Math.Max(1, (int)Math.Ceiling(duration.TotalDays))} D"
+                : $"{Math.Max(1, (int)Math.Ceiling(duration.TotalSeconds))} S";
+        }
+
+        private static DateTime ToUtc(DateTime value) => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            _ => value.ToUniversalTime()
+        };
 
         private void PublishMarketBar(StreamingSubscription subscription, MarketBar marketBar)
         {

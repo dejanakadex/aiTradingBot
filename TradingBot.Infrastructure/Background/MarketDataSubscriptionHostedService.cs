@@ -19,7 +19,6 @@ namespace TradingBot.Infrastructure.Background
         private readonly ITradingEngineStatusService _statusService;
         private readonly IIbkrConnectionService _connectionService;
         private readonly TradingSettings _tradingSettings;
-        private readonly OpenAiSettings _openAiSettings;
         private readonly ILogger<MarketDataSubscriptionHostedService> _logger;
         private readonly List<IMarketDataSubscription> _subscriptions = new();
         private readonly List<Task> _readerTasks = new();
@@ -30,7 +29,6 @@ namespace TradingBot.Infrastructure.Background
             ITradingEngineStatusService statusService,
             IIbkrConnectionService connectionService,
             IOptions<TradingSettings> tradingSettings,
-            IOptions<OpenAiSettings> openAiSettings,
             ILogger<MarketDataSubscriptionHostedService> logger)
         {
             _marketDataService = marketDataService ?? throw new ArgumentNullException(nameof(marketDataService));
@@ -38,7 +36,6 @@ namespace TradingBot.Infrastructure.Background
             _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             _connectionService = connectionService ?? throw new ArgumentNullException(nameof(connectionService));
             _tradingSettings = tradingSettings.Value;
-            _openAiSettings = openAiSettings.Value;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -123,7 +120,6 @@ namespace TradingBot.Infrastructure.Background
                         return;
                     }
 
-                    await SeedHistoricalCandlesAsync(instrument, timeframe, cancellationToken).ConfigureAwait(false);
                     await SubscribeAsync(instrument, timeframe, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -153,37 +149,6 @@ namespace TradingBot.Infrastructure.Background
                         "Market data subscriptions ended. Reconciliation required before retry.");
                     return;
                 }
-            }
-        }
-
-        private async Task SeedHistoricalCandlesAsync(ConfiguredInstrument instrument, string timeframe, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var count = GetHistoricalSeedCount(timeframe);
-                var bars = await _marketDataService.GetHistoricalBarsAsync(instrument.Symbol, timeframe, count, cancellationToken).ConfigureAwait(false);
-                var seeded = 0;
-                foreach (var bar in bars.OrderBy(b => b.TimestampUtc))
-                {
-                    await _marketDataPipeline.ProcessMarketBarAsync(
-                        bar,
-                        cancellationToken,
-                        allowStaleSeedCandle: true,
-                        publishToEventBus: false,
-                        instrumentId: instrument.InstrumentId,
-                        source: "IBKR.HistoricalBar").ConfigureAwait(false);
-                    seeded++;
-                }
-
-                _logger.LogInformation("Seeded {Count} historical candles for {InstrumentId} {Symbol} {Timeframe}.", seeded, instrument.InstrumentId, instrument.Symbol, timeframe);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to seed historical candles for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
         }
 
@@ -253,26 +218,5 @@ namespace TradingBot.Infrastructure.Background
             _readerTasks.Clear();
         }
 
-        private int GetHistoricalSeedCount(string timeframe)
-        {
-            return NormalizeTimeframe(timeframe) switch
-            {
-                "1m" => Math.Max(1, _openAiSettings.MarketContext.OneMinuteCandles),
-                "5m" => Math.Max(1, _openAiSettings.MarketContext.FiveMinuteCandles),
-                "15m" => Math.Max(1, _openAiSettings.MarketContext.FifteenMinuteCandles),
-                _ => 50
-            };
-        }
-
-        private static string NormalizeTimeframe(string timeframe)
-        {
-            return timeframe.Trim().ToLowerInvariant() switch
-            {
-                "1m" or "1 min" or "1 minute" => "1m",
-                "5m" or "5 mins" or "5 minutes" => "5m",
-                "15m" or "15 mins" or "15 minutes" => "15m",
-                _ => string.Empty
-            };
-        }
     }
 }

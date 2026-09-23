@@ -56,6 +56,11 @@ try
         .Validate(settings => settings.Paper.Port != settings.Live.Port, "IBKR paper and live ports must be different.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<HistoricalBackfillSettings>()
+        .Bind(builder.Configuration.GetSection("HistoricalBackfill"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "HistoricalBackfill configuration is invalid. Check lookback, segment, pacing and retry values.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -181,6 +186,10 @@ try
     app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
+    app.MapGet("/api/historical-backfill/jobs", async (IHistoricalBackfillService backfill, CancellationToken cancellationToken) =>
+        Results.Ok(await backfill.GetJobsAsync(cancellationToken)));
+    app.MapGet("/api/historical-backfill/gaps", async (string? instrumentId, IHistoricalBackfillService backfill, CancellationToken cancellationToken) =>
+        Results.Ok(await backfill.GetGapsAsync(instrumentId, cancellationToken)));
     if (TradingBot.Web.DevelopmentEndpointGuard.ShouldExposeDevelopmentEndpoints(app.Environment))
     {
         app.MapGet("/api/dev/openai-smoke-test", (IOptions<OpenAiSettings> openAiOptions, IOpenAiApiKeyProvider apiKeyProvider) =>

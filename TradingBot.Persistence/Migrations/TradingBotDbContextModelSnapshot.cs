@@ -401,6 +401,85 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("ExecutionRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.HistoricalBackfillJobRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BarsInserted").HasColumnType("INTEGER");
+                    b.Property<long>("BarsReceived").HasColumnType("INTEGER");
+                    b.Property<int>("CompletedSegments").HasColumnType("INTEGER");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("DesiredEndUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("DesiredStartUtc").HasColumnType("TEXT");
+                    b.Property<long>("DuplicateBars").HasColumnType("INTEGER");
+                    b.Property<int>("FailedAttempts").HasColumnType("INTEGER");
+                    b.Property<int>("GapCount").HasColumnType("INTEGER");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<string>("LastError").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime?>("LastRequestedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("NextAttemptUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("NextSegmentEndUtc").HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Timeframe").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+                    b.HasIndex("NextAttemptUtc");
+                    b.HasIndex("Status");
+                    b.HasIndex("UpdatedAtUtc");
+                    b.HasIndex("InstrumentId", "Timeframe").IsUnique();
+                    b.ToTable("HistoricalBackfillJobRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.HistoricalBackfillSegmentRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("AttemptCount").HasColumnType("INTEGER");
+                    b.Property<int>("BarsInserted").HasColumnType("INTEGER");
+                    b.Property<int>("BarsReceived").HasColumnType("INTEGER");
+                    b.Property<DateTime?>("CompletedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("DuplicateBars").HasColumnType("INTEGER");
+                    b.Property<DateTime>("EndUtc").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("JobId").HasColumnType("INTEGER");
+                    b.Property<string>("LastError").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("RequestedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("StartUtc").HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Timeframe").IsRequired().HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+                    b.HasIndex("InstrumentId");
+                    b.HasIndex("RequestedAtUtc");
+                    b.HasIndex("Status");
+                    b.HasIndex("JobId", "StartUtc", "EndUtc").IsUnique();
+                    b.ToTable("HistoricalBackfillSegmentRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.HistoricalDataGapRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<DateTime>("DetectedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("EndUtc").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("JobId").HasColumnType("INTEGER");
+                    b.Property<int>("MissingBars").HasColumnType("INTEGER");
+                    b.Property<DateTime>("StartUtc").HasColumnType("TEXT");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Timeframe").IsRequired().HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+                    b.HasIndex("DetectedAtUtc");
+                    b.HasIndex("InstrumentId");
+                    b.HasIndex("JobId", "StartUtc", "EndUtc").IsUnique();
+                    b.ToTable("HistoricalDataGapRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.InstrumentRegistryRecord", b =>
                 {
                     b.Property<int>("Id")

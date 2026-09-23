@@ -36,10 +36,10 @@ namespace TradingBot.Tests.Fakes
             return Task.FromResult<IMarketDataSubscription>(sub);
         }
 
-        public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default)
+        public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest request, CancellationToken cancellationToken = default)
         {
             var list = new List<MarketBar>();
-            for (int i = 0; i < count; i++) list.Add(new MarketBar { Symbol = symbol, Timeframe = timeframe, TimestampUtc = DateTime.UtcNow, Open = 1, High = 2, Low = 0.5m, Close = 1.5m, Volume = 10 });
+            list.Add(new MarketBar { Symbol = request.Symbol, Timeframe = request.Timeframe, TimestampUtc = request.StartUtc, Open = 1, High = 2, Low = 0.5m, Close = 1.5m, Volume = 10 });
             return Task.FromResult<IEnumerable<MarketBar>>(list);
         }
 

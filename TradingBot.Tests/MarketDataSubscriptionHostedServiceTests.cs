@@ -125,7 +125,7 @@ namespace TradingBot.Tests
         }
 
         [Fact]
-        public async Task SeedsHistoricalCandlesAndPersistsThem()
+        public async Task StartsLiveSubscriptionsWithoutWaitingForHistoricalBackfill()
         {
             var harness = CreateHarness(new TradingSettings
             {
@@ -143,17 +143,10 @@ namespace TradingBot.Tests
             harness.Status.SetState(TradingEngineState.Ready, true, "ready", reconciliationCompleted: true);
 
             await harness.Service.StartAsync(CancellationToken.None);
-            await WaitUntilAsync(async () =>
-            {
-                await using var db = harness.Factory.CreateDbContext();
-                return await db.Candles.CountAsync() >= 6;
-            });
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 3);
             await harness.Service.StopAsync(CancellationToken.None);
 
-            await using (var db = harness.Factory.CreateDbContext())
-            {
-                Assert.Equal(6, await db.Candles.CountAsync());
-            }
+            Assert.Equal(0, harness.MarketData.HistoricalRequests);
             Assert.False(harness.EventBus.CandleReader.TryRead(out _));
 
             harness.Dispose();
@@ -261,7 +254,6 @@ namespace TradingBot.Tests
                 status,
                 connectionService,
                 Options.Create(tradingSettings),
-                Options.Create(openAiSettings),
                 NullLogger<MarketDataSubscriptionHostedService>.Instance);
 
             return new Harness(service, marketData, eventBus, status, connectionService, factory, connection);
@@ -349,31 +341,12 @@ namespace TradingBot.Tests
         private sealed class FakeSubscriptionMarketDataService : IMarketDataService
         {
             public List<FakeSubscription> Subscriptions { get; } = new();
+            public int HistoricalRequests { get; private set; }
 
-            public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default)
+            public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest request, CancellationToken cancellationToken = default)
             {
-                var now = DateTime.UtcNow;
-                var intervalMinutes = timeframe switch
-                {
-                    "5m" => 5,
-                    "15m" => 15,
-                    _ => 1
-                };
-                var bars = Enumerable.Range(0, count)
-                    .Select(i => new MarketBar
-                    {
-                        Symbol = symbol,
-                        Timeframe = timeframe,
-                        TimestampUtc = now.AddMinutes(-(count - i) * intervalMinutes),
-                        Open = 100m,
-                        High = 101m,
-                        Low = 99m,
-                        Close = 100m,
-                        Volume = 1000m
-                    })
-                    .ToArray();
-
-                return Task.FromResult<IEnumerable<MarketBar>>(bars);
+                HistoricalRequests++;
+                return Task.FromResult<IEnumerable<MarketBar>>(Array.Empty<MarketBar>());
             }
 
             public Task<IMarketDataSubscription> SubscribeAsync(string symbol, string timeframe, CancellationToken cancellationToken = default)

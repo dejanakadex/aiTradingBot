@@ -18,9 +18,9 @@ namespace TradingBot.Infrastructure.Services
             _logger = logger;
         }
 
-        public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default)
+        public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest request, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("GetHistoricalBarsAsync placeholder called for {symbol} {timeframe}", symbol, timeframe);
+            _logger.LogDebug("GetHistoricalBarsAsync placeholder called for {Symbol} {Timeframe} [{StartUtc}, {EndUtc})", request.Symbol, request.Timeframe, request.StartUtc, request.EndUtc);
             return Task.FromResult<IEnumerable<MarketBar>>(Array.Empty<MarketBar>());
         }
 

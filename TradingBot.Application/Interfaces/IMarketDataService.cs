@@ -13,7 +13,7 @@ namespace TradingBot.Application.Interfaces
 
     public interface IMarketDataService
     {
-        Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default);
+        Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Subscribe to streaming bars for a symbol/timeframe. Returns a subscription which exposes a ChannelReader for consumption.

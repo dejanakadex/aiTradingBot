@@ -28,6 +28,9 @@ namespace TradingBot.Persistence
         public DbSet<InstrumentStatusTransitionRecord> InstrumentStatusTransitionRecords { get; set; }
         public DbSet<MarketDataStreamStateRecord> MarketDataStreamStateRecords { get; set; }
         public DbSet<MarketDataQualityIncidentRecord> MarketDataQualityIncidentRecords { get; set; }
+        public DbSet<HistoricalBackfillJobRecord> HistoricalBackfillJobRecords { get; set; }
+        public DbSet<HistoricalBackfillSegmentRecord> HistoricalBackfillSegmentRecords { get; set; }
+        public DbSet<HistoricalDataGapRecord> HistoricalDataGapRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -165,6 +168,35 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.InstrumentId);
                 b.HasIndex(x => x.Status);
                 b.HasIndex(x => x.RecordedAtUtc);
+            });
+
+            modelBuilder.Entity<HistoricalBackfillJobRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.InstrumentId, x.Timeframe }).IsUnique();
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.NextAttemptUtc);
+                b.HasIndex(x => x.UpdatedAtUtc);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Timeframe).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<HistoricalBackfillSegmentRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.JobId, x.StartUtc, x.EndUtc }).IsUnique();
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.RequestedAtUtc);
+            });
+
+            modelBuilder.Entity<HistoricalDataGapRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.JobId, x.StartUtc, x.EndUtc }).IsUnique();
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.DetectedAtUtc);
             });
         }
     }
