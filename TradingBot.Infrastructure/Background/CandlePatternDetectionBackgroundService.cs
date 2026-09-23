@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TradingBot.Application.Configuration;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
@@ -25,6 +27,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ITradingPipelineStatusService? _pipelineStatusService;
         private readonly IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> _dbFactory;
         private readonly ILogger<CandlePatternDetectionBackgroundService> _logger;
+        private readonly TradingSettings _tradingSettings;
         private readonly ConcurrentDictionary<string, byte> _processedCandles = new();
 
         public CandlePatternDetectionBackgroundService(
@@ -35,7 +38,8 @@ namespace TradingBot.Infrastructure.Background
             ITradingEngineStatusService statusService,
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             ILogger<CandlePatternDetectionBackgroundService> logger,
-            ITradingPipelineStatusService? pipelineStatusService = null)
+            ITradingPipelineStatusService? pipelineStatusService = null,
+            IOptions<TradingSettings>? tradingSettings = null)
         {
             _eventBus = eventBus;
             _candleHistoryService = candleHistoryService;
@@ -45,6 +49,7 @@ namespace TradingBot.Infrastructure.Background
             _pipelineStatusService = pipelineStatusService;
             _dbFactory = dbFactory;
             _logger = logger;
+            _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,7 +107,9 @@ namespace TradingBot.Infrastructure.Background
                     candle.Symbol);
 
                 var features = _featureEngine.ComputeFeatures(candles);
-                var patterns = _patternDetector.Detect(candles);
+                var patterns = _patternDetector.Detect(candles)
+                    .Select(ApplyConfiguredIdentity)
+                    .ToArray();
 
                 _logger.LogInformation(
                     "Processed candle {Symbol} {Timeframe} {TimestampUtc}; trend={Trend}, patterns={PatternCount}",
@@ -110,9 +117,9 @@ namespace TradingBot.Infrastructure.Background
                     candle.Timeframe,
                     candle.TimestampUtc,
                     features.TrendDirection,
-                    patterns.Count);
+                    patterns.Length);
 
-                if (patterns.Count == 0)
+                if (patterns.Length == 0)
                 {
                     _pipelineStatusService?.Mark(
                         TradingPipelineStage.PatternAnalysis,
@@ -153,6 +160,34 @@ namespace TradingBot.Infrastructure.Background
             }
         }
 
+        private PatternCandidate ApplyConfiguredIdentity(PatternCandidate pattern)
+        {
+            var instrument = _tradingSettings.GetEnabledInstruments()
+                .FirstOrDefault(configured => string.Equals(configured.Symbol, pattern.Symbol, StringComparison.OrdinalIgnoreCase));
+            if (instrument == null)
+            {
+                return pattern;
+            }
+
+            var strategyId = instrument.StrategyIds
+                .FirstOrDefault(strategy => string.Equals(strategy, PipelineContractVersions.DefaultStrategyId, StringComparison.OrdinalIgnoreCase))
+                ?? PipelineContractVersions.DefaultStrategyId;
+            var context = PipelineContext.CreateForSignal(
+                instrument.InstrumentId,
+                $"{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
+                strategyId);
+
+            return new PatternCandidate(
+                pattern.PatternType,
+                pattern.Symbol,
+                pattern.Timeframe,
+                pattern.DetectedAtUtc,
+                pattern.Confidence,
+                pattern.RelevantPriceLevels,
+                new Dictionary<string, string>(pattern.Metadata),
+                context);
+        }
+
         private async Task PersistPatternDetectionAsync(
             PatternCandidate pattern,
             MarketFeatures features,
@@ -164,6 +199,7 @@ namespace TradingBot.Infrastructure.Background
                 confidence = pattern.Confidence,
                 timeframe = pattern.Timeframe.ToString(),
                 detectedAtUtc = pattern.DetectedAtUtc,
+                context = pattern.Context,
                 relevantPriceLevels = pattern.RelevantPriceLevels,
                 metadata = pattern.Metadata,
                 aboveVwap = features.Vwap.HasValue ? latestCandle.Close >= features.Vwap.Value : (bool?)null,

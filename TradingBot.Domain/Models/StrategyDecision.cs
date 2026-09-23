@@ -15,5 +15,6 @@ namespace TradingBot.Domain.Models
         public decimal? StopPrice { get; init; }
         public decimal? TakeProfitPrice { get; init; }
         public decimal? ExpectedRewardRiskRatio { get; init; }
+        public PipelineContext? Context { get; init; }
     }
 }

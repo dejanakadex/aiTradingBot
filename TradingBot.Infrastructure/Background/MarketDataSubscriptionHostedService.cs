@@ -111,9 +111,9 @@ namespace TradingBot.Infrastructure.Background
                 return;
             }
 
-            foreach (var symbol in GetConfiguredSymbols())
+            foreach (var instrument in _tradingSettings.GetEnabledInstruments())
             {
-                foreach (var timeframe in GetConfiguredTimeframes())
+                foreach (var timeframe in instrument.MarketDataTimeframes)
                 {
                     if (_connectionService.Status != ConnectionStatus.Connected)
                     {
@@ -123,8 +123,8 @@ namespace TradingBot.Infrastructure.Background
                         return;
                     }
 
-                    await SeedHistoricalCandlesAsync(symbol, timeframe, cancellationToken).ConfigureAwait(false);
-                    await SubscribeAsync(symbol, timeframe, cancellationToken).ConfigureAwait(false);
+                    await SeedHistoricalCandlesAsync(instrument.Symbol, timeframe, cancellationToken).ConfigureAwait(false);
+                    await SubscribeAsync(instrument.Symbol, timeframe, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -245,28 +245,6 @@ namespace TradingBot.Infrastructure.Background
 
             _subscriptions.Clear();
             _readerTasks.Clear();
-        }
-
-        private IReadOnlyList<string> GetConfiguredSymbols()
-        {
-            var symbols = (_tradingSettings.Symbols ?? Array.Empty<string>())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => s.Trim().ToUpperInvariant())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return symbols.Length == 0 ? new[] { "SPY" } : symbols;
-        }
-
-        private IReadOnlyList<string> GetConfiguredTimeframes()
-        {
-            var timeframes = (_tradingSettings.MarketDataTimeframes ?? Array.Empty<string>())
-                .Select(NormalizeTimeframe)
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return timeframes.Length == 0 ? new[] { "1m", "5m", "15m" } : timeframes;
         }
 
         private int GetHistoricalSeedCount(string timeframe)

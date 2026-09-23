@@ -19,6 +19,14 @@ namespace TradingBot.Tests
             Assert.Equal("AnalysisOnly", trading.GetProperty("OperatingMode").GetString());
             Assert.False(trading.GetProperty("LiveTradingExplicitlyEnabled").GetBoolean());
             Assert.Equal(0.6m, trading.GetProperty("MinimumPatternQualityForAiAnalysis").GetDecimal());
+            var instruments = trading.GetProperty("Instruments");
+            Assert.Equal(1, instruments.GetArrayLength());
+            var spy = instruments[0];
+            Assert.Equal("US-STK-SPY-SMART", spy.GetProperty("InstrumentId").GetString());
+            Assert.Equal("SPY", spy.GetProperty("Symbol").GetString());
+            Assert.True(spy.GetProperty("Enabled").GetBoolean());
+            Assert.False(spy.GetProperty("TradingEnabled").GetBoolean());
+            Assert.Contains("deterministic-patterns", spy.GetProperty("StrategyIds").EnumerateArray().Select(value => value.GetString()));
 
             var ibkr = root.GetProperty("IbkrSettings");
             Assert.False(string.Equals("LiveTrading", trading.GetProperty("OperatingMode").GetString(), StringComparison.OrdinalIgnoreCase));

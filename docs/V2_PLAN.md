@@ -1,78 +1,91 @@
-# Plan nastavka — v2
+# Plan nastavka — multi-instrument scalping v2
 
-Status: **prijedlog za potvrdu**. Dosad odobreno i napravljeno: pregled, čišćenje i zajednički branch `trading-bot-v2`. Funkcionalna implementacija počinje nakon potvrde ovog plana.
+Status: **odobreno za implementaciju jednu točku po jednu**. Zajednički radni branch je `trading-bot-v2`. Nakon svake točke kod, testovi, dokumentacija i CI moraju biti završeni prije nastavka.
 
-Napredak 2026-09-23: dodani su .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. CI Release build prolazi bez upozorenja i grešaka, uz 195/195 prolaznih testova. U fazi 0 ostaje provjera conditional IBKR adaptera sa službenim `CSharpAPI.dll`.
+Napredak 2026-09-23: projekt koristi .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. Početni CI Release build prošao je bez upozorenja i grešaka uz 195/195 testova. Conditional IBKR adapter i dalje treba zasebno provjeriti sa službenim `CSharpAPI.dll`.
 
-Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Sve faze koriste isti branch, uz male opisne commitove. Potvrda plana ne uključuje automatsko uključivanje live trgovanja.
+Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Operativni checkpointi vode se u [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
-## Cilj
+## Cilj i granice
 
-Pouzdan SPY day-trading sustav u postojećoj .NET arhitekturi: jedan konzistentan lifecycle pozicije, provjerljivi podaci, deterministički rizik i izvršavanje, reproducibilna evaluacija te izmjerena korist svakog modela. AI izlaz ne može promijeniti limite ili preskočiti broker provjere.
+Cilj više nije jedan long SPY trade. Sustav treba podržati više konfiguriranih instrumenata, više strategija/signala, više istovremenih pozicija i velik broj malih intraday tradeova kada statistički potvrđena prilika pokriva spread, proviziju, slippage i sigurnosni buffer.
 
-Predloženi razvojni smjer: podaci → featurei → jednostavan numerički baseline → risk/izvršavanje. Postojeći patterni ostaju usporedni baseline i mogući featurei. LLM se evaluira kao sloj tržišnog konteksta/objašnjenja s jasno izmjerenim troškom i kašnjenjem. Konačna zamjena sadašnjeg analyzer/critic toka ovisi o rezultatima evaluacije.
+Predviđeni holding je od nekoliko sekundi do nekoliko minuta. To je automatizirani retail scalping, ne HFT: IBKR TWS API i postojeća hosted-service arhitektura nisu namijenjeni submilisekundnom izvršavanju.
 
-## Faze i kriteriji završetka
+Ključne sigurnosne granice:
 
-| Faza | Rad | Kriterij završetka |
+- prikupljanje i obrada podataka odvojeni su od dozvole za slanje naloga;
+- novi instrument nikad ne prelazi iz backfilla izravno u live trading;
+- risk se provodi globalno, po instrumentu i po strategiji;
+- brokerova neto pozicija ostaje izvor istine;
+- AI/LLM ne može preskočiti deterministic risk i nije planiran u latency-critical scalping putu;
+- projekt ostaje `AnalysisOnly` dok portfolio risk, order lifecycle i operativne kontrole nisu završeni.
+
+## Onboarding instrumenta
+
+Dodavanje konfiguriranog instrumenta pokreće ovaj lifecycle:
+
+1. validacija konfiguracije i broker contracta;
+2. početak live prikupljanja kako tijekom backfilla ne bi nastala nova praznina;
+3. resumable historical backfill s pacingom, retryjem i checkpointom;
+4. deduplikacija, gap analiza i izrada canonical agregata;
+5. replay featurea, patterna i labela;
+6. readiness statistika;
+7. shadow pa paper provjera;
+8. zasebno ručno dopuštanje live tradinga.
+
+Planirani statusi registra: `Disabled`, `BackfillPending`, `Backfilling`, `Collecting`, `WarmingUp`, `ResearchReady`, `ShadowReady`, `PaperReady`, `LiveEnabled`, `Suspended`, `Faulted`.
+
+## Redoslijed implementacije
+
+| Točka | Sadržaj | Kriterij završetka |
 | --- | --- | --- |
-| 0 — Ponovljiv razvoj | SDK/toolchain, build/test baseline, CI, zasebna provjera conditional IBKR adaptera i konfiguracije. | Clean checkout se reproducibilno gradi; zabilježeni stvarni rezultati testova i točna broker DLL verzija. |
-| 1 — Risk i lifecycle naloga | R01–R08: povijest risk engineu, sizing, durable intent, partial fills, stop/exit, cancellation, reconnect, UI kontrole. | Automatizirani testovi prekida/duplikata; jedan trade intent stvara najviše jedan ulaz; izlazi ne prelaze preostalu poziciju; pause/kill preživljava reconnect. |
-| 2 — Pouzdani tržišni podaci | R09–R10 i R13: timestampovi, quote freshness, bid/ask i trades, canonical barovi, sesije, jedinstveni featurei, event-time snapshot. | Svaki signal moguće reproducirati isključivo podacima dostupnim u trenutku odluke; praznine/stari feed blokiraju ulaz uz jasan razlog. |
-| 3 — Ledger, dataset i replay | R11–R12: trade/execution/provizija veza, post-trade zapisi; spremanje svih opažanja i odbijenih kandidata; simulator troškova. | Replay daje iste odluke za iste ulaze; količina i P/L usklađeni s executionima; bez budućih podataka u featureima. |
-| 4 — Numerički baseline | Jednostavni deterministički/statistički baselinei, zatim kandidat LightGBM; verzionirani feature/label/model ugovori i inferencija iz .NET-a. | Vremenski odvojena evaluacija uz troškove, stabilnost kroz više perioda i usporedba s postojećim pattern/LLM pristupom. Ne prelazi dalje samo zbog visokog win ratea. |
-| 5 — Shadow i paper | Model prvo samo zapisuje odluke, zatim nadzirani paper; mjerenje latencije, izvršenja, odstupanja i oporavka. | Unaprijed potvrđen protokol prolazi; nema nerazriješenih order/position mismatcha; operativne kontrole dokazano rade. |
-| 6 — Daljnji modeli i podaci | L2/order-book featurei samo ako kvaliteta i evaluacija opravdaju trošak; složeniji modeli tek nakon stabilnog baselinea. | Mjerljivo poboljšanje na netaknutom test razdoblju uz prihvatljiv operativni trošak. DeepLOB/RL nisu početni zadatak. |
+| 1 — Multi-instrument temelj | Konfigurirani instrumenti, stabilni `InstrumentId`/`StrategyId`/`SignalId`/`CorrelationId`, verzije ugovora i status dokument. | Više instrumenata i per-instrument timeframeovi prolaze validaciju i pokreću očekivane pretplate; isti signal zadržava identitet kroz strategy/risk tok. |
+| 2 — Registry i onboarding | Persistirani instrument registry, statusi, broker metadata i readiness odvojen od trading dozvole. | Dodavanje instrumenta idempotentno pokreće onboarding; restart nastavlja zadnji status; live ostaje isključen. |
+| 3 — Canonical market data | Bid/ask/trade događaji, source/receive vrijeme, finalnost i kvaliteta; kratki agregati te 1m/5m/15m kontekst. | Svaki događaj ima instrument i event-time; stale/out-of-order/gap stanja su vidljiva i ne mogu prešutno pokrenuti trade. |
+| 4 — Historical backfill | Resumable segmenti, pacing, retry, checkpoint, dedupe i gap report; široka 1m povijest i najveća praktična granularna povijest. | Prekid/restart ne duplicira podatke; nedostajući intervali su mjerljivi; live collection radi paralelno. |
+| 5 — Dataset storage | SQLite za operativno stanje; particionirani Parquet za raw/research podatke; manifest, schema version i hash. | Dataset je reproducibilan po instrumentu, datumu i vrsti podataka bez punjenja operativne baze tickovima. |
+| 6 — Neovisna collection pouzdanost | Collection radi u `AnalysisOnly`, pauzi i bez AI-ja; heartbeat, reconnect, lag i automatski gap-fill. | Trading readiness ne zaustavlja skupljanje; kvar jednog streama je detektiran zasebno. |
+| 7 — Deterministički replay | Isti feature/pattern kod kao live, event-time redoslijed, brzina, pause/resume i checkpoint. | Isti input i verzije daju iste signale; budući podaci nisu dostupni. |
+| 8 — Canonical featurei | VWAP, ATR, RSI, EMA, relativni volumen, spread, momentum, mean reversion, režim i normalizacija likvidnosti/volatilnosti. | Live, backfill i replay daju jednake feature vrijednosti za isti `asOf`. |
+| 9 — Pattern engine | Pattern + instrument + strategija + timeframe identitet; hard uvjeti, score komponente i razlozi; long/short domena. | Pozitivni i negativni testovi za svaki pattern; nema konflikta deduplikacije između instrumenata/timeframeova. |
+| 10 — Kandidati i labele | Spremanje prihvaćenih, odbijenih i blokiranih kandidata; 5s/15s/30s/1m/3m/5m, MFE/MAE i target/stop-first labele. | Svaka labela koristi samo naknadne podatke i uključuje realističan trošak. |
+| 11 — Evaluacija | Statistika po instrumentu, strategiji, vremenu, režimu i likvidnosti; walk-forward, expectancy, profit factor, drawdown i osjetljivost na trošak. | Odluka o pragu ne temelji se samo na win rateu; završni period ostaje netaknut. |
+| 12 — Kalibracija/rangiranje | Kalibrirane vjerojatnosti, stabilni pragovi i rangiranje konkurentnih prilika uz verzioniranu ručnu potvrdu. | Promjena praga/modela je auditirana i uspoređena s baselineom. |
+| 13 — Portfolio risk | R01–R02 plus globalni/per-instrument/per-strategy limiti, pending rezervacije, gross/net exposure, cooldown i korelacijski limit. | Paralelne odluke ne mogu rezervirati isti kapital; nulti kapacitet uvijek odbija nalog. |
+| 14 — Signal arbitration | Paralelni instrumenti; eksplicitna politika konflikta strategija na istom instrumentu; virtualna atribucija nasuprot broker net poziciji. | Suprotni ili duplicirani signali ne mogu proizvesti nekontrolirane naloge ili prodati tuđu količinu. |
+| 15 — Order/position lifecycle | R03–R08 i R12: durable intent, partial fills, commission, stop/target/time-exit, cancel/modify potvrda, restart i reconciliation. | Entry/exit su idempotentni; ukupni izlaz ne prelazi fillanu količinu; nepoznato broker stanje blokira nove ulaze. |
+| 16 — Scalping execution | Finalna quote/risk provjera, latency budget, edge-after-cost gate, market/limit/marketable-limit mjerenje i holding u sekundama. | Nalog se ne šalje na stale quote ili kad očekivani pomak ne pokriva procijenjeni trošak i buffer. |
+| 17 — Shadow i paper | Readiness po instrumentu, shadow, paper i postupni live rollout; automatska suspenzija na feed/order mismatch. | Svaki instrument zasebno prolazi unaprijed definirani protokol; live dopuštenje je ručno. |
+| 18 — Numerički model i LLM | Jednostavan baseline, zatim LightGBM kandidat i lokalna .NET inferencija; LLM za offline kontekst/objašnjenja. | Model nadmašuje deterministički baseline na walk-forward testu nakon troškova i bez mrežne latencije u entry putu. |
 
-## Faza 1: konkretan prvi paket implementacije
+## Pravila paralelizma
 
-### 1A — Risk i račun
+- Signali različitih instrumenata mogu se obrađivati i izvršavati paralelno.
+- Jedan instrument u početnoj sigurnoj verziji ima jednu stvarnu neto broker poziciju.
+- Više strategija na istom instrumentu dobiva virtualnu atribuciju, ali naloge koordinira portfolio/order sloj.
+- Suprotni signali ne netiraju se prešutno; prolaze eksplicitnu `Reject`, `Priority` ili kasnije odobrenu `Net` politiku.
+- Long i short podržani su u ugovorima i uključuju se zasebno po instrumentu. Short izvršavanje traži dodatnu broker/borrow provjeru prije paper/live aktivacije.
 
-- Uvesti jedinstveni account/operating-mode context.
-- Dohvatiti trade ledger za jasno definirani trading dan i spojiti ga na produkcijski risk poziv.
-- Popraviti nulti kapacitet sizer-a i definirati pravila količine/tick-sizea.
-- Uvesti rezervaciju izloženosti između odobrenja i potvrde entryja; otvoreni ostatak naloga ulazi u rezervaciju.
-- Testirati dnevni loss/trade/cooldown limit kroz cijeli pipeline, a ne samo izolirani engine.
+## Podatkovni i evaluacijski ugovori
 
-### 1B — Order i exit stanje
+- Raw market event ima stabilan ID, instrument, source-time, receive-time, izvor, sesiju, finalnost i quality status.
+- Signal ima stabilni `SignalId`; jedan konkretan prolaz pipelineom ima `CorrelationId`.
+- Verzije market-data, feature, pattern, strategy/label/model ugovora spremaju se uz odluke.
+- Svi kandidati i odbijanja ulaze u dataset, ne samo izvršeni ili dobitni tradeovi.
+- Cross-instrument trening koristi vremenske/group podjele koje sprečavaju leakage između preklapajućih razdoblja.
+- Rezultat se računa nakon provizije, spreada, slippagea i pretpostavke izvršenja.
+- Količina granularne povijesti ovisi o provideru; vlastito kontinuirano prikupljanje čuva podatke koje kasnije možda nije moguće ponovno preuzeti.
 
-- Persistirati intent prije slanja brokeru; stabilan poslovni ID ne ovisi o novom vremenu retryja.
-- Uskladiti executions, order statuse i provizije; callbackovi su idempotentni i mogu stići bilo kojim redoslijedom.
-- Za ATR i fixed-bracket put koristiti isti trade ledger i dosljedan lifecycle preostale količine.
-- Registrirati zaštitu ranih/djelomičnih fillova; potvrđivati stvarnu broker zaštitu.
-- Uvesti `ExitPending`, praćenje timeout/ručnog izlaza i koordinaciju sa stopom.
-- Modelirati pending cancel/modify i broker odbijanje; ne proglašavati uspjeh samo zato što je zahtjev poslan.
-- Zaključavanje ili serijalizaciju vezati uz jednu poziciju; modelirati crash recovery.
+## Potvrđene početne odluke
 
-### 1C — Operativne kontrole
+1. Više instrumenata i više paralelnih pozicija zamjenjuju SPY/single-position pretpostavku.
+2. Konfiguracija podržava više strategija po instrumentu i per-instrument timeframes/limite.
+3. Jedna neto broker pozicija po instrumentu ostaje početna sigurnosna granica.
+4. Long i short nisu hardkodirano ograničeni, ali se uključuju zasebno.
+5. SQLite ostaje operativna baza; Parquet je planirani research/raw format.
+6. Novi instrument automatski prikuplja, backfilla i obrađuje podatke, ali ne postaje automatski live-enabled.
+7. LLM se postupno uklanja iz latency-critical entry puta ako mjerenje potvrdi da usporava kratke tradeove.
+8. Zaštitni izlaz može realizirati kontrolirani gubitak; pravilo „nikad prodati s gubitkom” nije sigurnosno prihvatljivo.
 
-- Odvojiti readiness od trajne dozvole za nove ulaze.
-- Pause zaustavlja nove ulaze uz nastavak upravljanja postojećom pozicijom.
-- Close šalje i prati idempotentno zatvaranje preostale pozicije.
-- Kill ima dokumentiranu politiku za nove naloge, otvorene entryje i postojeće pozicije; odabranu politiku testirati.
-- Promjenu paper/live konteksta povezati s reconnectom i novim reconciliationom.
-
-## Podatkovni i modelni ugovori
-
-Prije ML implementacije definirati:
-
-- `EventId`, instrument, vrijeme izvora/primitka, sesiju i verziju izvora.
-- Bid/ask cijenu i količine, trade cijenu/količinu te closed-bar intervale; L2 je zaseban opcionalni skup.
-- Verziju featurea, cutoff vrijeme i status kvalitete/missing podataka.
-- Svaki kandidat i razlog odbijanja, uključujući odluke bez tradea; ne trenirati samo na izvršenim ili pobjedničkim tradeovima.
-- Labele s unaprijed odabranim horizontima i realističnim entry/exit pravilima, fee/spread/slippage pretpostavkama i jasnim vremenom nastanka labele.
-- Walk-forward podjelu po vremenu, razmak za preklapajuće labele i netaknuti završni test; preprocessing i odabir parametara rade se samo na train dijelu.
-- Evaluaciju neto rezultata, drawdowna, turnovera, broja tradeova, stabilnosti po sesijama i osjetljivosti na troškove. Ne zaključivati da rezultat jamči budući profit.
-- Model artifact/verziju i kompatibilan inference ugovor s .NET-om; odabrati način exporta/servinga nakon malog compatibility testa.
-
-## Odluke za potvrdu uz plan
-
-Predložene početne postavke projekta, uz mogućnost korekcije prije implementacije:
-
-1. **Redoslijed:** prvo faze 0–1; početno zadržati postojeću strategiju dok se popravljaju sigurnost i evidencija.
-2. **Pozicije:** jedan long SPY trade od ulaza do potpunog izlaza; bez shorta, pyramidinga i automatskog povećanja gubitničke pozicije u početnoj verziji.
-3. **Izlazna politika:** definirati dopušten gubitak, zaštitni stop, maximum holding i ponašanje na kraju sesije. Trenutni kod već dopušta izlaz s gubitkom; pravilo „nikad prodati s gubitkom” nije spojivo s bezuvjetnim zaštitnim izlazom. To ne mijenjati prešutno.
-4. **Kill politika:** predlaže se zabrana novih ulaza i otkazivanje preostalih entryja, uz nastavak zaštite postojeće pozicije; eksplicitni Close zasebno provodi izlaz. Prije koda potvrditi željenu semantiku hitnog zatvaranja.
-5. **Dataset/model:** nakon stabilizacije prikupljati quote/trade podatke i sve kandidate; jednostavan baseline pa LightGBM kandidat, uz postojeći pattern sustav za usporedbu.
-
-Za početak implementacije dovoljna je potvrda redoslijeda i eventualne korekcije ovih odluka. TWS paper dostupnost, službeni CSharpAPI DLL i sample feed trebat će za stvarnu adapter verifikaciju; API ključeve i račune postavljati lokalno kroz konfiguraciju/environment, bez upisa u Git.
+API ključevi, broker računi i službeni IBKR DLL ostaju lokalna konfiguracija i ne upisuju se u Git.

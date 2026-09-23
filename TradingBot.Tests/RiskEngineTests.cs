@@ -107,6 +107,7 @@ namespace TradingBot.Tests
             Assert.Equal(20m, decision.ApprovedQuantity);
             Assert.Equal(2000m, decision.PositionValue);
             Assert.Equal(100m, decision.RiskAmount);
+            Assert.NotNull(decision.Context);
             await AssertPersisted(factory, "riskDecision", "\"approvedQuantity\":20");
             connection.Dispose();
         }
@@ -281,7 +282,8 @@ namespace TradingBot.Tests
                 EntryMax = entry,
                 StopPrice = stop,
                 TakeProfitPrice = 110m,
-                ExpectedRewardRiskRatio = 2m
+                ExpectedRewardRiskRatio = 2m,
+                Context = PipelineContext.CreateForSignal("US-STK-SPY-SMART", $"risk-test|{entry}|{stop}")
             };
         }
 

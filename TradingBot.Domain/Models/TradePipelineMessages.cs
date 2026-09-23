@@ -11,5 +11,6 @@ namespace TradingBot.Domain.Models
         public StrategyDecision StrategyDecision { get; init; } = new();
         public RiskDecision RiskDecision { get; init; } = null!;
         public DateTime ApprovedAtUtc { get; init; } = DateTime.UtcNow;
+        public PipelineContext Context => Pattern.Context;
     }
 }

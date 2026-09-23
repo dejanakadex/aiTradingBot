@@ -103,7 +103,8 @@ namespace TradingBot.Infrastructure.Services
                 EntryMax = entryMax,
                 StopPrice = stopPrice,
                 TakeProfitPrice = takeProfit,
-                ExpectedRewardRiskRatio = rewardRisk
+                ExpectedRewardRiskRatio = rewardRisk,
+                Context = pattern.Context
             };
 
             await PersistAsync(snapshot, pattern, analysis, critic, decision, cancellationToken).ConfigureAwait(false);

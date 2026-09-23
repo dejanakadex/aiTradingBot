@@ -23,8 +23,9 @@ namespace TradingBot.Tests
         public async Task EvaluateAsync_CreatesTradeSignalWhenAllRulesPass()
         {
             var engine = CreateEngine(out var factory, out var connection);
+            var pattern = BuildPattern();
 
-            var decision = await engine.EvaluateAsync(BuildSnapshot(), BuildPattern(), BuildAnalysis(), BuildCritic());
+            var decision = await engine.EvaluateAsync(BuildSnapshot(), pattern, BuildAnalysis(), BuildCritic());
 
             Assert.True(decision.Approved);
             Assert.Empty(decision.RejectionReasons);
@@ -36,8 +37,9 @@ namespace TradingBot.Tests
             Assert.Equal(98m, decision.StopPrice);
             Assert.Equal(107.06m, Math.Round(decision.TakeProfitPrice!.Value, 2));
             Assert.True(decision.ExpectedRewardRiskRatio >= 2m);
+            Assert.Same(pattern.Context, decision.Context);
 
-            await AssertPersistedDecision(factory, "strategyDecision", "\"approved\":true");
+            await AssertPersistedDecision(factory, "strategyDecision", "\"approved\":true", pattern.Context.CorrelationId.ToString());
             connection.Dispose();
         }
 

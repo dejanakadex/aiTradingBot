@@ -37,6 +37,47 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task StartsPerInstrumentSubscriptionsForAllEnabledInstruments()
+        {
+            var harness = CreateHarness(new TradingSettings
+            {
+                Instruments = new[]
+                {
+                    new InstrumentSettings
+                    {
+                        InstrumentId = "US-STK-SPY-SMART",
+                        Symbol = "SPY",
+                        MarketDataTimeframes = new[] { "1m", "5m" }
+                    },
+                    new InstrumentSettings
+                    {
+                        InstrumentId = "US-STK-QQQ-SMART",
+                        Symbol = "QQQ",
+                        MarketDataTimeframes = new[] { "1m" }
+                    },
+                    new InstrumentSettings
+                    {
+                        InstrumentId = "US-STK-AAPL-SMART",
+                        Symbol = "AAPL",
+                        Enabled = false
+                    }
+                }
+            });
+            harness.Status.SetState(TradingEngineState.Ready, true, "ready", reconciliationCompleted: true);
+
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 3);
+            await harness.Service.StopAsync(CancellationToken.None);
+
+            var subscriptions = harness.MarketData.Subscriptions.Select(item => (item.Symbol, item.Timeframe)).ToArray();
+            Assert.Contains(("SPY", "1m"), subscriptions);
+            Assert.Contains(("SPY", "5m"), subscriptions);
+            Assert.Contains(("QQQ", "1m"), subscriptions);
+            Assert.DoesNotContain(subscriptions, item => item.Symbol == "AAPL");
+            harness.Dispose();
+        }
+
+        [Fact]
         public async Task DoesNotSubscribeBeforeEngineIsReady()
         {
             var harness = CreateHarness();

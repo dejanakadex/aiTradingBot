@@ -36,8 +36,7 @@ try
     // Bind configuration sections to strongly typed settings
     builder.Services.AddOptions<TradingSettings>()
         .Bind(builder.Configuration.GetSection("TradingSettings"))
-        .Validate(settings => settings.Symbols?.Any(symbol => !string.IsNullOrWhiteSpace(symbol)) == true, "TradingSettings:Symbols must contain at least one symbol.")
-        .Validate(settings => settings.MarketDataTimeframes?.Any(timeframe => !string.IsNullOrWhiteSpace(timeframe)) == true, "TradingSettings:MarketDataTimeframes must contain at least one timeframe.")
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "TradingSettings instrument configuration is invalid. Check InstrumentId, Symbol, market-data timeframes and duplicate values.")
         .Validate(settings => settings.MinimumPatternQualityForAiAnalysis is >= 0d and <= 1d, "TradingSettings:MinimumPatternQualityForAiAnalysis must be between 0 and 1.")
         .Validate(settings => settings.MinimumAiConfidence is >= 0m and <= 1m, "TradingSettings:MinimumAiConfidence must be between 0 and 1.")
         .Validate(settings => settings.MinimumPatternQuality is >= 0m and <= 1m, "TradingSettings:MinimumPatternQuality must be between 0 and 1.")

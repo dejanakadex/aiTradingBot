@@ -360,10 +360,8 @@ namespace TradingBot.Infrastructure.Services
 
         private IReadOnlyList<string> GetConfiguredSymbols()
         {
-            var symbols = (_tradingSettings.Symbols ?? Array.Empty<string>())
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => s.Trim().ToUpperInvariant())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var symbols = _tradingSettings.GetEnabledInstruments()
+                .Select(instrument => instrument.Symbol)
                 .ToArray();
 
             return symbols.Length == 0 ? new[] { "SPY" } : symbols;
@@ -371,9 +369,8 @@ namespace TradingBot.Infrastructure.Services
 
         private IReadOnlyList<string> GetConfiguredTimeframes()
         {
-            var timeframes = (_tradingSettings.MarketDataTimeframes ?? Array.Empty<string>())
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .Select(t => t.Trim().ToLowerInvariant())
+            var timeframes = _tradingSettings.GetEnabledInstruments()
+                .SelectMany(instrument => instrument.MarketDataTimeframes)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
