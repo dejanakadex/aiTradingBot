@@ -69,6 +69,8 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();
             services.AddTransient<IOpenAiSmokeTestService, OpenAiSmokeTestService>();
             services.AddSingleton<IMarketDataValidator, MarketDataValidator>();
+            services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
+            services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
             services.AddSingleton<IPatternQualityGate, PatternQualityGate>();
             services.AddTransient<IProtectiveStopMonitor, ProtectiveStopMonitor>();
             services.AddTransient<IPatternDetector>(sp =>

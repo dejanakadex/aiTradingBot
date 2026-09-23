@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
+using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
@@ -57,6 +58,31 @@ namespace TradingBot.Tests
             var snapshot = await service.BuildSnapshotAsync("SPY", currentPrice: 123.45m);
 
             Assert.Equal(123.45m, snapshot.CurrentPrice);
+        }
+
+        [Fact]
+        public async Task BuildSnapshotAsync_UsesLatestCanonicalTradeAndSpread()
+        {
+            var history = new FakeCandleHistoryService();
+            history.Seed("SPY", Timeframe.OneMinute, BuildCandles("SPY", Timeframe.OneMinute, 100m, TimeSpan.FromMinutes(1)));
+            history.Seed("SPY", Timeframe.FiveMinutes, BuildCandles("SPY", Timeframe.FiveMinutes, 200m, TimeSpan.FromMinutes(5)));
+            history.Seed("SPY", Timeframe.FifteenMinutes, BuildCandles("SPY", Timeframe.FifteenMinutes, 300m, TimeSpan.FromMinutes(15)));
+            var latest = new LatestMarketDataService();
+            var at = new DateTime(2026, 8, 24, 14, 30, 0, DateTimeKind.Utc);
+            latest.Apply(Tick(MarketDataEventKind.Bid, 123.40m, at));
+            latest.Apply(Tick(MarketDataEventKind.Ask, 123.44m, at));
+            latest.Apply(Tick(MarketDataEventKind.Trade, 123.42m, at));
+            var service = new MarketSnapshotService(
+                history,
+                new FeatureEngine(emaShort: 3, emaLong: 5, rsi: 3, atr: 3, volAvg: 3),
+                new FakePatternDetector(),
+                latestMarketData: latest);
+
+            var snapshot = await service.BuildSnapshotAsync("SPY");
+
+            Assert.Equal(123.42m, snapshot.CurrentPrice);
+            Assert.Equal(0.04m, snapshot.Spread);
+            Assert.Equal(at, snapshot.CreatedAtUtc);
         }
 
         [Fact]
@@ -128,6 +154,19 @@ namespace TradingBot.Tests
                 })
                 .ToList();
         }
+
+        private static CanonicalMarketDataEvent Tick(MarketDataEventKind kind, decimal price, DateTime at) => new()
+        {
+            EventId = $"test-{kind}",
+            InstrumentId = "US-STK-SPY-SMART",
+            Symbol = "SPY",
+            Kind = kind,
+            EventTimeUtc = at,
+            ReceivedTimeUtc = at,
+            Source = "Test",
+            Price = price,
+            Size = 1m
+        };
 
         private sealed class FakeCandleHistoryService : ICandleHistoryService
         {

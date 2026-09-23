@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Exceptions;
 using TradingBot.Application.Interfaces;
+using TradingBot.Domain.Enums;
 using TradingBot.Infrastructure.Interfaces;
 using TradingBot.Infrastructure.Options;
 
@@ -28,6 +29,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<int, OpenOrdersRequest> _openOrdersRequests = new();
         private readonly ConcurrentDictionary<int, HistoricalBarsRequest> _historicalRequests = new();
         private readonly ConcurrentDictionary<int, StreamingSubscription> _subscriptions = new();
+        private readonly ConcurrentDictionary<int, LevelOneSubscription> _levelOneSubscriptions = new();
         private readonly ConcurrentDictionary<string, decimal> _commissionsByExecutionId = new(StringComparer.OrdinalIgnoreCase);
 
         private EReaderSignal? _signal;
@@ -48,6 +50,7 @@ namespace TradingBot.Infrastructure.Services
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
         public event Func<MarketBar, Task>? MarketBarReceived;
+        public event Func<CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
         public event Func<AccountInfo, Task>? AccountUpdated;
         public event Func<PositionDto, Task>? PositionUpdated;
         public event Func<OrderStatusDto, Task>? OrderStatusUpdated;
@@ -340,6 +343,13 @@ namespace TradingBot.Infrastructure.Services
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var normalizedTimeframe = NormalizeTimeframe(timeframe);
+            int? levelOneRequestId = null;
+            if (normalizedTimeframe == "1m")
+            {
+                levelOneRequestId = GetNextRequestId();
+                _levelOneSubscriptions[levelOneRequestId.Value] = new LevelOneSubscription(symbol);
+                client.reqMktData(levelOneRequestId.Value, BuildStockContract(symbol), string.Empty, false, false, []);
+            }
             var channel = Channel.CreateBounded<MarketBar>(new BoundedChannelOptions(128)
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
@@ -350,6 +360,11 @@ namespace TradingBot.Infrastructure.Services
             {
                 _subscriptions.TryRemove(requestId, out _);
                 TryBrokerCall(() => client.cancelHistoricalData(requestId), "cancel streaming historical data");
+                if (levelOneRequestId.HasValue)
+                {
+                    _levelOneSubscriptions.TryRemove(levelOneRequestId.Value, out _);
+                    TryBrokerCall(() => client.cancelMktData(levelOneRequestId.Value), "cancel level-one market data");
+                }
             });
             subscription.SetContext(symbol, normalizedTimeframe);
 
@@ -656,6 +671,43 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
+        public override void tickPrice(int tickerId, int field, double price, TickAttrib attribs)
+        {
+            if (!_levelOneSubscriptions.TryGetValue(tickerId, out var subscription)
+                || double.IsNaN(price)
+                || double.IsInfinity(price)
+                || price <= 0d)
+            {
+                return;
+            }
+
+            var kind = field switch
+            {
+                1 => MarketDataEventKind.Bid,
+                2 => MarketDataEventKind.Ask,
+                4 => MarketDataEventKind.Trade,
+                _ => (MarketDataEventKind?)null
+            };
+            if (!kind.HasValue) return;
+
+            var now = DateTime.UtcNow;
+            var sequence = subscription.NextSequence(kind.Value);
+            var marketEvent = new CanonicalMarketDataEvent
+            {
+                EventId = $"IBKR:{tickerId}:{kind.Value}:{sequence}",
+                InstrumentId = subscription.Symbol,
+                Symbol = subscription.Symbol,
+                Kind = kind.Value,
+                EventTimeUtc = now,
+                ReceivedTimeUtc = now,
+                Source = "IBKR.Level1",
+                Sequence = sequence,
+                IsFinal = true,
+                Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture)
+            };
+            _ = InvokeMarketDataEventReceivedAsync(marketEvent);
+        }
+
         public override void historicalDataUpdate(int reqId, Bar bar)
         {
             if (_subscriptions.TryGetValue(reqId, out var subscription))
@@ -881,6 +933,9 @@ namespace TradingBot.Infrastructure.Services
                 Symbol = symbol,
                 Timeframe = timeframe,
                 TimestampUtc = ParseIbkrBarTime(bar.Time),
+                ReceivedTimeUtc = DateTime.UtcNow,
+                Source = "IBKR",
+                IsFinal = true,
                 Open = ToDecimal(bar.Open),
                 High = ToDecimal(bar.High),
                 Low = ToDecimal(bar.Low),
@@ -968,6 +1023,11 @@ namespace TradingBot.Infrastructure.Services
         private Task InvokeMarketBarReceivedAsync(MarketBar bar)
         {
             return MarketBarReceived?.Invoke(bar) ?? Task.CompletedTask;
+        }
+
+        private Task InvokeMarketDataEventReceivedAsync(CanonicalMarketDataEvent marketEvent)
+        {
+            return MarketDataEventReceived?.Invoke(marketEvent) ?? Task.CompletedTask;
         }
 
         private Task InvokeAccountUpdatedAsync(AccountInfo account)
@@ -1144,6 +1204,27 @@ namespace TradingBot.Infrastructure.Services
                 Channel.Writer.TryComplete();
                 return ValueTask.CompletedTask;
             }
+        }
+
+        private sealed class LevelOneSubscription
+        {
+            private long _bidSequence;
+            private long _askSequence;
+            private long _tradeSequence;
+
+            public LevelOneSubscription(string symbol)
+            {
+                Symbol = symbol;
+            }
+
+            public string Symbol { get; }
+            public long NextSequence(MarketDataEventKind kind) => kind switch
+            {
+                MarketDataEventKind.Bid => Interlocked.Increment(ref _bidSequence),
+                MarketDataEventKind.Ask => Interlocked.Increment(ref _askSequence),
+                MarketDataEventKind.Trade => Interlocked.Increment(ref _tradeSequence),
+                _ => throw new ArgumentOutOfRangeException(nameof(kind))
+            };
         }
     }
 }

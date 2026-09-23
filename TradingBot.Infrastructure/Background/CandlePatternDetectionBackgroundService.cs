@@ -79,7 +79,20 @@ namespace TradingBot.Infrastructure.Background
 
         private async Task ProcessCandleAsync(Candle candle, CancellationToken cancellationToken)
         {
-            var key = $"{candle.Symbol}:{candle.Timeframe}:{candle.TimestampUtc:O}";
+            if (!candle.IsFinal || candle.QualityStatus != MarketDataQualityStatus.Healthy)
+            {
+                _logger.LogWarning(
+                    "Skipped non-tradable candle {InstrumentId} {Symbol} {Timeframe} {TimestampUtc}: final={IsFinal}, quality={QualityStatus}",
+                    candle.InstrumentId,
+                    candle.Symbol,
+                    candle.Timeframe,
+                    candle.TimestampUtc,
+                    candle.IsFinal,
+                    candle.QualityStatus);
+                return;
+            }
+
+            var key = $"{candle.InstrumentId}:{candle.Timeframe}:{candle.TimestampUtc:O}";
             if (!_processedCandles.TryAdd(key, 0))
             {
                 _logger.LogDebug("Skipping duplicate candle {Key}", key);

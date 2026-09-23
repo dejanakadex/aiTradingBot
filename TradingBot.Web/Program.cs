@@ -176,6 +176,9 @@ try
     app.MapGet("/api/reconciliation/status", (ITradingEngineStatusService statusService) => Results.Ok(statusService.Current));
     app.MapGet("/api/instruments", async (IInstrumentRegistryService registry, CancellationToken cancellationToken) =>
         Results.Ok(await registry.GetAllAsync(cancellationToken)));
+    app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>
+        Results.Ok(await quality.GetStreamsAsync(cancellationToken)));
+    app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
     if (TradingBot.Web.DevelopmentEndpointGuard.ShouldExposeDevelopmentEndpoints(app.Environment))
     {
         app.MapGet("/api/dev/openai-smoke-test", (IOptions<OpenAiSettings> openAiOptions, IOpenAiApiKeyProvider apiKeyProvider) =>

@@ -24,6 +24,7 @@ namespace TradingBot.Infrastructure.Services
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
         public event Func<MarketBar, Task>? MarketBarReceived;
+        public event Func<CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
 #pragma warning restore CS0067
 
         public Task StartAsync(CancellationToken cancellationToken = default)

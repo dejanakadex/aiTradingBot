@@ -14,6 +14,7 @@ namespace TradingBot.Tests.Fakes
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
         public event Func<TradingBot.Application.DTOs.MarketBar, Task>? MarketBarReceived;
+        public event Func<CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
 
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
@@ -49,6 +50,11 @@ namespace TradingBot.Tests.Fakes
         public Task SimulateMarketBarAsync(TradingBot.Application.DTOs.MarketBar bar)
         {
             return MarketBarReceived?.Invoke(bar) ?? Task.CompletedTask;
+        }
+
+        public Task SimulateMarketDataEventAsync(CanonicalMarketDataEvent marketEvent)
+        {
+            return MarketDataEventReceived?.Invoke(marketEvent) ?? Task.CompletedTask;
         }
     }
 }

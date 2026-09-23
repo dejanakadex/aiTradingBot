@@ -168,10 +168,27 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<decimal>("High")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsFinal")
+                        .HasColumnType("INTEGER");
+
                     b.Property<decimal>("Low")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Open")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ReceivedTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Symbol")
@@ -188,6 +205,12 @@ namespace TradingBot.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId");
+
+                    b.HasIndex("QualityStatus");
+
+                    b.HasIndex("ReceivedTimeUtc");
 
                     b.HasIndex("Symbol", "Timeframe", "TimestampUtc")
                         .IsUnique();
@@ -512,6 +535,147 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("ToStatus");
 
                     b.ToTable("InstrumentStatusTransitionRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.MarketDataQualityIncidentRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EventTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ReceivedTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("Sequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StreamKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Timeframe")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("InstrumentId");
+
+                    b.HasIndex("RecordedAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("StreamKey");
+
+                    b.ToTable("MarketDataQualityIncidentRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.MarketDataStreamStateRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsHealthy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastEventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastEventTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastReceivedTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StatusReason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StreamKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Timeframe")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("StreamKey")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedAtUtc");
+
+                    b.ToTable("MarketDataStreamStateRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.MarketSnapshot", b =>

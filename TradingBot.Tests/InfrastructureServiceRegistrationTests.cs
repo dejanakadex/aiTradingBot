@@ -48,6 +48,8 @@ namespace TradingBot.Tests
             Assert.NotNull(provider.GetRequiredService<MarketDataPipeline>());
             Assert.NotNull(provider.GetRequiredService<IBrokerStateReconciliationService>());
             Assert.IsType<InstrumentRegistryService>(provider.GetRequiredService<IInstrumentRegistryService>());
+            Assert.IsType<MarketDataQualityService>(provider.GetRequiredService<IMarketDataQualityService>());
+            Assert.IsType<LatestMarketDataService>(provider.GetRequiredService<ILatestMarketDataService>());
         }
 
         [Fact]

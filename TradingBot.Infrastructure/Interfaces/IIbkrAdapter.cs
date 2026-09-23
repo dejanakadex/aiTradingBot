@@ -36,5 +36,10 @@ namespace TradingBot.Infrastructure.Interfaces
         /// Implementations should emit MarketBar instances for completed candles only.
         /// </summary>
         event Func<TradingBot.Application.DTOs.MarketBar, Task>? MarketBarReceived;
+
+        /// <summary>
+        /// Emits canonical bid, ask and trade events when the broker provides level-one updates.
+        /// </summary>
+        event Func<TradingBot.Application.DTOs.CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
     }
 }

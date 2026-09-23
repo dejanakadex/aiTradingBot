@@ -17,17 +17,20 @@ namespace TradingBot.Infrastructure.Services
         private readonly IFeatureEngine _featureEngine;
         private readonly IPatternDetector _patternDetector;
         private readonly OpenAiMarketContextSettings _marketContextSettings;
+        private readonly ILatestMarketDataService? _latestMarketData;
 
         public MarketSnapshotService(
             ICandleHistoryService candleHistory,
             IFeatureEngine featureEngine,
             IPatternDetector patternDetector,
-            IOptions<OpenAiSettings>? openAiSettings = null)
+            IOptions<OpenAiSettings>? openAiSettings = null,
+            ILatestMarketDataService? latestMarketData = null)
         {
             _candleHistory = candleHistory ?? throw new ArgumentNullException(nameof(candleHistory));
             _featureEngine = featureEngine ?? throw new ArgumentNullException(nameof(featureEngine));
             _patternDetector = patternDetector ?? throw new ArgumentNullException(nameof(patternDetector));
             _marketContextSettings = openAiSettings?.Value.MarketContext ?? new OpenAiMarketContextSettings();
+            _latestMarketData = latestMarketData;
         }
 
         public async Task<MarketSnapshot> BuildSnapshotAsync(
@@ -42,13 +45,17 @@ namespace TradingBot.Infrastructure.Services
             var oneMinute = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.OneMinute, "Entry timing", cancellationToken).ConfigureAwait(false);
             var fiveMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FiveMinutes, "Trading setup / pullback context", cancellationToken).ConfigureAwait(false);
             var fifteenMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FifteenMinutes, "Broader market direction", cancellationToken).ConfigureAwait(false);
+            var latest = _latestMarketData?.Get(normalizedSymbol);
+            var midpoint = latest?.Bid is decimal bid && latest.Ask is decimal ask ? (bid + ask) / 2m : (decimal?)null;
 
             return new MarketSnapshot
             {
                 Symbol = normalizedSymbol,
-                CreatedAtUtc = DateTime.UtcNow,
-                CurrentPrice = currentPrice ?? oneMinute.RecentCandles.LastOrDefault()?.Close,
-                Spread = spread,
+                CreatedAtUtc = currentPrice.HasValue || spread.HasValue
+                    ? DateTime.UtcNow
+                    : latest?.AsOfUtc ?? DateTime.UtcNow,
+                CurrentPrice = currentPrice ?? latest?.LastTrade ?? midpoint ?? oneMinute.RecentCandles.LastOrDefault()?.Close,
+                Spread = spread ?? latest?.Spread,
                 OneMinute = oneMinute,
                 FiveMinutes = fiveMinutes,
                 FifteenMinutes = fifteenMinutes

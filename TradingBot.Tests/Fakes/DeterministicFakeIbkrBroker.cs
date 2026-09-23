@@ -67,6 +67,7 @@ namespace TradingBot.Tests.Fakes
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
         public event Func<MarketBar, Task>? MarketBarReceived;
+        public event Func<CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
 #pragma warning disable CS0067
         public event Func<AccountInfo, Task>? AccountUpdated;
 #pragma warning restore CS0067
@@ -102,6 +103,11 @@ namespace TradingBot.Tests.Fakes
         public Task EmitMarketBarAsync(MarketBar bar)
         {
             return MarketBarReceived?.Invoke(bar) ?? Task.CompletedTask;
+        }
+
+        public Task EmitMarketDataEventAsync(CanonicalMarketDataEvent marketEvent)
+        {
+            return MarketDataEventReceived?.Invoke(marketEvent) ?? Task.CompletedTask;
         }
 
         public async Task ReplayExecutionCallbacksAsync()

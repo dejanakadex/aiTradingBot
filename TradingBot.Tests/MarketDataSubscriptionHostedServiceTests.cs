@@ -250,7 +250,9 @@ namespace TradingBot.Tests
                 eventBus,
                 factory,
                 new MarketDataValidator(Options.Create(tradingSettings), new SystemClock()),
-                NullLogger<MarketDataPipeline>.Instance);
+                null,
+                NullLogger<MarketDataPipeline>.Instance,
+                settings: Options.Create(tradingSettings));
             var marketData = new FakeSubscriptionMarketDataService();
             var connectionService = new FakeConnectionService(ConnectionStatus.Connected);
             var service = new MarketDataSubscriptionHostedService(
@@ -351,12 +353,18 @@ namespace TradingBot.Tests
             public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(string symbol, string timeframe, int count, CancellationToken cancellationToken = default)
             {
                 var now = DateTime.UtcNow;
+                var intervalMinutes = timeframe switch
+                {
+                    "5m" => 5,
+                    "15m" => 15,
+                    _ => 1
+                };
                 var bars = Enumerable.Range(0, count)
                     .Select(i => new MarketBar
                     {
                         Symbol = symbol,
                         Timeframe = timeframe,
-                        TimestampUtc = now.AddMinutes(-(count - i + 1)),
+                        TimestampUtc = now.AddMinutes(-(count - i) * intervalMinutes),
                         Open = 100m,
                         High = 101m,
                         Low = 99m,

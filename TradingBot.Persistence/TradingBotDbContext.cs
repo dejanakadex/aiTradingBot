@@ -26,6 +26,8 @@ namespace TradingBot.Persistence
         public DbSet<ExitStopAuditRecord> ExitStopAuditRecords { get; set; }
         public DbSet<InstrumentRegistryRecord> InstrumentRegistryRecords { get; set; }
         public DbSet<InstrumentStatusTransitionRecord> InstrumentStatusTransitionRecords { get; set; }
+        public DbSet<MarketDataStreamStateRecord> MarketDataStreamStateRecords { get; set; }
+        public DbSet<MarketDataQualityIncidentRecord> MarketDataQualityIncidentRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,6 +37,9 @@ namespace TradingBot.Persistence
             {
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => new { x.Symbol, x.Timeframe, x.TimestampUtc }).IsUnique();
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.ReceivedTimeUtc);
+                b.HasIndex(x => x.QualityStatus);
             });
 
             modelBuilder.Entity<Trade>(b =>
@@ -139,6 +144,27 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.InstrumentId);
                 b.HasIndex(x => x.ToStatus);
                 b.HasIndex(x => x.TimestampUtc);
+            });
+
+            modelBuilder.Entity<MarketDataStreamStateRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.StreamKey).IsUnique();
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.UpdatedAtUtc);
+                b.Property(x => x.StreamKey).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<MarketDataQualityIncidentRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.EventId);
+                b.HasIndex(x => x.StreamKey);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.RecordedAtUtc);
             });
         }
     }

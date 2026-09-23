@@ -5,7 +5,7 @@ namespace TradingBot.Domain.Models
 {
     public static class PipelineContractVersions
     {
-        public const string MarketData = "market-data-v1";
+        public const string MarketData = "market-data-v2";
         public const string Features = "features-v1";
         public const string Patterns = "patterns-v1";
         public const string Strategy = "strategy-v1";

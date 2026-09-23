@@ -123,8 +123,8 @@ namespace TradingBot.Infrastructure.Background
                         return;
                     }
 
-                    await SeedHistoricalCandlesAsync(instrument.Symbol, timeframe, cancellationToken).ConfigureAwait(false);
-                    await SubscribeAsync(instrument.Symbol, timeframe, cancellationToken).ConfigureAwait(false);
+                    await SeedHistoricalCandlesAsync(instrument, timeframe, cancellationToken).ConfigureAwait(false);
+                    await SubscribeAsync(instrument, timeframe, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -156,12 +156,12 @@ namespace TradingBot.Infrastructure.Background
             }
         }
 
-        private async Task SeedHistoricalCandlesAsync(string symbol, string timeframe, CancellationToken cancellationToken)
+        private async Task SeedHistoricalCandlesAsync(ConfiguredInstrument instrument, string timeframe, CancellationToken cancellationToken)
         {
             try
             {
                 var count = GetHistoricalSeedCount(timeframe);
-                var bars = await _marketDataService.GetHistoricalBarsAsync(symbol, timeframe, count, cancellationToken).ConfigureAwait(false);
+                var bars = await _marketDataService.GetHistoricalBarsAsync(instrument.Symbol, timeframe, count, cancellationToken).ConfigureAwait(false);
                 var seeded = 0;
                 foreach (var bar in bars.OrderBy(b => b.TimestampUtc))
                 {
@@ -169,11 +169,13 @@ namespace TradingBot.Infrastructure.Background
                         bar,
                         cancellationToken,
                         allowStaleSeedCandle: true,
-                        publishToEventBus: false).ConfigureAwait(false);
+                        publishToEventBus: false,
+                        instrumentId: instrument.InstrumentId,
+                        source: "IBKR.HistoricalBar").ConfigureAwait(false);
                     seeded++;
                 }
 
-                _logger.LogInformation("Seeded {Count} historical candles for {Symbol} {Timeframe}.", seeded, symbol, timeframe);
+                _logger.LogInformation("Seeded {Count} historical candles for {InstrumentId} {Symbol} {Timeframe}.", seeded, instrument.InstrumentId, instrument.Symbol, timeframe);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -181,18 +183,18 @@ namespace TradingBot.Infrastructure.Background
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to seed historical candles for {Symbol} {Timeframe}.", symbol, timeframe);
+                _logger.LogWarning(ex, "Failed to seed historical candles for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
         }
 
-        private async Task SubscribeAsync(string symbol, string timeframe, CancellationToken cancellationToken)
+        private async Task SubscribeAsync(ConfiguredInstrument instrument, string timeframe, CancellationToken cancellationToken)
         {
             try
             {
-                var subscription = await _marketDataService.SubscribeAsync(symbol, timeframe, cancellationToken).ConfigureAwait(false);
+                var subscription = await _marketDataService.SubscribeAsync(instrument.Symbol, timeframe, cancellationToken).ConfigureAwait(false);
                 _subscriptions.Add(subscription);
-                _readerTasks.Add(ReadSubscriptionAsync(symbol, timeframe, subscription, cancellationToken));
-                _logger.LogInformation("Subscribed to market data for {Symbol} {Timeframe}.", symbol, timeframe);
+                _readerTasks.Add(ReadSubscriptionAsync(instrument, timeframe, subscription, cancellationToken));
+                _logger.LogInformation("Subscribed to market data for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -200,12 +202,12 @@ namespace TradingBot.Infrastructure.Background
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to subscribe to market data for {Symbol} {Timeframe}.", symbol, timeframe);
+                _logger.LogWarning(ex, "Failed to subscribe to market data for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
         }
 
         private async Task ReadSubscriptionAsync(
-            string symbol,
+            ConfiguredInstrument instrument,
             string timeframe,
             IMarketDataSubscription subscription,
             CancellationToken cancellationToken)
@@ -214,18 +216,22 @@ namespace TradingBot.Infrastructure.Background
             {
                 await foreach (var bar in subscription.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    await _marketDataPipeline.ProcessMarketBarAsync(bar, cancellationToken).ConfigureAwait(false);
+                    await _marketDataPipeline.ProcessMarketBarAsync(
+                        bar,
+                        cancellationToken,
+                        instrumentId: instrument.InstrumentId,
+                        source: "IBKR.StreamingBar").ConfigureAwait(false);
                 }
 
-                _logger.LogWarning("Market data subscription completed for {Symbol} {Timeframe}.", symbol, timeframe);
+                _logger.LogWarning("Market data subscription completed for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogInformation("Market data subscription reader canceled for {Symbol} {Timeframe}.", symbol, timeframe);
+                _logger.LogInformation("Market data subscription reader canceled for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Market data subscription reader failed for {Symbol} {Timeframe}.", symbol, timeframe);
+                _logger.LogError(ex, "Market data subscription reader failed for {InstrumentId} {Symbol} {Timeframe}.", instrument.InstrumentId, instrument.Symbol, timeframe);
             }
         }
 

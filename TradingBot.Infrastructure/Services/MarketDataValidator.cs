@@ -58,7 +58,14 @@ namespace TradingBot.Infrastructure.Services
                 return false;
             }
 
-            if (now - timestampUtc > TimeSpan.FromSeconds(Math.Max(1, _settings.MaximumCandleAgeSeconds)))
+            var timeframeSeconds = bar.Timeframe.Trim().ToLowerInvariant() switch
+            {
+                "1m" or "1 min" or "1 minute" => 60,
+                "5m" or "5 mins" or "5 minutes" => 300,
+                "15m" or "15 mins" or "15 minutes" => 900,
+                _ => 0
+            };
+            if (now - timestampUtc > TimeSpan.FromSeconds(Math.Max(1, _settings.MaximumCandleAgeSeconds + timeframeSeconds)))
             {
                 reason = "Candle timestamp is stale.";
                 return false;

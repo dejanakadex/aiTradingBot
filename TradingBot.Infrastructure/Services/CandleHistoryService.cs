@@ -30,7 +30,20 @@ namespace TradingBot.Infrastructure.Services
                 .ConfigureAwait(false);
 
             // map to domain Candles, order ascending
-            var mapped = rows.Select(r => new Candle(r.Symbol, r.Timeframe, r.TimestampUtc, r.Open, r.High, r.Low, r.Close, r.Volume))
+            var mapped = rows.Select(r => new Candle(
+                    r.Symbol,
+                    r.Timeframe,
+                    r.TimestampUtc,
+                    r.Open,
+                    r.High,
+                    r.Low,
+                    r.Close,
+                    r.Volume,
+                    r.InstrumentId,
+                    r.ReceivedTimeUtc,
+                    r.Source,
+                    r.IsFinal,
+                    r.QualityStatus))
                 .OrderBy(c => c.TimestampUtc)
                 .ToList();
 
