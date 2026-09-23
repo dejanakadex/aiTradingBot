@@ -25,6 +25,7 @@ namespace TradingBot.Application.Configuration
         string Exchange,
         string Currency,
         string SecurityType,
+        bool Enabled,
         bool TradingEnabled,
         IReadOnlyList<TradeDirection> AllowedDirections,
         IReadOnlyList<string> StrategyIds,

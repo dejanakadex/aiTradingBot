@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
+using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
@@ -100,6 +101,21 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task LiveTrading_InstrumentStillBackfillPending_Rejects()
+        {
+            var guard = CreateGuard(
+                new TradingSettings { Enabled = true, OperatingMode = TradingOperatingMode.LiveTrading, LiveTradingExplicitlyEnabled = true },
+                TradingOperatingMode.LiveTrading,
+                ReadyStatus(BrokerEnvironmentVerificationStatus.VerifiedLive),
+                InstrumentOnboardingStatus.BackfillPending);
+
+            var result = await guard.CanSubmitBrokerOrderAsync(ApprovedRisk());
+
+            Assert.False(result.Approved);
+            Assert.Contains(result.RejectionReasons, reason => reason.Contains("not ready for live orders"));
+        }
+
+        [Fact]
         public async Task UnapprovedRiskDecision_Rejects()
         {
             var guard = CreateGuard(
@@ -113,10 +129,18 @@ namespace TradingBot.Tests
             Assert.Contains(result.RejectionReasons, r => r.Contains("RiskDecision is not approved"));
         }
 
-        private static TradingExecutionGuard CreateGuard(TradingSettings settings, TradingOperatingMode currentMode, BrokerReconciliationStatus status)
+        private static TradingExecutionGuard CreateGuard(
+            TradingSettings settings,
+            TradingOperatingMode currentMode,
+            BrokerReconciliationStatus status,
+            InstrumentOnboardingStatus instrumentStatus = InstrumentOnboardingStatus.LiveEnabled)
         {
             var statusService = new FakeStatusService(status);
-            return new TradingExecutionGuard(Options.Create(settings), new FakeModeService(currentMode), statusService);
+            return new TradingExecutionGuard(
+                Options.Create(settings),
+                new FakeModeService(currentMode),
+                statusService,
+                new FakeInstrumentRegistry(instrumentStatus));
         }
 
         private static BrokerReconciliationStatus ReadyStatus(BrokerEnvironmentVerificationStatus environment)
@@ -133,7 +157,41 @@ namespace TradingBot.Tests
 
         private static RiskDecision ApprovedRisk()
         {
-            return new RiskDecision(RiskDecisionType.Approve, "ok", 10m, 1000m, 50m, DateTime.UtcNow);
+            return new RiskDecision(
+                RiskDecisionType.Approve,
+                "ok",
+                10m,
+                1000m,
+                50m,
+                DateTime.UtcNow,
+                context: PipelineContext.CreateForSignal("US-STK-SPY-SMART", "guard-test"));
+        }
+
+        private sealed class FakeInstrumentRegistry : IInstrumentRegistryService
+        {
+            private readonly InstrumentRegistrySnapshot _snapshot;
+
+            public FakeInstrumentRegistry(InstrumentOnboardingStatus status)
+            {
+                _snapshot = new InstrumentRegistrySnapshot
+                {
+                    InstrumentId = "US-STK-SPY-SMART",
+                    Symbol = "SPY",
+                    ConfiguredEnabled = true,
+                    TradingRequested = true,
+                    Status = status
+                };
+            }
+
+            public Task<InstrumentRegistrySnapshot?> GetAsync(string instrumentId, CancellationToken cancellationToken = default) =>
+                Task.FromResult<InstrumentRegistrySnapshot?>(string.Equals(instrumentId, _snapshot.InstrumentId, StringComparison.OrdinalIgnoreCase) ? _snapshot : null);
+
+            public Task<IReadOnlyList<InstrumentRegistrySnapshot>> GetAllAsync(CancellationToken cancellationToken = default) =>
+                Task.FromResult<IReadOnlyList<InstrumentRegistrySnapshot>>(new[] { _snapshot });
+
+            public Task<InstrumentRegistrySyncResult> SynchronizeConfiguredAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<InstrumentRegistrySnapshot> SetBrokerContractAsync(string instrumentId, int expectedVersion, long brokerContractId, string brokerPrimaryExchange, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<InstrumentRegistrySnapshot> TransitionAsync(string instrumentId, InstrumentOnboardingStatus expectedStatus, InstrumentOnboardingStatus targetStatus, string reason, string trigger, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         }
 
         private sealed class FakeModeService : IOperatingModeService

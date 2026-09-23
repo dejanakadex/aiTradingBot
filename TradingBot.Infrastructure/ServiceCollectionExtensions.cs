@@ -47,6 +47,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<ITradingEngineStatusService, TradingEngineStatusService>();
             services.AddSingleton<IOperatingModeService, OperatingModeService>();
             services.AddSingleton<ITradingPipelineStatusService, TradingPipelineStatusService>();
+            services.AddSingleton<IInstrumentRegistryService, InstrumentRegistryService>();
             services.AddTransient<IDashboardService, DashboardService>();
             services.AddTransient<ITradeDashboardService, TradeDashboardService>();
             services.AddTransient<IPatternAnalysisDashboardService, PatternAnalysisDashboardService>();
@@ -81,6 +82,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IAiMarketAnalyzer, OpenAiMarketAnalyzer>();
             services.AddTransient<IAiTradeCritic, OpenAiTradeCritic>();
 
+            services.AddHostedService<InstrumentRegistryHostedService>();
             services.AddHostedService<BrokerStateReconciliationHostedService>();
             services.AddHostedService<RuntimeBrokerReconciliationHostedService>();
             services.AddHostedService<ProtectiveStopInvariantHostedService>();

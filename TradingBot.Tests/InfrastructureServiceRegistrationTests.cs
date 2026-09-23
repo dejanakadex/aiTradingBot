@@ -47,6 +47,7 @@ namespace TradingBot.Tests
             Assert.IsType<UnavailablePositionService>(provider.GetRequiredService<IPositionService>());
             Assert.NotNull(provider.GetRequiredService<MarketDataPipeline>());
             Assert.NotNull(provider.GetRequiredService<IBrokerStateReconciliationService>());
+            Assert.IsType<InstrumentRegistryService>(provider.GetRequiredService<IInstrumentRegistryService>());
         }
 
         [Fact]

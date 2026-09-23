@@ -24,6 +24,8 @@ namespace TradingBot.Persistence
         public DbSet<PostTradeAnalysisRecord> PostTradeAnalysisRecords { get; set; }
         public DbSet<ExitManagementRecord> ExitManagementRecords { get; set; }
         public DbSet<ExitStopAuditRecord> ExitStopAuditRecords { get; set; }
+        public DbSet<InstrumentRegistryRecord> InstrumentRegistryRecords { get; set; }
+        public DbSet<InstrumentStatusTransitionRecord> InstrumentStatusTransitionRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -117,6 +119,26 @@ namespace TradingBot.Persistence
             {
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => x.BrokerExecutionId).IsUnique();
+            });
+
+            modelBuilder.Entity<InstrumentRegistryRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.InstrumentId).IsUnique();
+                b.HasIndex(x => x.Symbol);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.ConfiguredEnabled);
+                b.HasIndex(x => x.UpdatedAtUtc);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<InstrumentStatusTransitionRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.ToStatus);
+                b.HasIndex(x => x.TimestampUtc);
             });
         }
     }

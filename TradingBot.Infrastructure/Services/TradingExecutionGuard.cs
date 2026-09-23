@@ -14,18 +14,21 @@ namespace TradingBot.Infrastructure.Services
         private readonly TradingSettings _tradingSettings;
         private readonly IOperatingModeService _operatingModeService;
         private readonly ITradingEngineStatusService _statusService;
+        private readonly IInstrumentRegistryService _instrumentRegistry;
 
         public TradingExecutionGuard(
             IOptions<TradingSettings> tradingSettings,
             IOperatingModeService operatingModeService,
-            ITradingEngineStatusService statusService)
+            ITradingEngineStatusService statusService,
+            IInstrumentRegistryService instrumentRegistry)
         {
             _tradingSettings = tradingSettings.Value;
             _operatingModeService = operatingModeService;
             _statusService = statusService;
+            _instrumentRegistry = instrumentRegistry ?? throw new ArgumentNullException(nameof(instrumentRegistry));
         }
 
-        public Task<TradingExecutionGuardResult> CanSubmitBrokerOrderAsync(
+        public async Task<TradingExecutionGuardResult> CanSubmitBrokerOrderAsync(
             RiskDecision? riskDecision,
             CancellationToken cancellationToken = default)
         {
@@ -68,6 +71,8 @@ namespace TradingBot.Infrastructure.Services
                 {
                     reasons.Add($"Broker environment is {status.BrokerEnvironmentVerification}, not VerifiedPaper.");
                 }
+
+                await ValidateInstrumentReadinessAsync(riskDecision, live: false, reasons, cancellationToken).ConfigureAwait(false);
             }
             else if (mode == TradingOperatingMode.LiveTrading)
             {
@@ -80,11 +85,42 @@ namespace TradingBot.Infrastructure.Services
                 {
                     reasons.Add($"Broker environment is {status.BrokerEnvironmentVerification}, not VerifiedLive.");
                 }
+
+                await ValidateInstrumentReadinessAsync(riskDecision, live: true, reasons, cancellationToken).ConfigureAwait(false);
             }
 
-            return Task.FromResult(reasons.Count == 0
+            return reasons.Count == 0
                 ? TradingExecutionGuardResult.Approve()
-                : TradingExecutionGuardResult.Reject(reasons));
+                : TradingExecutionGuardResult.Reject(reasons);
+        }
+
+        private async Task ValidateInstrumentReadinessAsync(
+            RiskDecision? riskDecision,
+            bool live,
+            List<string> reasons,
+            CancellationToken cancellationToken)
+        {
+            var instrumentId = riskDecision?.Context?.InstrumentId;
+            if (string.IsNullOrWhiteSpace(instrumentId))
+            {
+                reasons.Add("RiskDecision has no instrument registry context.");
+                return;
+            }
+
+            var instrument = await _instrumentRegistry.GetAsync(instrumentId, cancellationToken).ConfigureAwait(false);
+            if (instrument == null)
+            {
+                reasons.Add($"Instrument '{instrumentId}' is not registered.");
+                return;
+            }
+
+            var allowed = live ? instrument.CanSubmitLiveOrders : instrument.CanSubmitPaperOrders;
+            if (!allowed)
+            {
+                reasons.Add(
+                    $"Instrument '{instrument.InstrumentId}' is not ready for {(live ? "live" : "paper")} orders " +
+                    $"(status={instrument.Status}, configuredEnabled={instrument.ConfiguredEnabled}, tradingRequested={instrument.TradingRequested}).");
+            }
         }
     }
 }

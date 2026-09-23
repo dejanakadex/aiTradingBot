@@ -15,7 +15,7 @@ namespace TradingBot.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.14");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("TradingBot.Persistence.AiAnalysisRecord", b =>
                 {
@@ -376,6 +376,142 @@ namespace TradingBot.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ExecutionRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.InstrumentRegistryRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AllowedDirectionsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("BrokerContractId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BrokerPrimaryExchange")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConfigurationHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ConfiguredEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Exchange")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("MarketDataTimeframesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MaximumHoldingSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("MaximumPositionValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecurityType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("StatusChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StatusReason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StrategyIdsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TradingRequested")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfiguredEnabled");
+
+                    b.HasIndex("InstrumentId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Symbol");
+
+                    b.HasIndex("UpdatedAtUtc");
+
+                    b.ToTable("InstrumentRegistryRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.InstrumentStatusTransitionRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("FromStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ToStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId");
+
+                    b.HasIndex("TimestampUtc");
+
+                    b.HasIndex("ToStatus");
+
+                    b.ToTable("InstrumentStatusTransitionRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.MarketSnapshot", b =>

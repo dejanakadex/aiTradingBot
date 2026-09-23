@@ -32,10 +32,17 @@ namespace TradingBot.Application.Configuration
 
         public IReadOnlyList<ConfiguredInstrument> GetEnabledInstruments()
         {
+            return GetConfiguredInstruments()
+                .Where(instrument => instrument.Enabled)
+                .ToArray();
+        }
+
+        public IReadOnlyList<ConfiguredInstrument> GetConfiguredInstruments()
+        {
             if (Instruments?.Length > 0)
             {
                 return Instruments
-                    .Where(instrument => instrument != null && instrument.Enabled)
+                    .Where(instrument => instrument != null)
                     .Select(ToConfiguredInstrument)
                     .ToArray();
             }
@@ -50,6 +57,7 @@ namespace TradingBot.Application.Configuration
                     "SMART",
                     "USD",
                     "STK",
+                    true,
                     true,
                     new[] { TradeDirection.Long },
                     new[] { PipelineContractVersions.DefaultStrategyId },
@@ -155,6 +163,7 @@ namespace TradingBot.Application.Configuration
                 instrument.Exchange.Trim().ToUpperInvariant(),
                 instrument.Currency.Trim().ToUpperInvariant(),
                 instrument.SecurityType.Trim().ToUpperInvariant(),
+                instrument.Enabled,
                 instrument.TradingEnabled,
                 (instrument.AllowedDirections ?? Array.Empty<TradeDirection>()).Distinct().ToArray(),
                 NormalizeValues(instrument.StrategyIds),
