@@ -46,9 +46,11 @@ GET /api/health/details
 GET /api/health/ready
 GET /api/health/trading-ready
 GET /api/reconciliation/status
+GET /api/instruments
 ```
 
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
+`/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
 
 Run unit tests:
 
@@ -133,6 +135,8 @@ the current Git tree and does not erase earlier commits.
 - `OrderManager` implements approved-order submission, broker status/fill persistence and duplicate checks. Crash recovery, real partial-fill handling and exit coordination have open findings (R03–R07).
 - Broker-state reconciliation gates startup readiness: trading remains disabled until IBKR positions/open orders are compared with SQLite open trades/orders and reconciled.
 - Market data subscription startup waits for the engine to become `Ready`, seeds configured historical candles and subscribes to every enabled `TradingSettings.Instruments` entry using its configured timeframes. The checked-in fail-closed example contains SPY on `1m`, `5m` and `15m`; legacy `Symbols` remains a temporary compatibility fallback.
+- A persistent instrument registry synchronizes configuration at startup, records every onboarding status transition and preserves progress across restarts. New enabled instruments begin at `BackfillPending`; configuration changes reset onboarding safely, while removed instruments remain disabled for audit.
+- Instrument-level `TradingEnabled` is only a requested permission. Paper/live order submission also requires the matching persisted readiness state, and no startup path automatically grants `LiveEnabled`.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.
 - The Blazor dashboard shows engine/broker/market/AI/risk/P&L status with realtime refresh and control actions for pause, resume, close-current-position request and kill switch.
 - Blazor analytics pages show recent trades and pattern performance with filters for symbol, pattern, date range, market regime, VWAP context, 15m trend and AI decisions.
@@ -163,6 +167,7 @@ High-priority files to open for Codex:
 - `TradingBot.Infrastructure/Services/OrderManager.cs`
 - `TradingBot.Infrastructure/Services/BrokerStateReconciliationService.cs`
 - `TradingBot.Infrastructure/Services/TradingEngineStatusService.cs`
+- `TradingBot.Infrastructure/Services/InstrumentRegistryService.cs`
 - `TradingBot.Infrastructure/Services/DashboardService.cs`
 - `TradingBot.Infrastructure/Services/TradeDashboardService.cs`
 - `TradingBot.Infrastructure/Services/PatternAnalysisDashboardService.cs`
@@ -175,6 +180,7 @@ High-priority files to open for Codex:
 - `TradingBot.Infrastructure/Services/OperatingModeService.cs`
 - `TradingBot.Infrastructure/Background/CandlePatternDetectionBackgroundService.cs`
 - `TradingBot.Infrastructure/Background/MarketDataSubscriptionHostedService.cs`
+- `TradingBot.Infrastructure/Background/InstrumentRegistryHostedService.cs`
 - `TradingBot.Infrastructure/Background/PatternDecisionBackgroundService.cs`
 - `TradingBot.Infrastructure/Background/ApprovedOrderExecutionBackgroundService.cs`
 - `TradingBot.Infrastructure/Options/PatternDetectorOptions.cs`
@@ -207,6 +213,7 @@ High-priority files to open for Codex:
 - `TradingBot.Application/Interfaces/IPatternAnalysisDashboardService.cs`
 - `TradingBot.Application/Interfaces/IPostTradeAnalysisService.cs`
 - `TradingBot.Application/Interfaces/ITradingControlService.cs`
+- `TradingBot.Application/Interfaces/IInstrumentRegistryService.cs`
 - `TradingBot.Application/Interfaces/IOperatingModeService.cs`
 - `TradingBot.Tests/PatternDetectorTests.cs`
 - `TradingBot.Tests/MarketSnapshotServiceTests.cs`
@@ -220,13 +227,15 @@ High-priority files to open for Codex:
 - `TradingBot.Tests/DashboardAnalyticsServiceTests.cs`
 - `TradingBot.Tests/PostTradeAnalysisServiceTests.cs`
 - `TradingBot.Tests/AiPipelineOptimizationTests.cs`
+- `TradingBot.Tests/InstrumentRegistryServiceTests.cs`
 
 Short technical notes for Codex
 
 - EF Core: uses `IDbContextFactory<TradingBotDbContext>` and SQLite. Candle entity is uniquely indexed on `(Symbol, Timeframe, TimestampUtc)` to prevent duplicates.
 - Event bus: `TradingEventBus` uses bounded `Channel<T>` with configurable full-mode strategies (Wait, DropOldest, DropNewest, Reject). Keep `TryPublish` non-blocking for IB callbacks.
 - IBKR: `IIbkrAdapter` is the broker boundary. The conditional concrete adapter uses the official TWS C# API when available, and publishes normalized `MarketBar` DTOs through market-data subscriptions.
-- Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false and will be joined with persisted readiness in onboarding point 2; global `AnalysisOnly` remains active.
+- Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false; `TradingExecutionGuard` joins it with persisted per-instrument readiness before paper/live submission, while global `AnalysisOnly` remains active.
+- Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Actual resumable historical backfill and automatic status advancement are intentionally deferred to plan point 4.
 - Pipeline identity: every pattern has a deterministic `SignalId` plus a per-run `CorrelationId`, `InstrumentId`, `StrategyId` and explicit market-data/feature/pattern/strategy contract versions. The same context is propagated into strategy and risk audit JSON.
 - Pattern detection: deterministic rules implemented for Hammer, Bullish Engulfing, Double Bottom, BreakoutAndRetest, VWAP Reclaim. Options are in `PatternDetectorOptions`.
 - Market snapshots: `IMarketSnapshotService` combines 15m broader direction, 5m setup/pullback context and 1m entry timing into a structured `MarketSnapshot` for later AI analysis. It includes candles, features, patterns, support/resistance candidates, trend, volume, volatility, current price when available and spread when supplied.
