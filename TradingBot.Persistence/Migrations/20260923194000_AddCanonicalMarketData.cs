@@ -12,6 +12,23 @@ namespace TradingBot.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "Candles" (
+                    "Id" INTEGER NOT NULL CONSTRAINT "PK_Candles" PRIMARY KEY AUTOINCREMENT,
+                    "Symbol" TEXT NOT NULL,
+                    "Timeframe" INTEGER NOT NULL,
+                    "TimestampUtc" TEXT NOT NULL,
+                    "Open" TEXT NOT NULL,
+                    "High" TEXT NOT NULL,
+                    "Low" TEXT NOT NULL,
+                    "Close" TEXT NOT NULL,
+                    "Volume" TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_Candles_Symbol_Timeframe_TimestampUtc"
+                    ON "Candles" ("Symbol", "Timeframe", "TimestampUtc");
+                """);
+
             migrationBuilder.AddColumn<string>(name: "InstrumentId", table: "Candles", type: "TEXT", nullable: false, defaultValue: "");
             migrationBuilder.AddColumn<bool>(name: "IsFinal", table: "Candles", type: "INTEGER", nullable: false, defaultValue: true);
             migrationBuilder.AddColumn<int>(name: "QualityStatus", table: "Candles", type: "INTEGER", nullable: false, defaultValue: 0);
