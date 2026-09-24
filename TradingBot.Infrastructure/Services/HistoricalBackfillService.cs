@@ -17,6 +17,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly IInstrumentRegistryService _registry;
         private readonly HistoricalBackfillSettings _settings;
         private readonly IClock _clock;
+        private readonly IMarketDatasetSink? _datasetSink;
         private readonly ILogger<HistoricalBackfillService> _logger;
         private readonly SemaphoreSlim _singleRequest = new(1, 1);
 
@@ -26,13 +27,15 @@ namespace TradingBot.Infrastructure.Services
             IInstrumentRegistryService registry,
             IOptions<HistoricalBackfillSettings> settings,
             IClock clock,
-            ILogger<HistoricalBackfillService> logger)
+            ILogger<HistoricalBackfillService> logger,
+            IMarketDatasetSink? datasetSink = null)
         {
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
             _marketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            _datasetSink = datasetSink;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -175,6 +178,7 @@ namespace TradingBot.Infrastructure.Services
                         .OrderBy(bar => bar.TimestampUtc)
                         .ToArray();
                     var inserted = await InsertBarsAsync(db, job, valid, now, cancellationToken).ConfigureAwait(false);
+                    await RecordDatasetAsync(job, valid, now, cancellationToken).ConfigureAwait(false);
 
                     segment.Status = HistoricalBackfillSegmentStatus.Completed;
                     segment.BarsReceived = received.Length;
@@ -236,6 +240,57 @@ namespace TradingBot.Infrastructure.Services
             finally
             {
                 _singleRequest.Release();
+            }
+        }
+
+        private async Task RecordDatasetAsync(
+            HistoricalBackfillJobRecord job,
+            IEnumerable<MarketBar> bars,
+            DateTime receivedAtUtc,
+            CancellationToken cancellationToken)
+        {
+            if (_datasetSink == null) return;
+            foreach (var bar in bars)
+            {
+                var canonical = new CanonicalMarketDataEvent
+                {
+                    EventId = CanonicalMarketDataIdentity.ForBar(job.InstrumentId, bar, job.Timeframe),
+                    InstrumentId = job.InstrumentId,
+                    Symbol = job.Symbol,
+                    Kind = MarketDataEventKind.Bar,
+                    EventTimeUtc = ToUtc(bar.TimestampUtc),
+                    ReceivedTimeUtc = ToUtc(bar.ReceivedTimeUtc ?? receivedAtUtc),
+                    Source = string.IsNullOrWhiteSpace(bar.Source) ? "IBKR.HistoricalBackfill" : bar.Source.Trim(),
+                    Sequence = bar.Sequence,
+                    IsFinal = bar.IsFinal,
+                    Timeframe = job.Timeframe,
+                    Open = bar.Open,
+                    High = bar.High,
+                    Low = bar.Low,
+                    Close = bar.Close,
+                    Volume = bar.Volume
+                };
+                try
+                {
+                    var accepted = await _datasetSink.EnqueueAsync(
+                        MarketDatasetRecord.From(
+                            canonical,
+                            new MarketDataQualityAssessment(MarketDataQualityStatus.Healthy, "Historical bar passed backfill validation.", true, false),
+                            string.Empty),
+                        cancellationToken).ConfigureAwait(false);
+                    if (!accepted)
+                    {
+                        _logger.LogWarning("Dataset writer rejected historical market-data event {EventId}.", canonical.EventId);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to enqueue historical market-data event {EventId} for dataset storage.", canonical.EventId);
+                }
             }
         }
 

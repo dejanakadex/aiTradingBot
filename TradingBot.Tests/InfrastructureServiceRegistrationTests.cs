@@ -50,6 +50,8 @@ namespace TradingBot.Tests
             Assert.IsType<InstrumentRegistryService>(provider.GetRequiredService<IInstrumentRegistryService>());
             Assert.IsType<MarketDataQualityService>(provider.GetRequiredService<IMarketDataQualityService>());
             Assert.IsType<LatestMarketDataService>(provider.GetRequiredService<ILatestMarketDataService>());
+            Assert.IsType<ParquetMarketDatasetStore>(provider.GetRequiredService<IMarketDatasetStore>());
+            Assert.NotNull(provider.GetRequiredService<IMarketDatasetSink>());
         }
 
         [Fact]

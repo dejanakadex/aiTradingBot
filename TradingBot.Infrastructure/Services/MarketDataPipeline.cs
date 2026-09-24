@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,6 +23,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ILatestMarketDataService _latestMarketData;
         private readonly TradingSettings _settings;
         private readonly IClock _clock;
+        private readonly IMarketDatasetSink? _datasetSink;
         private readonly ILogger<MarketDataPipeline> _logger;
 
         public MarketDataPipeline(
@@ -63,7 +62,8 @@ namespace TradingBot.Infrastructure.Services
             IMarketDataQualityService? qualityService = null,
             ILatestMarketDataService? latestMarketData = null,
             IOptions<TradingSettings>? settings = null,
-            IClock? clock = null)
+            IClock? clock = null,
+            IMarketDatasetSink? datasetSink = null)
         {
             _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
@@ -79,6 +79,7 @@ namespace TradingBot.Infrastructure.Services
                 _clock,
                 NullLogger<MarketDataQualityService>.Instance);
             _latestMarketData = latestMarketData ?? new LatestMarketDataService();
+            _datasetSink = datasetSink;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             _adapter.MarketBarReceived += OnMarketBarReceived;
@@ -101,7 +102,7 @@ namespace TradingBot.Infrastructure.Services
             var resolvedInstrumentId = ResolveInstrumentId(instrumentId, bar.InstrumentId, bar.Symbol);
             var canonical = new CanonicalMarketDataEvent
             {
-                EventId = BuildBarEventId(resolvedInstrumentId, bar),
+                EventId = CanonicalMarketDataIdentity.ForBar(resolvedInstrumentId, bar, NormalizeTimeframe(bar.Timeframe)),
                 InstrumentId = resolvedInstrumentId,
                 Symbol = bar.Symbol.Trim().ToUpperInvariant(),
                 Kind = MarketDataEventKind.Bar,
@@ -134,6 +135,7 @@ namespace TradingBot.Infrastructure.Services
                     .ConfigureAwait(false);
                 if (!assessment.CanPersist)
                 {
+                    await RecordDatasetAsync(canonical, assessment, cancellationToken).ConfigureAwait(false);
                     MarkRejected(canonical, assessment, publishToEventBus);
                     return;
                 }
@@ -141,15 +143,21 @@ namespace TradingBot.Infrastructure.Services
                 if (!_validator.TryValidate(bar, out var validationReason)
                     && (!allowStaleSeedCandle || !validationReason.Equals("Candle timestamp is stale.", StringComparison.OrdinalIgnoreCase)))
                 {
-                    MarkRejected(canonical, new MarketDataQualityAssessment(MarketDataQualityStatus.Invalid, validationReason, false, false), publishToEventBus);
+                    var invalid = new MarketDataQualityAssessment(MarketDataQualityStatus.Invalid, validationReason, false, false);
+                    await RecordDatasetAsync(canonical, invalid, cancellationToken).ConfigureAwait(false);
+                    MarkRejected(canonical, invalid, publishToEventBus);
                     return;
                 }
 
                 if (!TryParseTimeframe(canonical.Timeframe, out var timeframe))
                 {
-                    MarkRejected(canonical, new MarketDataQualityAssessment(MarketDataQualityStatus.Invalid, "Unsupported timeframe.", false, false), publishToEventBus);
+                    var invalid = new MarketDataQualityAssessment(MarketDataQualityStatus.Invalid, "Unsupported timeframe.", false, false);
+                    await RecordDatasetAsync(canonical, invalid, cancellationToken).ConfigureAwait(false);
+                    MarkRejected(canonical, invalid, publishToEventBus);
                     return;
                 }
+
+                await RecordDatasetAsync(canonical, assessment, cancellationToken).ConfigureAwait(false);
 
                 var candle = new TradingBot.Domain.Models.Candle(
                     canonical.Symbol,
@@ -242,11 +250,38 @@ namespace TradingBot.Infrastructure.Services
                 Source = marketEvent.Source.Trim()
             };
             var assessment = await _qualityService.EvaluateAsync(normalized, false, cancellationToken).ConfigureAwait(false);
+            await RecordDatasetAsync(normalized, assessment, cancellationToken).ConfigureAwait(false);
             if (assessment.IsHealthy)
             {
                 _latestMarketData.Apply(normalized);
             }
             return assessment;
+        }
+
+        private async Task RecordDatasetAsync(
+            CanonicalMarketDataEvent marketEvent,
+            MarketDataQualityAssessment assessment,
+            CancellationToken cancellationToken)
+        {
+            if (_datasetSink == null) return;
+            try
+            {
+                var accepted = await _datasetSink.EnqueueAsync(
+                    MarketDatasetRecord.From(marketEvent, assessment, string.Empty),
+                    cancellationToken).ConfigureAwait(false);
+                if (!accepted)
+                {
+                    _logger.LogWarning("Dataset writer rejected canonical market-data event {EventId}.", marketEvent.EventId);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to enqueue canonical market-data event {EventId} for dataset storage.", marketEvent.EventId);
+            }
         }
 
         private async Task<bool> PersistCandleAsync(
@@ -336,22 +371,6 @@ namespace TradingBot.Infrastructure.Services
 
             return configured.SingleOrDefault(item => item.Symbol.Equals(symbol.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?.InstrumentId ?? symbol.Trim().ToUpperInvariant();
-        }
-
-        private static string BuildBarEventId(string instrumentId, MarketBar bar)
-        {
-            var canonical = string.Join('|',
-                instrumentId.Trim().ToUpperInvariant(),
-                MarketDataEventKind.Bar,
-                NormalizeTimeframe(bar.Timeframe),
-                ToUtc(bar.TimestampUtc).ToString("O"),
-                bar.Sequence?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
-                bar.Open.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                bar.High.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                bar.Low.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                bar.Close.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                bar.Volume.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
         }
 
         private static bool TryParseTimeframe(string timeframe, out Timeframe parsed)

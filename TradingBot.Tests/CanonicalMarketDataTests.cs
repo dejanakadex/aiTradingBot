@@ -148,6 +148,38 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task CanonicalTickIsSentToDatasetWithoutCreatingOperationalCandle()
+        {
+            using var database = CreateDatabase(out var factory);
+            var settings = Settings();
+            var clock = new FixedClock(NowUtc);
+            var sink = new RecordingDatasetSink();
+            using var pipeline = new MarketDataPipeline(
+                new FakeIbkrAdapter(),
+                new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance),
+                factory,
+                new MarketDataValidator(Options.Create(settings), clock),
+                null,
+                NullLogger<MarketDataPipeline>.Instance,
+                qualityService: new MarketDataQualityService(factory, Options.Create(settings), clock, NullLogger<MarketDataQualityService>.Instance),
+                latestMarketData: new LatestMarketDataService(),
+                settings: Options.Create(settings),
+                clock: clock,
+                datasetSink: sink);
+
+            var assessment = await pipeline.ProcessCanonicalEventAsync(
+                Tick("dataset-bid", MarketDataEventKind.Bid, NowUtc, NowUtc, 100m));
+
+            Assert.True(assessment.IsHealthy);
+            var stored = Assert.Single(sink.Records);
+            Assert.Equal("dataset-bid", stored.EventId);
+            Assert.Equal("bid", stored.DataType);
+            Assert.Equal("Healthy", stored.QualityStatus);
+            await using var db = await factory.CreateDbContextAsync();
+            Assert.Empty(await db.Candles.ToListAsync());
+        }
+
+        [Fact]
         public async Task MigrationCreatesQualityTablesAndCanonicalCandleColumns()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"tradingbot-market-data-{Guid.NewGuid():N}.db");
@@ -281,6 +313,17 @@ namespace TradingBot.Tests
         {
             public FixedClock(DateTime utcNow) => UtcNow = utcNow;
             public DateTime UtcNow { get; }
+        }
+
+        private sealed class RecordingDatasetSink : IMarketDatasetSink
+        {
+            public List<MarketDatasetRecord> Records { get; } = new();
+
+            public ValueTask<bool> EnqueueAsync(MarketDatasetRecord record, CancellationToken cancellationToken = default)
+            {
+                Records.Add(record);
+                return ValueTask.FromResult(true);
+            }
         }
     }
 }

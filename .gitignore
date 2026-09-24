@@ -36,6 +36,7 @@ coverage/
 *.coveragexml
 
 # Local runtime databases and SQLite sidecars
+data/datasets/
 *.db
 *.db-wal
 *.db-shm

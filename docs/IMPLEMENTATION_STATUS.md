@@ -11,7 +11,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 2 — Registry i onboarding | Završeno | Persistirani registry, auditirane tranzicije, broker metadata, idempotentan startup sync i per-instrument execution gate. CI: 206/206 testova, 0 warninga i 0 grešaka. |
 | 3 — Canonical market data | Završeno | Verzija `market-data-v2`: instrument/event/receive/source identitet, bid/ask/trade/bar događaji, finalnost, persistirani stream statusi i fail-closed quality gate. CI: 213/213 testova, 0 warninga i 0 grešaka. |
 | 4 — Historical backfill | Završeno | Trajni segmenti/checkpointi, broker-wide pacing, exponential retry, idempotentni candle upis, gap report i automatske onboarding tranzicije. |
-| 5 — Dataset storage | Sljedeće | Particionirani Parquet raw/research storage, manifest, schema version i hash bez punjenja operativnog SQLitea tickovima. |
+| 5 — Dataset storage | Implementirano, čeka CI | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. |
 | 6–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
@@ -106,6 +106,28 @@ Verifikacija: [GitHub Actions run 35967896421](https://github.com/dejanakadex/ai
 - Standardni CI i dalje ne kompilira conditional realni IBKR adapter bez službenog DLL-a. Parametri zahtjeva provjereni su prema službenom TWS API step-size/pacing ugovoru, ali potreban je integration smoke test s TWS/IB Gatewayem.
 - Ova točka ne mijenja fail-closed `AnalysisOnly`, ne dopušta paper/live naloge i ne započinje Parquet dataset storage.
 
-## Sljedeći checkpoint — točka 5
+## Točka 5 — izvedeno
 
-Izgraditi particionirani Parquet storage za raw/research podatke: stabilna struktura po instrumentu/datumu/vrsti, manifest, schema version, hash i reproduktivan read path bez punjenja operativnog SQLitea tickovima.
+- Dodan je Parquet raw/research sloj odvojen od operativnog SQLitea. SQLite i dalje čuva checkpoint/status/incidente i canonical candleove, ali ne bid/ask/trade tickove.
+- Stabilna particija je `instrument=<InstrumentId>/date=<UTC yyyy-MM-dd>/type=<bid|ask|trade|bar>`; naziv part datoteke proizlazi iz vremenskog raspona i determinističkog hasha sadržaja.
+- Svaka part datoteka nastaje u istoj particiji kao privremena datoteka i atomskim renameom postaje vidljiva tek nakon uspješne Parquet serializacije.
+- `_manifest.json` sadrži schema version, instrument, datum, vrstu, broj redaka, vremenski raspon i SHA-256 svake datoteke. `_manifest.sha256` zasebno štiti sam manifest.
+- Ponovni zapis identičnog batcha prepoznaje isti sadržajni identitet i ne stvara novu datoteku ni novu manifest stavku.
+- Read path prvo provjerava hash, filtrira po instrumentu/vremenu/vrsti, uklanja ponovljeni `EventId` i vraća stabilan event-time/receive-time/ID redoslijed.
+- Live canonical bid/ask/trade/bar događaji i validirani historical barovi prolaze kroz bounded single-reader writer. Puni kanal primjenjuje backpressure umjesto tihog odbacivanja; graceful shutdown prazni preostali batch.
+- Quality rezultat, razlog i dopuštenja za persistence/trading spremaju se uz svaki canonical zapis, uključujući događaje koji su korisni za research, ali ne smiju pokrenuti trade.
+- Read-only endpointi `GET /api/datasets/manifest` i `GET /api/datasets/verify` izlažu inventar i integrity status bez mutacije dataseta.
+- `DatasetStorage` konfiguracija upravlja rootom, kapacitetom queuea, batch veličinom, intervalom flushanja i schema versionom. Runtime `data/datasets/` je u `.gitignore`.
+- Testovi pokrivaju više instrumenata/datuma/vrsta, stvarni Parquet read, stabilni poredak, idempotentni replay batcha, manifest/file hash, detekciju tamperinga, live tick bez SQLite candlea i historical bar dataset integraciju.
+
+## Odluke i ograničenja točke 5
+
+- Dataset je append-only na razini immutable part datoteka. Deduplikacija istog batcha događa se pri pisanju, a preklapanje različitih batchova deterministički se uklanja na read pathu po `EventId`; buduća compaction/retention politika nije dio ove točke.
+- Schema version se ne mijenja nad postojećim rootom bez eksplicitne migracije dataseta. Hash potvrđuje integritet bajtova, ali nije digitalni potpis i ne zamjenjuje kontrolu pristupa storageu.
+- Historical validacija i dalje odbacuje neispravne broker barove prije dataset writera; broker request/retry/gap audit ostaje u operativnom SQLiteu.
+- Standardni CI ne testira stvarni IBKR feed niti dugotrajno opterećenje diska. Capacity, flush interval, disk monitoring, retention i recovery procedure moraju se kalibrirati prije kontinuiranog rada.
+- Ova točka ne uključuje deterministic replay engine; reproducibilan read ugovor koji će replay koristiti dolazi sada, a samo izvršavanje je točka 7.
+
+## Sljedeći checkpoint — točka 6
+
+Odvojiti pouzdanost prikupljanja od trading/AI readinessa: heartbeat po streamu, reconnect, lag metrike i automatski gap-fill tako da kvar jednog instrumenta bude zasebno vidljiv i ne zaustavi ostale.

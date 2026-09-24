@@ -31,7 +31,8 @@ namespace TradingBot.Tests
                 };
             });
             var settings = BackfillSettings(lookbackDays: 2, segmentDays: 1);
-            var firstProcess = CreateService(factory, marketData, registry, settings, clock);
+            var dataset = new RecordingDatasetSink();
+            var firstProcess = CreateService(factory, marketData, registry, settings, clock, dataset);
 
             await firstProcess.SynchronizePlanAsync();
             var firstSegment = await firstProcess.RunNextSegmentAsync();
@@ -41,7 +42,7 @@ namespace TradingBot.Tests
             var checkpoint = firstSegment.NextSegmentEndUtc;
             Assert.Equal(2, firstSegment.BarsInserted);
 
-            var restarted = CreateService(factory, marketData, registry, settings, clock);
+            var restarted = CreateService(factory, marketData, registry, settings, clock, dataset);
             await restarted.SynchronizePlanAsync();
             var completed = await restarted.RunNextSegmentAsync();
 
@@ -56,6 +57,12 @@ namespace TradingBot.Tests
             Assert.Equal(4, await db.Candles.CountAsync());
             Assert.Equal(2, await db.HistoricalBackfillSegmentRecords.CountAsync(item => item.Status == HistoricalBackfillSegmentStatus.Completed));
             Assert.True(await db.HistoricalDataGapRecords.AnyAsync());
+            Assert.Equal(4, dataset.Records.Count);
+            Assert.All(dataset.Records, item =>
+            {
+                Assert.Equal("bar", item.DataType);
+                Assert.False(item.CanTriggerTrading);
+            });
         }
 
         [Fact]
@@ -141,13 +148,15 @@ namespace TradingBot.Tests
             IMarketDataService marketData,
             IInstrumentRegistryService registry,
             HistoricalBackfillSettings settings,
-            IClock clock) => new(
+            IClock clock,
+            IMarketDatasetSink? datasetSink = null) => new(
                 factory,
                 marketData,
                 registry,
                 Options.Create(settings),
                 clock,
-                NullLogger<HistoricalBackfillService>.Instance);
+                NullLogger<HistoricalBackfillService>.Instance,
+                datasetSink);
 
         private static HistoricalBackfillSettings BackfillSettings(int lookbackDays, int segmentDays) => new()
         {
@@ -226,6 +235,17 @@ namespace TradingBot.Tests
         {
             public MutableClock(DateTime utcNow) => UtcNow = utcNow;
             public DateTime UtcNow { get; set; }
+        }
+
+        private sealed class RecordingDatasetSink : IMarketDatasetSink
+        {
+            public List<MarketDatasetRecord> Records { get; } = new();
+
+            public ValueTask<bool> EnqueueAsync(MarketDatasetRecord record, CancellationToken cancellationToken = default)
+            {
+                Records.Add(record);
+                return ValueTask.FromResult(true);
+            }
         }
 
         private sealed class SimpleDbContextFactory : IDbContextFactory<TradingBotDbContext>

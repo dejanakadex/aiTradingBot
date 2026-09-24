@@ -61,6 +61,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "HistoricalBackfill configuration is invalid. Check lookback, segment, pacing and retry values.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<DatasetStorageSettings>()
+        .Bind(builder.Configuration.GetSection("DatasetStorage"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "DatasetStorage configuration is invalid. Check root path, queue, batch, flush interval and schema version.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -186,6 +191,16 @@ try
     app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
+    app.MapGet("/api/datasets/manifest", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
+        Results.Ok(await datasets.GetManifestAsync(cancellationToken)));
+    app.MapGet("/api/datasets/verify", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
+    {
+        var result = await datasets.VerifyAsync(cancellationToken);
+        return result.IsValid ? Results.Ok(result) : Results.Problem(
+            title: "Dataset integrity verification failed.",
+            detail: string.Join(" ", result.Errors),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    });
     app.MapGet("/api/historical-backfill/jobs", async (IHistoricalBackfillService backfill, CancellationToken cancellationToken) =>
         Results.Ok(await backfill.GetJobsAsync(cancellationToken)));
     app.MapGet("/api/historical-backfill/gaps", async (string? instrumentId, IHistoricalBackfillService backfill, CancellationToken cancellationToken) =>

@@ -50,6 +50,8 @@ GET /api/instruments
 GET /api/market-data/streams
 GET /api/market-data/incidents
 GET /api/market-data/latest
+GET /api/datasets/manifest
+GET /api/datasets/verify
 GET /api/historical-backfill/jobs
 GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
 ```
@@ -57,6 +59,7 @@ GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
 `/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
 The market-data endpoints expose persisted stream health, recent quality incidents, and the in-memory latest bid/ask/trade plus 5s/15s aggregates.
+The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 
 Run unit tests:
@@ -92,6 +95,7 @@ below to compile and test the real adapter in an environment where the official 
 - Supply account-specific configuration and API keys through environment variables or your local secret configuration. Keep shared settings free of credentials.
 - `appsettings.Local.json` patterns are ignored for local use, but the host does not automatically load those files; use an explicitly configured provider or environment variables.
 - Historical backfill defaults to 365 days of 1m, 730 days of 5m and 1825 days of 15m data, split into pacing-safe segments. Override without editing shared broker settings, for example `HistoricalBackfill__OneMinute__LookbackDays`, `HistoricalBackfill__OneMinute__SegmentDays`, `HistoricalBackfill__PacingDelayMilliseconds` and `HistoricalBackfill__MaximumAttemptsPerSegment`.
+- Canonical raw/research events are written to `data/datasets` as Parquet by default and partitioned as `instrument=<id>/date=<UTC-date>/type=<bid|ask|trade|bar>`. Runtime output is ignored by Git. Override with `DatasetStorage__RootPath`; tune bounded backpressure and batching with `DatasetStorage__QueueCapacity`, `DatasetStorage__BatchSize` and `DatasetStorage__FlushIntervalSeconds`. Treat `DatasetStorage__SchemaVersion` as an immutable data-contract identifier for an existing dataset.
 
 ### IBKR build prerequisite
 
@@ -250,9 +254,10 @@ Short technical notes for Codex
 - EF Core: uses `IDbContextFactory<TradingBotDbContext>` and SQLite. Candle entity is uniquely indexed on `(Symbol, Timeframe, TimestampUtc)` to prevent duplicates.
 - Event bus: `TradingEventBus` uses bounded `Channel<T>` with configurable full-mode strategies (Wait, DropOldest, DropNewest, Reject). Keep `TryPublish` non-blocking for IB callbacks.
 - IBKR: `IIbkrAdapter` is the broker boundary. The conditional concrete adapter uses the official TWS C# API when available, publishes completed streaming bars and requests level-one bid/ask/last events from the 1m subscription. The standard CI build cannot compile this conditional path without the official DLL.
-- Canonical market data: `MarketDataQualityService` persists stream checkpoints and incidents, blocks non-final/stale/future/duplicate/out-of-order/invalid events, and retains gap bars only for research. Raw quote/trade tick persistence is deferred to the partitioned dataset storage in plan point 5.
+- Canonical market data: `MarketDataQualityService` persists stream checkpoints and incidents, blocks non-final/stale/future/duplicate/out-of-order/invalid events, and retains gap bars only for research. Raw quote/trade events and validated historical bars flow through a bounded writer into partitioned Parquet; SQLite remains limited to operational state, incidents and canonical candles.
+- Dataset storage: `ParquetMarketDatasetStore` writes atomic partition files, a stable `_manifest.json` and `_manifest.sha256`, records a SHA-256 for each file, verifies integrity before reads, and returns deterministically ordered/de-duplicated events for instrument/time/type ranges.
 - Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false; `TradingExecutionGuard` joins it with persisted per-instrument readiness before paper/live submission, while global `AnalysisOnly` remains active.
-- Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Actual resumable historical backfill and automatic status advancement are intentionally deferred to plan point 4.
+- Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Historical backfill resumes from durable checkpoints, emits validated bars to the research dataset, and advances instruments to collection without granting trading permission.
 - Pipeline identity: every pattern has a deterministic `SignalId` plus a per-run `CorrelationId`, `InstrumentId`, `StrategyId` and explicit market-data/feature/pattern/strategy contract versions. The same context is propagated into strategy and risk audit JSON.
 - Pattern detection: deterministic rules implemented for Hammer, Bullish Engulfing, Double Bottom, BreakoutAndRetest, VWAP Reclaim. Options are in `PatternDetectorOptions`.
 - Market snapshots: `IMarketSnapshotService` combines 15m broader direction, 5m setup/pullback context and 1m entry timing into a structured `MarketSnapshot` for later AI analysis. It includes candles, features, patterns, support/resistance candidates, trend, volume and volatility, and automatically uses the latest healthy canonical trade/bid/ask for current price and spread when available.

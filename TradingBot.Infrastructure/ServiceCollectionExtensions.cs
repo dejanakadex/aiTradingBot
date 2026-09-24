@@ -72,6 +72,9 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IMarketDataValidator, MarketDataValidator>();
             services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
+            services.AddSingleton<IMarketDatasetStore, ParquetMarketDatasetStore>();
+            services.AddSingleton<MarketDatasetWriterHostedService>();
+            services.AddSingleton<IMarketDatasetSink>(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddSingleton<IPatternQualityGate, PatternQualityGate>();
             services.AddTransient<IProtectiveStopMonitor, ProtectiveStopMonitor>();
             services.AddTransient<IPatternDetector>(sp =>
@@ -86,6 +89,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IAiTradeCritic, OpenAiTradeCritic>();
 
             services.AddHostedService<InstrumentRegistryHostedService>();
+            services.AddHostedService(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddHostedService<HistoricalBackfillHostedService>();
             services.AddHostedService<BrokerStateReconciliationHostedService>();
             services.AddHostedService<RuntimeBrokerReconciliationHostedService>();
