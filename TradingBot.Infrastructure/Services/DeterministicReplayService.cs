@@ -11,6 +11,7 @@ using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
 using TradingBot.Persistence;
+using DomainCandle = TradingBot.Domain.Models.Candle;
 
 namespace TradingBot.Infrastructure.Services
 {
@@ -203,7 +204,7 @@ namespace TradingBot.Infrastructure.Services
                 }
 
                 var detector = _patternDetectorFactory.Create();
-                var histories = new Dictionary<Timeframe, List<Candle>>();
+                var histories = new Dictionary<Timeframe, List<DomainCandle>>();
                 DateTime? previousEventTimeUtc = null;
                 var processedThisBatch = 0;
 
@@ -219,7 +220,7 @@ namespace TradingBot.Infrastructure.Services
                         var history = histories.GetValueOrDefault(candle.Timeframe);
                         if (history == null)
                         {
-                            history = new List<Candle>(_settings.HistoryCandles);
+                            history = new List<DomainCandle>(_settings.HistoryCandles);
                             histories[candle.Timeframe] = history;
                         }
                         history.Add(candle);
@@ -396,7 +397,7 @@ namespace TradingBot.Infrastructure.Services
                 .ToArray();
         }
 
-        private static Candle? TryCreateCandle(MarketDatasetRecord record)
+        private static DomainCandle? TryCreateCandle(MarketDatasetRecord record)
         {
             if (!record.IsFinal || !record.CanTriggerTrading
                 || !Enum.TryParse<MarketDataQualityStatus>(record.QualityStatus, true, out var quality)
@@ -407,7 +408,7 @@ namespace TradingBot.Infrastructure.Services
                 return null;
             }
 
-            return new Candle(
+            return new DomainCandle(
                 record.Symbol,
                 timeframe,
                 record.EventTimeUtc,

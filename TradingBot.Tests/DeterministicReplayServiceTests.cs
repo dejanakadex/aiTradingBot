@@ -10,6 +10,7 @@ using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
 using TradingBot.Infrastructure.Services;
 using TradingBot.Persistence;
+using DomainCandle = TradingBot.Domain.Models.Candle;
 
 namespace TradingBot.Tests
 {
@@ -226,7 +227,7 @@ namespace TradingBot.Tests
                 private readonly RecordingDetectorFactory _owner;
                 public RecordingDetector(RecordingDetectorFactory owner) => _owner = owner;
 
-                public IReadOnlyList<PatternCandidate> Detect(IReadOnlyList<Candle> candles)
+                public IReadOnlyList<PatternCandidate> Detect(IReadOnlyList<DomainCandle> candles)
                 {
                     var current = candles[^1];
                     _owner.AllInputsWereOrderedAndAsOfCurrentEvent &= candles
