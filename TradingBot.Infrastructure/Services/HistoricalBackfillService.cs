@@ -75,7 +75,8 @@ namespace TradingBot.Infrastructure.Services
                     }
 
                     var resetRequested = instrument.Status == InstrumentOnboardingStatus.BackfillPending
-                        && job.Status is HistoricalBackfillStatus.Completed or HistoricalBackfillStatus.CompletedWithGaps or HistoricalBackfillStatus.Faulted;
+                        && (job.Status != HistoricalBackfillStatus.Pending
+                            || !string.Equals(job.Symbol, instrument.Symbol, StringComparison.OrdinalIgnoreCase));
                     if (resetRequested)
                     {
                         job.Symbol = instrument.Symbol;

@@ -50,11 +50,14 @@ GET /api/instruments
 GET /api/market-data/streams
 GET /api/market-data/incidents
 GET /api/market-data/latest
+GET /api/historical-backfill/jobs
+GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
 ```
 
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
 `/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
 The market-data endpoints expose persisted stream health, recent quality incidents, and the in-memory latest bid/ask/trade plus 5s/15s aggregates.
+The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 
 Run unit tests:
 
@@ -88,6 +91,7 @@ below to compile and test the real adapter in an environment where the official 
 - The persistence registration creates the configured SQLite directory; startup applies migrations.
 - Supply account-specific configuration and API keys through environment variables or your local secret configuration. Keep shared settings free of credentials.
 - `appsettings.Local.json` patterns are ignored for local use, but the host does not automatically load those files; use an explicitly configured provider or environment variables.
+- Historical backfill defaults to 365 days of 1m, 730 days of 5m and 1825 days of 15m data, split into pacing-safe segments. Override without editing shared broker settings, for example `HistoricalBackfill__OneMinute__LookbackDays`, `HistoricalBackfill__OneMinute__SegmentDays`, `HistoricalBackfill__PacingDelayMilliseconds` and `HistoricalBackfill__MaximumAttemptsPerSegment`.
 
 ### IBKR build prerequisite
 
@@ -138,10 +142,11 @@ the current Git tree and does not erase earlier commits.
 - `RiskEngine` and `PositionSizer` implement deterministic account, exposure and loss checks. Production history wiring and the zero-capacity sizing case still need correction (R01–R02).
 - `OrderManager` implements approved-order submission, broker status/fill persistence and duplicate checks. Crash recovery, real partial-fill handling and exit coordination have open findings (R03–R07).
 - Broker-state reconciliation gates startup readiness: trading remains disabled until IBKR positions/open orders are compared with SQLite open trades/orders and reconciled.
-- Market data subscription startup waits for the engine to become `Ready`, seeds configured historical candles and subscribes to every enabled `TradingSettings.Instruments` entry using its configured timeframes. The checked-in fail-closed example contains SPY on `1m`, `5m` and `15m`; legacy `Symbols` remains a temporary compatibility fallback.
+- Market data subscription startup subscribes to every enabled `TradingSettings.Instruments` entry using its configured timeframes once the engine is ready. Historical seeding is no longer on this live startup path; a separate resumable worker performs the wide backfill in parallel. The checked-in fail-closed example contains SPY on `1m`, `5m` and `15m`; legacy `Symbols` remains a temporary compatibility fallback.
 - A persistent instrument registry synchronizes configuration at startup, records every onboarding status transition and preserves progress across restarts. New enabled instruments begin at `BackfillPending`; configuration changes reset onboarding safely, while removed instruments remain disabled for audit.
 - Instrument-level `TradingEnabled` is only a requested permission. Paper/live order submission also requires the matching persisted readiness state, and no startup path automatically grants `LiveEnabled`.
 - Canonical `market-data-v2` events carry instrument ID, event/receive time, source, sequence and finality for bid, ask, trade and bar data. Persisted stream state makes stale, future, duplicate, out-of-order and gap conditions explicit.
+- Historical backfill persists jobs, segment attempts and gap reports per instrument/timeframe. Restart resumes the saved boundary, duplicate candles are ignored by the database unique key, and onboarding advances only through `Backfilling` to `Collecting` after every configured timeframe finishes.
 - Only final `Healthy` candles reach pattern analysis. Gap candles may be retained for research but are blocked from trading; a second guard in the pattern worker rejects any unhealthy candle.
 - Healthy level-one events maintain latest bid/ask/trade, spread and rolling 5s/15s aggregates; `MarketSnapshotService` combines them with its 1m/5m/15m candle context.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.

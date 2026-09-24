@@ -188,6 +188,17 @@ namespace TradingBot.Tests
             {
                 Symbol = "SPY",
                 Timeframe = "1m",
+                TimestampUtc = at.AddMinutes(-1),
+                Open = 100m,
+                High = 101m,
+                Low = 99m,
+                Close = 100m,
+                Volume = 900m
+            });
+            await harness.MarketData.PublishAsync("SPY", "1m", new MarketBar
+            {
+                Symbol = "SPY",
+                Timeframe = "1m",
                 TimestampUtc = at,
                 Open = 100m,
                 High = 101m,
