@@ -11,7 +11,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 2 — Registry i onboarding | Završeno | Persistirani registry, auditirane tranzicije, broker metadata, idempotentan startup sync i per-instrument execution gate. CI: 206/206 testova, 0 warninga i 0 grešaka. |
 | 3 — Canonical market data | Završeno | Verzija `market-data-v2`: instrument/event/receive/source identitet, bid/ask/trade/bar događaji, finalnost, persistirani stream statusi i fail-closed quality gate. CI: 213/213 testova, 0 warninga i 0 grešaka. |
 | 4 — Historical backfill | Završeno | Trajni segmenti/checkpointi, broker-wide pacing, exponential retry, idempotentni candle upis, gap report i automatske onboarding tranzicije. |
-| 5 — Dataset storage | Implementirano, čeka CI | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. |
+| 5 — Dataset storage | Završeno | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. CI: 219/219 testova, 0 warninga i 0 grešaka. |
 | 6–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
@@ -107,6 +107,8 @@ Verifikacija: [GitHub Actions run 35967896421](https://github.com/dejanakadex/ai
 - Ova točka ne mijenja fail-closed `AnalysisOnly`, ne dopušta paper/live naloge i ne započinje Parquet dataset storage.
 
 ## Točka 5 — izvedeno
+
+Verifikacija: [GitHub Actions run 35969992224](https://github.com/dejanakadex/aiTradingBot/actions/runs/35969992224) — .NET 10 Release build, 219/219 testova, bez warninga i grešaka.
 
 - Dodan je Parquet raw/research sloj odvojen od operativnog SQLitea. SQLite i dalje čuva checkpoint/status/incidente i canonical candleove, ali ne bid/ask/trade tickove.
 - Stabilna particija je `instrument=<InstrumentId>/date=<UTC yyyy-MM-dd>/type=<bid|ask|trade|bar>`; naziv part datoteke proizlazi iz vremenskog raspona i determinističkog hasha sadržaja.
