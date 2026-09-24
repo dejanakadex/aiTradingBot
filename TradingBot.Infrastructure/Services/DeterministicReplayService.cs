@@ -346,7 +346,11 @@ namespace TradingBot.Infrastructure.Services
                 return;
             }
 
-            var metadata = new SortedDictionary<string, string>(pattern.Metadata, StringComparer.Ordinal);
+            var metadata = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            foreach (var item in pattern.Metadata)
+            {
+                metadata[item.Key] = item.Value;
+            }
             db.ReplaySignalRecords.Add(new ReplaySignalRecord
             {
                 ReplayRunId = run.Id,
