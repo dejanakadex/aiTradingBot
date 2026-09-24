@@ -12,7 +12,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 3 — Canonical market data | Završeno | Verzija `market-data-v2`: instrument/event/receive/source identitet, bid/ask/trade/bar događaji, finalnost, persistirani stream statusi i fail-closed quality gate. CI: 213/213 testova, 0 warninga i 0 grešaka. |
 | 4 — Historical backfill | Završeno | Trajni segmenti/checkpointi, broker-wide pacing, exponential retry, idempotentni candle upis, gap report i automatske onboarding tranzicije. |
 | 5 — Dataset storage | Završeno | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. CI: 219/219 testova, 0 warninga i 0 grešaka. |
-| 6–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 6 — Neovisna collection pouzdanost | Implementirano, čeka CI | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. |
+| 7–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -130,6 +131,27 @@ Verifikacija: [GitHub Actions run 35969992224](https://github.com/dejanakadex/ai
 - Standardni CI ne testira stvarni IBKR feed niti dugotrajno opterećenje diska. Capacity, flush interval, disk monitoring, retention i recovery procedure moraju se kalibrirati prije kontinuiranog rada.
 - Ova točka ne uključuje deterministic replay engine; reproducibilan read ugovor koji će replay koristiti dolazi sada, a samo izvršavanje je točka 7.
 
-## Sljedeći checkpoint — točka 6
+## Točka 6 — izvedeno
 
-Odvojiti pouzdanost prikupljanja od trading/AI readinessa: heartbeat po streamu, reconnect, lag metrike i automatski gap-fill tako da kvar jednog instrumenta bude zasebno vidljiv i ne zaustavi ostale.
+- Uklonjena je pogrešna ovisnost collection workera o `TradingEngineState.Ready`, `TradingEnabled`, reconciliation statusu i `TradingSettings.Enabled`. Omogućeni instrumenti sada skupljaju podatke u `AnalysisOnly`, tijekom trading pauze i neovisno o AI dostupnosti.
+- Svaki instrument/timeframe radi u vlastitom dugotrajnom subscription loopu. Exception, završen channel ili stale heartbeat ponovno pokreće samo taj stream; ostali instrumenti i timeframeovi nastavljaju bez prekida.
+- Runtime status po streamu sadrži broker/subscription stanje, zadnji heartbeat i event-time, receive lag, izračunati heartbeat timeout, consecutive failures, reconnect counter, zadnji error i gap-fill metrike.
+- Heartbeat timeout računa se iz intervala timeframea, konfigurabilnog multiplikatora i grace perioda. Izvan konfigurirane New York regularne sesije stream ostaje pretplaćen u `IdleOutsideSession` stanju i očekivana tišina ne pokreće reconnect.
+- Reconnect prije nove live pretplate određuje nedostajući `[last event + interval, aligned now)` raspon i poziva automatski gap-fill. Maksimalni lookback je ograničen konfiguracijom kako kvar ne bi proizveo nekontrolirano velik zahtjev.
+- Automatski gap-fill prolazi kroz isti singleton historical servis i njegov broker-wide semaphore/pacing, OHLCV validaciju, `INSERT OR IGNORE` deduplikaciju i Parquet dataset sink. Gap-fill barovi ne objavljuju trading evente.
+- 1m resubscription u stvarnom IBKR adapteru ponovno stvara i vezanu level-one bid/ask/trade pretplatu. Njihov canonical quality status ostaje vidljiv kroz postojeći stream/incidents endpoint.
+- Read-only `GET /api/market-data/collection` izlaže sve collection statuse; postojeći `streams`, `incidents`, `latest`, historical jobs/gaps i dataset integrity endpointi ostaju odvojeni pogledi.
+- `MarketDataCollection` konfiguracija upravlja uključivanjem collectiona, monitor intervalom, heartbeatom, reconnect backoffom, session-aware ponašanjem, automatskim gap-fillom i najvećim lookbackom.
+- Testovi pokrivaju collection bez trading readinessa, više instrumenata, izolaciju neuspjelog streama, disconnect čekanje, graceful dispose, stvarni bar/pattern tok, završeni channel reconnect, stale heartbeat i idempotentni automatski gap-fill.
+
+## Odluke i ograničenja točke 6
+
+- Collection status je namjerno runtime/in-memory prikaz; canonical quality checkpointi, historical jobovi/gapovi i sami podaci ostaju trajni u SQLiteu/Parquetu. Nakon restarta status se ponovno izgradi iz aktivnih streamova.
+- Session guard trenutno poznaje radne dane i konfigurirane New York sate, ali ne službeni exchange holiday/early-close kalendar. Zato se izvan uobičajenih sati ne stvara lažni alarm, dok će puna calendar-aware provjera trebati zaseban market-calendar izvor.
+- Reconnect i gap-fill garantiraju izolaciju u procesu, ali ne mogu nadoknaditi podatke koje broker/provider više ne nudi. Takav rezultat ostaje mjerljiv kroz historical gap report i quality incidente.
+- Standardni CI provjerava fake broker put. Stvarni TWS/Gateway reconnect, IBKR pacing kod više paralelnih streamova i level-one recovery trebaju integration/soak test sa službenim `CSharpAPI.dll` i paper računom.
+- Ova točka ne implementira replay. Stabilni collection/dataset input sada je spreman za deterministic event-time replay u točki 7.
+
+## Sljedeći checkpoint — točka 7
+
+Implementirati deterministički replay koji koristi isti feature/pattern kod kao live, obrađuje događaje strogo po event-timeu, nema pristup budućim podacima te podržava brzinu, pause/resume i checkpoint.

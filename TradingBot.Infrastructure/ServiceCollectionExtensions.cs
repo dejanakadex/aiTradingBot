@@ -72,6 +72,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IMarketDataValidator, MarketDataValidator>();
             services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
+            services.AddSingleton<IMarketDataCollectionStatusService, MarketDataCollectionStatusService>();
             services.AddSingleton<IMarketDatasetStore, ParquetMarketDatasetStore>();
             services.AddSingleton<MarketDatasetWriterHostedService>();
             services.AddSingleton<IMarketDatasetSink>(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());

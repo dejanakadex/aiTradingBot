@@ -177,8 +177,8 @@ namespace TradingBot.Infrastructure.Services
                         .Select(group => group.First())
                         .OrderBy(bar => bar.TimestampUtc)
                         .ToArray();
-                    var inserted = await InsertBarsAsync(db, job, valid, now, cancellationToken).ConfigureAwait(false);
-                    await RecordDatasetAsync(job, valid, now, cancellationToken).ConfigureAwait(false);
+                    var inserted = await InsertBarsAsync(db, job, valid, now, "IBKR.HistoricalBackfill", cancellationToken).ConfigureAwait(false);
+                    await RecordDatasetAsync(job, valid, now, "IBKR.HistoricalBackfill", cancellationToken).ConfigureAwait(false);
 
                     segment.Status = HistoricalBackfillSegmentStatus.Completed;
                     segment.BarsReceived = received.Length;
@@ -243,10 +243,108 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
+        public async Task<HistoricalGapFillResult> FillGapAsync(
+            string instrumentId,
+            string symbol,
+            string timeframe,
+            DateTime startUtc,
+            DateTime endUtc,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedInstrumentId = instrumentId?.Trim() ?? string.Empty;
+            var normalizedSymbol = symbol?.Trim().ToUpperInvariant() ?? string.Empty;
+            var normalizedTimeframe = NormalizeTimeframe(timeframe);
+            var start = ToUtc(startUtc);
+            var end = ToUtc(endUtc);
+            if (string.IsNullOrWhiteSpace(normalizedInstrumentId)) throw new ArgumentException("InstrumentId is required.", nameof(instrumentId));
+            if (string.IsNullOrWhiteSpace(normalizedSymbol)) throw new ArgumentException("Symbol is required.", nameof(symbol));
+            if (end <= start) throw new ArgumentOutOfRangeException(nameof(endUtc), "Gap-fill end must be after start.");
+
+            await _singleRequest.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+                var lastRequest = await db.HistoricalBackfillJobRecords
+                    .MaxAsync(item => (DateTime?)item.LastRequestedAtUtc, cancellationToken)
+                    .ConfigureAwait(false);
+                var requestAt = ToUtc(_clock.UtcNow);
+                if (lastRequest.HasValue)
+                {
+                    var availableAt = ToUtc(lastRequest.Value).AddMilliseconds(_settings.PacingDelayMilliseconds);
+                    if (availableAt > requestAt)
+                    {
+                        await Task.Delay(availableAt - requestAt, cancellationToken).ConfigureAwait(false);
+                        requestAt = ToUtc(_clock.UtcNow);
+                    }
+                }
+
+                var persistedJob = await db.HistoricalBackfillJobRecords.SingleOrDefaultAsync(
+                    item => item.InstrumentId == normalizedInstrumentId && item.Timeframe == normalizedTimeframe,
+                    cancellationToken).ConfigureAwait(false);
+                if (persistedJob != null)
+                {
+                    persistedJob.LastRequestedAtUtc = requestAt;
+                    persistedJob.UpdatedAtUtc = requestAt;
+                    persistedJob.Version++;
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                var job = persistedJob ?? new HistoricalBackfillJobRecord
+                {
+                    InstrumentId = normalizedInstrumentId,
+                    Symbol = normalizedSymbol,
+                    Timeframe = normalizedTimeframe
+                };
+                var request = new HistoricalBarRequest(normalizedInstrumentId, normalizedSymbol, normalizedTimeframe, start, end);
+                var received = (await _marketData.GetHistoricalBarsAsync(request, cancellationToken).ConfigureAwait(false)).ToArray();
+                var valid = received
+                    .Where(bar => IsValid(bar, normalizedSymbol, normalizedTimeframe, start, end))
+                    .GroupBy(bar => ToUtc(bar.TimestampUtc))
+                    .Select(group => group.First())
+                    .OrderBy(bar => bar.TimestampUtc)
+                    .ToArray();
+                var receivedAt = ToUtc(_clock.UtcNow);
+                var inserted = await InsertBarsAsync(db, job, valid, receivedAt, "IBKR.AutomaticGapFill", cancellationToken).ConfigureAwait(false);
+                await RecordDatasetAsync(job, valid, receivedAt, "IBKR.AutomaticGapFill", cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation(
+                    "Automatic gap fill completed for {InstrumentId} {Timeframe} [{StartUtc}, {EndUtc}): received={Received}, inserted={Inserted}.",
+                    normalizedInstrumentId,
+                    normalizedTimeframe,
+                    start,
+                    end,
+                    received.Length,
+                    inserted);
+                return new HistoricalGapFillResult(
+                    true,
+                    normalizedInstrumentId,
+                    normalizedTimeframe,
+                    start,
+                    end,
+                    received.Length,
+                    inserted,
+                    Math.Max(0, valid.Length - inserted),
+                    string.Empty);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Automatic gap fill failed for {InstrumentId} {Timeframe} [{StartUtc}, {EndUtc}).", normalizedInstrumentId, normalizedTimeframe, start, end);
+                return new HistoricalGapFillResult(false, normalizedInstrumentId, normalizedTimeframe, start, end, 0, 0, 0, ex.Message);
+            }
+            finally
+            {
+                _singleRequest.Release();
+            }
+        }
+
         private async Task RecordDatasetAsync(
             HistoricalBackfillJobRecord job,
             IEnumerable<MarketBar> bars,
             DateTime receivedAtUtc,
+            string source,
             CancellationToken cancellationToken)
         {
             if (_datasetSink == null) return;
@@ -260,7 +358,7 @@ namespace TradingBot.Infrastructure.Services
                     Kind = MarketDataEventKind.Bar,
                     EventTimeUtc = ToUtc(bar.TimestampUtc),
                     ReceivedTimeUtc = ToUtc(bar.ReceivedTimeUtc ?? receivedAtUtc),
-                    Source = string.IsNullOrWhiteSpace(bar.Source) ? "IBKR.HistoricalBackfill" : bar.Source.Trim(),
+                    Source = string.IsNullOrWhiteSpace(bar.Source) ? source : bar.Source.Trim(),
                     Sequence = bar.Sequence,
                     IsFinal = bar.IsFinal,
                     Timeframe = job.Timeframe,
@@ -359,6 +457,7 @@ namespace TradingBot.Infrastructure.Services
             HistoricalBackfillJobRecord job,
             IReadOnlyCollection<MarketBar> bars,
             DateTime receivedAtUtc,
+            string source,
             CancellationToken cancellationToken)
         {
             var inserted = 0;
@@ -370,7 +469,7 @@ namespace TradingBot.Infrastructure.Services
                     INSERT OR IGNORE INTO Candles
                         (InstrumentId, Symbol, Timeframe, TimestampUtc, ReceivedTimeUtc, Source, IsFinal, QualityStatus, Open, High, Low, Close, Volume)
                     VALUES
-                        ({job.InstrumentId}, {job.Symbol}, {(int)timeframe}, {ToUtc(bar.TimestampUtc)}, {receivedAtUtc}, {"IBKR.HistoricalBackfill"}, {true}, {(int)MarketDataQualityStatus.Healthy}, {bar.Open}, {bar.High}, {bar.Low}, {bar.Close}, {bar.Volume})
+                        ({job.InstrumentId}, {job.Symbol}, {(int)timeframe}, {ToUtc(bar.TimestampUtc)}, {receivedAtUtc}, {source}, {true}, {(int)MarketDataQualityStatus.Healthy}, {bar.Open}, {bar.High}, {bar.Low}, {bar.Close}, {bar.Volume})
                     """, cancellationToken).ConfigureAwait(false);
             }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

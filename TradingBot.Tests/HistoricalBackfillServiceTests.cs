@@ -143,6 +143,34 @@ namespace TradingBot.Tests
             Assert.Equal(InstrumentOnboardingStatus.Faulted, (await registry.GetAsync("US-STK-SPY-SMART"))!.Status);
         }
 
+        [Fact]
+        public async Task AutomaticGapFillUsesSharedBackfillPathAndRemainsIdempotent()
+        {
+            using var database = CreateDatabase(out var factory);
+            var clock = new MutableClock(new DateTime(2026, 9, 24, 20, 0, 0, DateTimeKind.Utc));
+            var registry = new InstrumentRegistryService(factory, Options.Create(BuildTradingSettings()), clock);
+            await registry.SynchronizeConfiguredAsync();
+            var marketData = new RecordingMarketDataService(request => new[] { Bar(request, request.StartUtc) });
+            var dataset = new RecordingDatasetSink();
+            var service = CreateService(factory, marketData, registry, BackfillSettings(1, 1), clock, dataset);
+            await service.SynchronizePlanAsync();
+            var start = clock.UtcNow.AddMinutes(-5);
+            var end = clock.UtcNow.AddMinutes(-3);
+
+            var first = await service.FillGapAsync("US-STK-SPY-SMART", "SPY", "1m", start, end);
+            var repeated = await service.FillGapAsync("US-STK-SPY-SMART", "SPY", "1m", start, end);
+
+            Assert.True(first.Success);
+            Assert.Equal(1, first.BarsInserted);
+            Assert.True(repeated.Success);
+            Assert.Equal(0, repeated.BarsInserted);
+            Assert.Equal(1, repeated.DuplicateBars);
+            Assert.Equal(2, dataset.Records.Count);
+            await using var db = factory.CreateDbContext();
+            var candle = Assert.Single(await db.Candles.ToListAsync());
+            Assert.Equal("IBKR.AutomaticGapFill", candle.Source);
+        }
+
         private static HistoricalBackfillService CreateService(
             IDbContextFactory<TradingBotDbContext> factory,
             IMarketDataService marketData,

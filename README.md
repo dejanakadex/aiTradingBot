@@ -50,6 +50,7 @@ GET /api/instruments
 GET /api/market-data/streams
 GET /api/market-data/incidents
 GET /api/market-data/latest
+GET /api/market-data/collection
 GET /api/datasets/manifest
 GET /api/datasets/verify
 GET /api/historical-backfill/jobs
@@ -58,7 +59,7 @@ GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
 
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
 `/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
-The market-data endpoints expose persisted stream health, recent quality incidents, and the in-memory latest bid/ask/trade plus 5s/15s aggregates.
+The market-data endpoints expose persisted quality checkpoints/incidents, the in-memory latest bid/ask/trade plus 5s/15s aggregates, and independent collection heartbeat/reconnect/lag/gap-fill state for every configured instrument/timeframe.
 The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 
@@ -96,6 +97,7 @@ below to compile and test the real adapter in an environment where the official 
 - `appsettings.Local.json` patterns are ignored for local use, but the host does not automatically load those files; use an explicitly configured provider or environment variables.
 - Historical backfill defaults to 365 days of 1m, 730 days of 5m and 1825 days of 15m data, split into pacing-safe segments. Override without editing shared broker settings, for example `HistoricalBackfill__OneMinute__LookbackDays`, `HistoricalBackfill__OneMinute__SegmentDays`, `HistoricalBackfill__PacingDelayMilliseconds` and `HistoricalBackfill__MaximumAttemptsPerSegment`.
 - Canonical raw/research events are written to `data/datasets` as Parquet by default and partitioned as `instrument=<id>/date=<UTC-date>/type=<bid|ask|trade|bar>`. Runtime output is ignored by Git. Override with `DatasetStorage__RootPath`; tune bounded backpressure and batching with `DatasetStorage__QueueCapacity`, `DatasetStorage__BatchSize` and `DatasetStorage__FlushIntervalSeconds`. Treat `DatasetStorage__SchemaVersion` as an immutable data-contract identifier for an existing dataset.
+- Collection is enabled independently of AI and trading readiness. `MarketDataCollection__MonitorIntervalSeconds`, `HeartbeatGraceSeconds`, `HeartbeatIntervalMultiplier`, reconnect delays and `MaximumGapFillLookbackMinutes` tune per-stream recovery. `RegularSessionOnly=true` prevents expected overnight/weekend silence from being classified as stale; exchange holidays remain a calendar limitation.
 
 ### IBKR build prerequisite
 
@@ -256,6 +258,7 @@ Short technical notes for Codex
 - IBKR: `IIbkrAdapter` is the broker boundary. The conditional concrete adapter uses the official TWS C# API when available, publishes completed streaming bars and requests level-one bid/ask/last events from the 1m subscription. The standard CI build cannot compile this conditional path without the official DLL.
 - Canonical market data: `MarketDataQualityService` persists stream checkpoints and incidents, blocks non-final/stale/future/duplicate/out-of-order/invalid events, and retains gap bars only for research. Raw quote/trade events and validated historical bars flow through a bounded writer into partitioned Parquet; SQLite remains limited to operational state, incidents and canonical candles.
 - Dataset storage: `ParquetMarketDatasetStore` writes atomic partition files, a stable `_manifest.json` and `_manifest.sha256`, records a SHA-256 for each file, verifies integrity before reads, and returns deterministically ordered/de-duplicated events for instrument/time/type ranges.
+- Collection reliability: each enabled instrument/timeframe owns an isolated subscription loop. It records heartbeat and receive lag, reconnects only the failed stream, keeps collection active in `AnalysisOnly`/pause/AI failure states, and invokes pacing-safe historical gap fill before resubscription. The 1m subscription also recreates its associated level-one bid/ask/trade subscription.
 - Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false; `TradingExecutionGuard` joins it with persisted per-instrument readiness before paper/live submission, while global `AnalysisOnly` remains active.
 - Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Historical backfill resumes from durable checkpoints, emits validated bars to the research dataset, and advances instruments to collection without granting trading permission.
 - Pipeline identity: every pattern has a deterministic `SignalId` plus a per-run `CorrelationId`, `InstrumentId`, `StrategyId` and explicit market-data/feature/pattern/strategy contract versions. The same context is propagated into strategy and risk audit JSON.

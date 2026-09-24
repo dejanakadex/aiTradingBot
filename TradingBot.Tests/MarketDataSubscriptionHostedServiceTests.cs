@@ -78,16 +78,142 @@ namespace TradingBot.Tests
         }
 
         [Fact]
-        public async Task DoesNotSubscribeBeforeEngineIsReady()
+        public async Task StartsCollectionWithoutTradingReadiness()
         {
             var harness = CreateHarness();
             harness.Status.SetState(TradingEngineState.Starting, false, "starting");
 
             await harness.Service.StartAsync(CancellationToken.None);
-            await Task.Delay(1200);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 3);
             await harness.Service.StopAsync(CancellationToken.None);
 
-            Assert.Empty(harness.MarketData.Subscriptions);
+            Assert.Equal(3, harness.MarketData.Subscriptions.Count);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task FailureOfOneStreamDoesNotStopOtherInstruments()
+        {
+            var harness = CreateHarness(new TradingSettings
+            {
+                Instruments =
+                [
+                    new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", MarketDataTimeframes = ["1m"] },
+                    new InstrumentSettings { InstrumentId = "US-STK-QQQ-SMART", Symbol = "QQQ", MarketDataTimeframes = ["1m"] }
+                ]
+            });
+            harness.MarketData.FailNextSubscriptions("SPY", "1m", 3);
+
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Any(item => item.Symbol == "QQQ"));
+
+            Assert.DoesNotContain(harness.MarketData.Subscriptions, item => item.Symbol == "SPY");
+            Assert.Contains(harness.CollectionStatus.GetAll(), item => item.Symbol == "QQQ" && item.Subscribed);
+            await harness.Service.StopAsync(CancellationToken.None);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task CompletedStreamReconnectsAndRequestsAutomaticGapFill()
+        {
+            var harness = CreateHarness(new TradingSettings
+            {
+                Symbols = ["SPY"],
+                MarketDataTimeframes = ["1m"],
+                MaximumCandleAgeSeconds = 300
+            });
+
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 1);
+            await harness.MarketData.PublishAsync("SPY", "1m", new MarketBar
+            {
+                Symbol = "SPY",
+                Timeframe = "1m",
+                TimestampUtc = harness.Clock.UtcNow.AddMinutes(-2),
+                ReceivedTimeUtc = harness.Clock.UtcNow,
+                Source = "test",
+                Open = 100m,
+                High = 101m,
+                Low = 99m,
+                Close = 100m,
+                Volume = 100m
+            });
+            await WaitUntilAsync(() => harness.CollectionStatus.GetAll().Single().LastHeartbeatUtc.HasValue);
+            harness.MarketData.CompleteLatest("SPY", "1m");
+
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count >= 2, timeoutMilliseconds: 5000);
+            await WaitUntilAsync(() => harness.Historical.GapFills.Count == 1);
+
+            var gap = Assert.Single(harness.Historical.GapFills);
+            Assert.Equal(harness.Clock.UtcNow.AddMinutes(-1), gap.StartUtc);
+            Assert.Equal(harness.Clock.UtcNow, gap.EndUtc);
+            var status = Assert.Single(harness.CollectionStatus.GetAll());
+            Assert.Equal(1, status.ReconnectCount);
+            Assert.Equal(1, status.GapFillCount);
+            await harness.Service.StopAsync(CancellationToken.None);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task StaleHeartbeatIsVisibleAndRestartsOnlyThatStream()
+        {
+            var harness = CreateHarness(new TradingSettings
+            {
+                Symbols = ["SPY"],
+                MarketDataTimeframes = ["1m"]
+            });
+
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 1);
+            harness.Clock.UtcNow = harness.Clock.UtcNow.AddMinutes(3);
+
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count >= 2, timeoutMilliseconds: 5000);
+
+            var status = Assert.Single(harness.CollectionStatus.GetAll());
+            Assert.Equal(1, status.ReconnectCount);
+            Assert.True(status.ConsecutiveFailures > 0);
+            Assert.Contains("heartbeat", status.LastError, StringComparison.OrdinalIgnoreCase);
+            await harness.Service.StopAsync(CancellationToken.None);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task StartupRestoresLastCandleAndFillsDowntimeGapBeforeLiveSubscription()
+        {
+            var harness = CreateHarness(new TradingSettings
+            {
+                Symbols = ["SPY"],
+                MarketDataTimeframes = ["1m"]
+            });
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                db.Candles.Add(new TradingBot.Persistence.Candle
+                {
+                    InstrumentId = "SPY",
+                    Symbol = "SPY",
+                    Timeframe = Timeframe.OneMinute,
+                    TimestampUtc = harness.Clock.UtcNow.AddMinutes(-2),
+                    ReceivedTimeUtc = harness.Clock.UtcNow.AddMinutes(-2),
+                    Source = "test",
+                    IsFinal = true,
+                    QualityStatus = MarketDataQualityStatus.Healthy,
+                    Open = 100m,
+                    High = 101m,
+                    Low = 99m,
+                    Close = 100m,
+                    Volume = 100m
+                });
+                await db.SaveChangesAsync();
+            }
+
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.Historical.GapFills.Count == 1);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 1);
+
+            var gap = Assert.Single(harness.Historical.GapFills);
+            Assert.Equal(harness.Clock.UtcNow.AddMinutes(-1), gap.StartUtc);
+            Assert.Equal(harness.Clock.UtcNow, gap.EndUtc);
+            await harness.Service.StopAsync(CancellationToken.None);
             harness.Dispose();
         }
 
@@ -183,7 +309,7 @@ namespace TradingBot.Tests
             await harness.Service.StartAsync(CancellationToken.None);
             await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 1);
 
-            var at = DateTime.UtcNow;
+            var at = harness.Clock.UtcNow;
             await harness.MarketData.PublishAsync("SPY", "1m", new MarketBar
             {
                 Symbol = "SPY",
@@ -231,6 +357,7 @@ namespace TradingBot.Tests
             var eventBus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
             var status = new TradingEngineStatusService();
             var fakeAdapter = new FakeIbkrAdapter();
+            var clock = new MutableClock(new DateTime(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc));
             tradingSettings ??= new TradingSettings
             {
                 Enabled = true,
@@ -253,21 +380,35 @@ namespace TradingBot.Tests
                 fakeAdapter,
                 eventBus,
                 factory,
-                new MarketDataValidator(Options.Create(tradingSettings), new SystemClock()),
+                new MarketDataValidator(Options.Create(tradingSettings), clock),
                 null,
                 NullLogger<MarketDataPipeline>.Instance,
-                settings: Options.Create(tradingSettings));
+                settings: Options.Create(tradingSettings),
+                clock: clock);
             var marketData = new FakeSubscriptionMarketDataService();
             var connectionService = new FakeConnectionService(ConnectionStatus.Connected);
+            var historical = new FakeHistoricalBackfillService();
+            var collectionStatus = new MarketDataCollectionStatusService();
             var service = new MarketDataSubscriptionHostedService(
                 marketData,
                 pipeline,
-                status,
                 connectionService,
+                historical,
+                new CandleHistoryService(factory),
+                collectionStatus,
                 Options.Create(tradingSettings),
+                Options.Create(new MarketDataCollectionSettings
+                {
+                    MonitorIntervalSeconds = 1,
+                    ReconnectInitialDelaySeconds = 1,
+                    ReconnectMaximumDelaySeconds = 1,
+                    HeartbeatGraceSeconds = 0,
+                    MaximumGapFillLookbackMinutes = 60
+                }),
+                clock,
                 NullLogger<MarketDataSubscriptionHostedService>.Instance);
 
-            return new Harness(service, marketData, eventBus, status, connectionService, factory, connection);
+            return new Harness(service, marketData, eventBus, status, connectionService, historical, collectionStatus, clock, factory, connection);
         }
 
         private static IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> CreateInMemoryFactory(out SqliteConnection connection)
@@ -285,9 +426,9 @@ namespace TradingBot.Tests
             return factory;
         }
 
-        private static async Task WaitUntilAsync(Func<bool> condition)
+        private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMilliseconds = 3000)
         {
-            using var timeout = new CancellationTokenSource(3000);
+            using var timeout = new CancellationTokenSource(timeoutMilliseconds);
             while (!condition())
             {
                 await Task.Delay(25, timeout.Token);
@@ -309,6 +450,9 @@ namespace TradingBot.Tests
             TradingEventBus EventBus,
             TradingEngineStatusService Status,
             FakeConnectionService Connection,
+            FakeHistoricalBackfillService Historical,
+            MarketDataCollectionStatusService CollectionStatus,
+            MutableClock Clock,
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> Factory,
             SqliteConnection DatabaseConnection) : IDisposable
         {
@@ -351,7 +495,10 @@ namespace TradingBot.Tests
 
         private sealed class FakeSubscriptionMarketDataService : IMarketDataService
         {
-            public List<FakeSubscription> Subscriptions { get; } = new();
+            private readonly System.Collections.Concurrent.ConcurrentQueue<FakeSubscription> _subscriptions = new();
+            private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _failures = new(StringComparer.OrdinalIgnoreCase);
+
+            public IReadOnlyList<FakeSubscription> Subscriptions => _subscriptions.ToArray();
             public int HistoricalRequests { get; private set; }
 
             public Task<IEnumerable<MarketBar>> GetHistoricalBarsAsync(HistoricalBarRequest request, CancellationToken cancellationToken = default)
@@ -362,16 +509,57 @@ namespace TradingBot.Tests
 
             public Task<IMarketDataSubscription> SubscribeAsync(string symbol, string timeframe, CancellationToken cancellationToken = default)
             {
+                var key = $"{symbol}|{timeframe}";
+                if (_failures.TryGetValue(key, out var remaining) && remaining > 0)
+                {
+                    _failures[key] = remaining - 1;
+                    throw new InvalidOperationException($"Simulated subscription failure for {key}.");
+                }
                 var subscription = new FakeSubscription(symbol, timeframe);
-                Subscriptions.Add(subscription);
+                _subscriptions.Enqueue(subscription);
                 return Task.FromResult<IMarketDataSubscription>(subscription);
             }
 
+            public void FailNextSubscriptions(string symbol, string timeframe, int count) => _failures[$"{symbol}|{timeframe}"] = count;
+
+            public void CompleteLatest(string symbol, string timeframe) => Subscriptions
+                .Last(item => item.Symbol == symbol && item.Timeframe == timeframe)
+                .Channel.Writer.TryComplete();
+
             public async Task PublishAsync(string symbol, string timeframe, MarketBar bar)
             {
-                var subscription = Subscriptions.Single(s => s.Symbol == symbol && s.Timeframe == timeframe);
+                var subscription = Subscriptions.Last(s => s.Symbol == symbol && s.Timeframe == timeframe && !s.Disposed);
                 await subscription.Channel.Writer.WriteAsync(bar);
             }
+        }
+
+        private sealed class FakeHistoricalBackfillService : IHistoricalBackfillService
+        {
+            public System.Collections.Concurrent.ConcurrentQueue<HistoricalGapFillResult> GapFills { get; } = new();
+
+            public Task SynchronizePlanAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task<HistoricalBackfillJobSnapshot?> RunNextSegmentAsync(CancellationToken cancellationToken = default) => Task.FromResult<HistoricalBackfillJobSnapshot?>(null);
+            public Task<IReadOnlyList<HistoricalBackfillJobSnapshot>> GetJobsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<HistoricalBackfillJobSnapshot>>(Array.Empty<HistoricalBackfillJobSnapshot>());
+            public Task<IReadOnlyList<HistoricalDataGapSnapshot>> GetGapsAsync(string? instrumentId = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<HistoricalDataGapSnapshot>>(Array.Empty<HistoricalDataGapSnapshot>());
+
+            public Task<HistoricalGapFillResult> FillGapAsync(
+                string instrumentId,
+                string symbol,
+                string timeframe,
+                DateTime startUtc,
+                DateTime endUtc,
+                CancellationToken cancellationToken = default)
+            {
+                var result = new HistoricalGapFillResult(true, instrumentId, timeframe, startUtc, endUtc, 2, 2, 0, string.Empty);
+                GapFills.Enqueue(result);
+                return Task.FromResult(result);
+            }
+        }
+
+        private sealed class MutableClock : IClock
+        {
+            public MutableClock(DateTime utcNow) => UtcNow = utcNow;
+            public DateTime UtcNow { get; set; }
         }
 
         private sealed class FakeSubscription : IMarketDataSubscription

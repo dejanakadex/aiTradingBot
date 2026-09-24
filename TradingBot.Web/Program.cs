@@ -66,6 +66,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "DatasetStorage configuration is invalid. Check root path, queue, batch, flush interval and schema version.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<MarketDataCollectionSettings>()
+        .Bind(builder.Configuration.GetSection("MarketDataCollection"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "MarketDataCollection configuration is invalid. Check heartbeat, reconnect and gap-fill values.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -191,6 +196,7 @@ try
     app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
+    app.MapGet("/api/market-data/collection", (IMarketDataCollectionStatusService collection) => Results.Ok(collection.GetAll()));
     app.MapGet("/api/datasets/manifest", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
         Results.Ok(await datasets.GetManifestAsync(cancellationToken)));
     app.MapGet("/api/datasets/verify", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
