@@ -83,6 +83,11 @@ namespace TradingBot.Tests
             Assert.Equal(123.42m, snapshot.CurrentPrice);
             Assert.Equal(0.04m, snapshot.Spread);
             Assert.Equal(at, snapshot.CreatedAtUtc);
+            Assert.Equal(0.04m, snapshot.OneMinute.Features!.Spread);
+            Assert.Equal(0.04m, snapshot.FiveMinutes.Features!.Spread);
+            Assert.Equal(0.04m, snapshot.FifteenMinutes.Features!.Spread);
+            Assert.Equal(0L, snapshot.OneMinute.Features.QuoteAgeMilliseconds);
+            Assert.StartsWith("features-v2+config-", snapshot.OneMinute.Features.FeatureVersion);
         }
 
         [Fact]

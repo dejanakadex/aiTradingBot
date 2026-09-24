@@ -28,6 +28,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> _dbFactory;
         private readonly ILogger<CandlePatternDetectionBackgroundService> _logger;
         private readonly TradingSettings _tradingSettings;
+        private readonly ILatestMarketDataService? _latestMarketDataService;
         private readonly ConcurrentDictionary<string, byte> _processedCandles = new();
 
         public CandlePatternDetectionBackgroundService(
@@ -39,7 +40,8 @@ namespace TradingBot.Infrastructure.Background
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             ILogger<CandlePatternDetectionBackgroundService> logger,
             ITradingPipelineStatusService? pipelineStatusService = null,
-            IOptions<TradingSettings>? tradingSettings = null)
+            IOptions<TradingSettings>? tradingSettings = null,
+            ILatestMarketDataService? latestMarketDataService = null)
         {
             _eventBus = eventBus;
             _candleHistoryService = candleHistoryService;
@@ -50,6 +52,7 @@ namespace TradingBot.Infrastructure.Background
             _dbFactory = dbFactory;
             _logger = logger;
             _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
+            _latestMarketDataService = latestMarketDataService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -112,6 +115,13 @@ namespace TradingBot.Infrastructure.Background
                 {
                     candles = candles.Concat(new[] { candle }).OrderBy(c => c.TimestampUtc).ToList();
                 }
+                candles = candles
+                    .Where(item => item.TimestampUtc <= candle.TimestampUtc)
+                    .GroupBy(item => item.TimestampUtc)
+                    .Select(group => group.OrderBy(item => item.ReceivedTimeUtc).ThenBy(item => item.Source, StringComparer.Ordinal).Last())
+                    .OrderBy(item => item.TimestampUtc)
+                    .TakeLast(HistoryCandles)
+                    .ToArray();
 
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.PatternAnalysis,
@@ -119,7 +129,19 @@ namespace TradingBot.Infrastructure.Background
                     $"Analyzing {candles.Count} candles for patterns.",
                     candle.Symbol);
 
-                var features = _featureEngine.ComputeFeatures(candles);
+                var latest = _latestMarketDataService?.Get(candle.InstrumentId)
+                    ?? _latestMarketDataService?.Get(candle.Symbol);
+                var features = _featureEngine.ComputeFeatures(new CanonicalFeatureInput
+                {
+                    Candles = candles,
+                    AsOfUtc = candle.TimestampUtc,
+                    Bid = latest?.Bid,
+                    BidTimeUtc = latest?.BidTimeUtc,
+                    Ask = latest?.Ask,
+                    AskTimeUtc = latest?.AskTimeUtc,
+                    LastTrade = latest?.LastTrade,
+                    LastTradeTimeUtc = latest?.LastTradeTimeUtc
+                });
                 var patterns = _patternDetector.Detect(candles)
                     .Select(ApplyConfiguredIdentity)
                     .ToArray();
@@ -177,18 +199,14 @@ namespace TradingBot.Infrastructure.Background
         {
             var instrument = _tradingSettings.GetEnabledInstruments()
                 .FirstOrDefault(configured => string.Equals(configured.Symbol, pattern.Symbol, StringComparison.OrdinalIgnoreCase));
-            if (instrument == null)
-            {
-                return pattern;
-            }
-
-            var strategyId = instrument.StrategyIds
+            var strategyId = instrument?.StrategyIds
                 .FirstOrDefault(strategy => string.Equals(strategy, PipelineContractVersions.DefaultStrategyId, StringComparison.OrdinalIgnoreCase))
-                ?? PipelineContractVersions.DefaultStrategyId;
+                ?? pattern.Context.StrategyId;
             var context = PipelineContext.CreateForSignal(
-                instrument.InstrumentId,
+                instrument?.InstrumentId ?? pattern.Context.InstrumentId,
                 $"{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
-                strategyId);
+                strategyId,
+                _featureEngine.FeatureVersion);
 
             return new PatternCandidate(
                 pattern.PatternType,
@@ -215,6 +233,8 @@ namespace TradingBot.Infrastructure.Background
                 context = pattern.Context,
                 relevantPriceLevels = pattern.RelevantPriceLevels,
                 metadata = pattern.Metadata,
+                featureVersion = features.FeatureVersion,
+                canonicalFeatures = features,
                 aboveVwap = features.Vwap.HasValue ? latestCandle.Close >= features.Vwap.Value : (bool?)null,
                 vwap = features.Vwap,
                 trendDirection = features.TrendDirection,

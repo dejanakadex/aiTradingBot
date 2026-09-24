@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
@@ -97,6 +98,42 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ChangedFeatureConfigurationAfterCheckpointFailsClosed()
+        {
+            var featureEngine = new VersionedFeatureEngine();
+            await using var harness = await ReplayHarness.CreateAsync(CreateRecords(3), featureEngine);
+            var run = await harness.Service.StartAsync(Request());
+            run = await harness.Service.ProcessBatchAsync(run.Id, 1);
+            featureEngine.Version = "features-v2+config-changed";
+
+            var result = await harness.Service.ProcessBatchAsync(run.Id, 100);
+
+            Assert.Equal(ReplayRunStatus.Faulted, result.Status);
+            Assert.Contains("feature configuration changed", result.LastError, StringComparison.OrdinalIgnoreCase);
+            Assert.Single(await harness.Service.GetSignalsAsync(run.Id));
+        }
+
+        [Fact]
+        public async Task ReplayUsesAsOfBidAskEventsInCanonicalFeatureOutput()
+        {
+            var records = CreateRecords(1);
+            records.Add(Quote("bid-1", "bid", StartUtc.AddSeconds(30), 100.98m));
+            records.Add(Quote("ask-1", "ask", StartUtc.AddSeconds(40), 101.02m));
+            await using var harness = await ReplayHarness.CreateAsync(records);
+            var run = await harness.Service.StartAsync(Request());
+
+            run = await harness.Service.ProcessBatchAsync(run.Id, 100);
+            var signal = Assert.Single(await harness.Service.GetSignalsAsync(run.Id));
+            using var features = JsonDocument.Parse(signal.FeaturesJson);
+
+            Assert.Equal(ReplayRunStatus.Completed, run.Status);
+            Assert.Equal(3, run.InputEventCount);
+            Assert.Equal(0.04m, features.RootElement.GetProperty("spread").GetDecimal());
+            Assert.True(features.RootElement.GetProperty("spreadBps").GetDecimal() > 0m);
+            Assert.Equal(20_000, features.RootElement.GetProperty("quoteAgeMilliseconds").GetInt64());
+        }
+
+        [Fact]
         public async Task StartRejectsInvalidDatasetAndOutOfRangeSpeed()
         {
             await using var harness = await ReplayHarness.CreateAsync(CreateRecords(1));
@@ -157,23 +194,44 @@ namespace TradingBot.Tests
             CanTriggerTrading = true
         };
 
+        private static MarketDatasetRecord Quote(string eventId, string dataType, DateTime eventTimeUtc, decimal price) => new()
+        {
+            SchemaVersion = "market-data-v2.parquet-v1",
+            EventId = eventId,
+            InstrumentId = "US-STK-SPY-SMART",
+            Symbol = "SPY",
+            DataType = dataType,
+            EventTimeUtc = eventTimeUtc,
+            ReceivedTimeUtc = eventTimeUtc.AddMilliseconds(10),
+            Source = "Test.Dataset",
+            IsFinal = true,
+            Price = price,
+            Size = 1m,
+            QualityStatus = MarketDataQualityStatus.Healthy.ToString(),
+            CanPersist = true,
+            CanTriggerTrading = true
+        };
+
         private sealed class ReplayHarness : IAsyncDisposable
         {
             private readonly SqliteConnection _connection;
             private readonly ServiceProvider _provider;
             private readonly FixedClock _clock = new(StartUtc.AddHours(1));
             private readonly ReplaySettings _settings = new() { EventsPerBatch = 100, MaximumDelayMilliseconds = 0 };
+            private readonly IFeatureEngine _featureEngine;
 
             private ReplayHarness(
                 SqliteConnection connection,
                 ServiceProvider provider,
                 FakeDatasetStore dataset,
-                RecordingDetectorFactory detectors)
+                RecordingDetectorFactory detectors,
+                IFeatureEngine featureEngine)
             {
                 _connection = connection;
                 _provider = provider;
                 Dataset = dataset;
                 Detectors = detectors;
+                _featureEngine = featureEngine;
                 Service = CreateFreshService();
             }
 
@@ -181,7 +239,7 @@ namespace TradingBot.Tests
             public RecordingDetectorFactory Detectors { get; }
             public DeterministicReplayService Service { get; }
 
-            public static async Task<ReplayHarness> CreateAsync(List<MarketDatasetRecord> records)
+            public static async Task<ReplayHarness> CreateAsync(List<MarketDatasetRecord> records, IFeatureEngine? featureEngine = null)
             {
                 var connection = new SqliteConnection("Data Source=:memory:");
                 await connection.OpenAsync();
@@ -192,13 +250,18 @@ namespace TradingBot.Tests
                 {
                     await db.Database.EnsureCreatedAsync();
                 }
-                return new ReplayHarness(connection, provider, new FakeDatasetStore(records), new RecordingDetectorFactory());
+                return new ReplayHarness(
+                    connection,
+                    provider,
+                    new FakeDatasetStore(records),
+                    new RecordingDetectorFactory(),
+                    featureEngine ?? new FeatureEngine());
             }
 
             public DeterministicReplayService CreateFreshService() => new(
                 Dataset,
                 _provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>(),
-                new FeatureEngine(),
+                _featureEngine,
                 Detectors,
                 _clock,
                 Options.Create(_settings),
@@ -256,6 +319,15 @@ namespace TradingBot.Tests
                     };
                 }
             }
+        }
+
+        private sealed class VersionedFeatureEngine : IFeatureEngine
+        {
+            private readonly FeatureEngine _inner = new();
+            public string Version { get; set; } = "features-v2+config-test";
+            public string FeatureVersion => Version;
+            public MarketFeatures ComputeFeatures(IReadOnlyList<DomainCandle> candles) => _inner.ComputeFeatures(candles);
+            public MarketFeatures ComputeFeatures(CanonicalFeatureInput input) => _inner.ComputeFeatures(input);
         }
 
         private sealed class FixedClock : IClock

@@ -42,10 +42,11 @@ namespace TradingBot.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(symbol)) throw new ArgumentException("symbol required", nameof(symbol));
 
             var normalizedSymbol = symbol.Trim();
-            var oneMinute = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.OneMinute, "Entry timing", cancellationToken).ConfigureAwait(false);
-            var fiveMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FiveMinutes, "Trading setup / pullback context", cancellationToken).ConfigureAwait(false);
-            var fifteenMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FifteenMinutes, "Broader market direction", cancellationToken).ConfigureAwait(false);
             var latest = _latestMarketData?.Get(normalizedSymbol);
+            var requestedAsOfUtc = currentPrice.HasValue || spread.HasValue ? DateTime.UtcNow : latest?.AsOfUtc;
+            var oneMinute = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.OneMinute, "Entry timing", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
+            var fiveMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FiveMinutes, "Trading setup / pullback context", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
+            var fifteenMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FifteenMinutes, "Broader market direction", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
             var midpoint = latest?.Bid is decimal bid && latest.Ask is decimal ask ? (bid + ask) / 2m : (decimal?)null;
 
             return new MarketSnapshot
@@ -66,6 +67,10 @@ namespace TradingBot.Infrastructure.Services
             string symbol,
             Timeframe timeframe,
             string interpretation,
+            DateTime? requestedAsOfUtc,
+            decimal? currentPrice,
+            decimal? spread,
+            TradingBot.Application.DTOs.LatestMarketDataSnapshot? latest,
             CancellationToken cancellationToken)
         {
             var candles = await _candleHistory.GetLastNCandlesAsync(symbol, timeframe, GetCandleCount(timeframe), cancellationToken).ConfigureAwait(false);
@@ -74,7 +79,20 @@ namespace TradingBot.Infrastructure.Services
                 return MarketTimeframeSnapshot.Empty(timeframe, interpretation);
             }
 
-            var features = _featureEngine.ComputeFeatures(candles);
+            var asOfUtc = requestedAsOfUtc ?? candles[^1].TimestampUtc;
+            var features = _featureEngine.ComputeFeatures(new CanonicalFeatureInput
+            {
+                Candles = candles,
+                AsOfUtc = asOfUtc,
+                Bid = latest?.Bid,
+                BidTimeUtc = latest?.BidTimeUtc,
+                Ask = latest?.Ask,
+                AskTimeUtc = latest?.AskTimeUtc,
+                LastTrade = currentPrice ?? latest?.LastTrade,
+                LastTradeTimeUtc = currentPrice.HasValue ? asOfUtc : latest?.LastTradeTimeUtc,
+                Spread = spread,
+                SpreadTimeUtc = spread.HasValue ? asOfUtc : null
+            });
             var patterns = _patternDetector.Detect(candles);
 
             return new MarketTimeframeSnapshot

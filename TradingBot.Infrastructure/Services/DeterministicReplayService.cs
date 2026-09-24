@@ -67,6 +67,10 @@ namespace TradingBot.Infrastructure.Services
             var records = await ReadInputAsync(instrumentId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
             if (records.Count == 0)
             {
+                throw new InvalidOperationException("No market-data events exist in the requested dataset range.");
+            }
+            if (!records.Any(item => item.DataType.Equals("bar", StringComparison.OrdinalIgnoreCase)))
+            {
                 throw new InvalidOperationException("No bar events exist in the requested dataset range.");
             }
 
@@ -84,7 +88,7 @@ namespace TradingBot.Infrastructure.Services
                 InputSha256 = ComputeInputHash(records),
                 InputEventCount = records.Count,
                 MarketDataVersion = PipelineContractVersions.MarketData,
-                FeatureVersion = PipelineContractVersions.Features,
+                FeatureVersion = _featureEngine.FeatureVersion,
                 PatternVersion = _patternDetectorFactory.DetectorVersion,
                 StrategyVersion = PipelineContractVersions.Strategy,
                 CreatedAtUtc = now,
@@ -189,6 +193,10 @@ namespace TradingBot.Infrastructure.Services
                 {
                     throw new InvalidDataException("Pattern detector configuration changed after the replay run was created; start a new run with the new version.");
                 }
+                if (!run.FeatureVersion.Equals(_featureEngine.FeatureVersion, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("Canonical feature configuration changed after the replay run was created; start a new run with the new version.");
+                }
                 var inputHash = ComputeInputHash(records);
                 if (records.Count != run.InputEventCount || !inputHash.Equals(run.InputSha256, StringComparison.OrdinalIgnoreCase))
                 {
@@ -209,6 +217,7 @@ namespace TradingBot.Infrastructure.Services
 
                 var detector = _patternDetectorFactory.Create();
                 var histories = new Dictionary<Timeframe, List<DomainCandle>>();
+                var quoteState = new ReplayQuoteState();
                 DateTime? previousEventTimeUtc = null;
                 var processedThisBatch = 0;
 
@@ -217,6 +226,12 @@ namespace TradingBot.Infrastructure.Services
                     cancellationToken.ThrowIfCancellationRequested();
                     var record = records[index];
                     var isWarmup = index < run.ProcessedEventCount;
+                    if (!isWarmup)
+                    {
+                        await DelayForSpeedAsync(previousEventTimeUtc, record.EventTimeUtc, run.SpeedMultiplier, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    quoteState.Apply(record);
 
                     var candle = TryCreateCandle(record);
                     if (candle != null)
@@ -233,11 +248,10 @@ namespace TradingBot.Infrastructure.Services
                             history.RemoveAt(0);
                         }
 
-                        var features = _featureEngine.ComputeFeatures(history);
+                        var features = _featureEngine.ComputeFeatures(quoteState.CreateFeatureInput(history, record.EventTimeUtc));
                         var patterns = detector.Detect(history);
                         if (!isWarmup)
                         {
-                            await DelayForSpeedAsync(previousEventTimeUtc, record.EventTimeUtc, run.SpeedMultiplier, cancellationToken).ConfigureAwait(false);
                             foreach (var pattern in patterns)
                             {
                                 await PersistSignalAsync(db, run, record.EventId, pattern, features, cancellationToken).ConfigureAwait(false);
@@ -345,7 +359,8 @@ namespace TradingBot.Infrastructure.Services
             var context = PipelineContext.CreateForSignal(
                 run.InstrumentId,
                 $"{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
-                run.StrategyId);
+                run.StrategyId,
+                run.FeatureVersion);
             if (db.ReplaySignalRecords.Local.Any(item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId)
                 || await db.ReplaySignalRecords.AnyAsync(
                     item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId,
@@ -398,7 +413,7 @@ namespace TradingBot.Infrastructure.Services
             CancellationToken cancellationToken)
         {
             var records = await _datasetStore.ReadAsync(
-                new DatasetQuery(instrumentId, fromUtc, toUtc, new[] { "bar" }),
+                new DatasetQuery(instrumentId, fromUtc, toUtc, new[] { "bar", "bid", "ask", "trade" }),
                 cancellationToken).ConfigureAwait(false);
             return records
                 .GroupBy(item => item.EventId, StringComparer.Ordinal)
@@ -504,6 +519,54 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.FeaturesJson).Append('\n');
             }
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();
+        }
+
+        private sealed class ReplayQuoteState
+        {
+            private decimal? _bid;
+            private DateTime? _bidTimeUtc;
+            private decimal? _ask;
+            private DateTime? _askTimeUtc;
+            private decimal? _lastTrade;
+            private DateTime? _lastTradeTimeUtc;
+
+            public void Apply(MarketDatasetRecord record)
+            {
+                if (!record.IsFinal || !record.CanTriggerTrading || record.Price is not > 0m
+                    || !Enum.TryParse<MarketDataQualityStatus>(record.QualityStatus, true, out var quality)
+                    || quality != MarketDataQualityStatus.Healthy)
+                {
+                    return;
+                }
+
+                switch (record.DataType.Trim().ToLowerInvariant())
+                {
+                    case "bid":
+                        _bid = record.Price;
+                        _bidTimeUtc = record.EventTimeUtc;
+                        break;
+                    case "ask":
+                        _ask = record.Price;
+                        _askTimeUtc = record.EventTimeUtc;
+                        break;
+                    case "trade":
+                        _lastTrade = record.Price;
+                        _lastTradeTimeUtc = record.EventTimeUtc;
+                        break;
+                }
+            }
+
+            public CanonicalFeatureInput CreateFeatureInput(IReadOnlyList<DomainCandle> candles, DateTime asOfUtc) => new()
+            {
+                Candles = candles,
+                AsOfUtc = asOfUtc,
+                Bid = _bid,
+                BidTimeUtc = _bidTimeUtc,
+                Ask = _ask,
+                AskTimeUtc = _askTimeUtc,
+                LastTrade = _lastTrade,
+                LastTradeTimeUtc = _lastTradeTimeUtc
+            };
         }
 
         private void ValidateSpeed(decimal speedMultiplier)

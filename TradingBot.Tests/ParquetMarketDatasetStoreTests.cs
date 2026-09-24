@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
+using TradingBot.Domain.Enums;
+using TradingBot.Domain.Models;
 using TradingBot.Infrastructure.Services;
 
 namespace TradingBot.Tests
@@ -79,6 +81,61 @@ namespace TradingBot.Tests
             }
         }
 
+        [Fact]
+        public async Task CanonicalFeaturesAreIdenticalBeforeAndAfterBackfillParquetRoundTrip()
+        {
+            var root = CreateTemporaryRoot();
+            try
+            {
+                var store = CreateStore(root);
+                var records = Enumerable.Range(0, 8)
+                    .Select(index => BarRecord(index))
+                    .Reverse()
+                    .ToArray();
+                await store.WriteBatchAsync(records);
+                var restored = await store.ReadAsync(new DatasetQuery(
+                    "US-STK-SPY-SMART",
+                    NowUtc,
+                    NowUtc.AddMinutes(8),
+                    new[] { "bar" }));
+                var engine = new FeatureEngine(new CanonicalFeatureSettings
+                {
+                    EmaShortPeriod = 2,
+                    EmaLongPeriod = 4,
+                    RsiPeriod = 2,
+                    AtrPeriod = 2,
+                    VolumeAveragePeriod = 3,
+                    MomentumLookbackCandles = 2,
+                    MeanReversionLookbackCandles = 3,
+                    MaximumQuoteAgeSeconds = 30
+                });
+                var asOfUtc = NowUtc.AddMinutes(7);
+
+                var beforeBackfill = engine.ComputeFeatures(new CanonicalFeatureInput
+                {
+                    Candles = records.Select(ToCandle).ToArray(),
+                    AsOfUtc = asOfUtc,
+                    Spread = 0.02m,
+                    SpreadTimeUtc = asOfUtc
+                });
+                var afterBackfill = engine.ComputeFeatures(new CanonicalFeatureInput
+                {
+                    Candles = restored.Select(ToCandle).ToArray(),
+                    AsOfUtc = asOfUtc,
+                    Spread = 0.02m,
+                    SpreadTimeUtc = asOfUtc
+                });
+
+                Assert.Equal(
+                    System.Text.Json.JsonSerializer.Serialize(beforeBackfill),
+                    System.Text.Json.JsonSerializer.Serialize(afterBackfill));
+            }
+            finally
+            {
+                DeleteTemporaryRoot(root);
+            }
+        }
+
         private static ParquetMarketDatasetStore CreateStore(string root) => new(
             Options.Create(new DatasetStorageSettings
             {
@@ -108,6 +165,45 @@ namespace TradingBot.Tests
             CanPersist = true,
             CanTriggerTrading = true
         };
+
+        private static MarketDatasetRecord BarRecord(int minute) => new()
+        {
+            SchemaVersion = "ignored-on-write",
+            EventId = $"bar-{minute}",
+            InstrumentId = "US-STK-SPY-SMART",
+            Symbol = "SPY",
+            DataType = "bar",
+            EventTimeUtc = NowUtc.AddMinutes(minute),
+            ReceivedTimeUtc = NowUtc.AddMinutes(minute).AddMilliseconds(10),
+            Source = "Test.Backfill",
+            Sequence = minute,
+            IsFinal = true,
+            Timeframe = "1m",
+            Open = 100m + minute,
+            High = 101m + minute,
+            Low = 99m + minute,
+            Close = 100.5m + minute,
+            Volume = 1_000m + minute * 100m,
+            QualityStatus = MarketDataQualityStatus.Healthy.ToString(),
+            QualityReason = "Validated backfill bar.",
+            CanPersist = true,
+            CanTriggerTrading = true
+        };
+
+        private static Candle ToCandle(MarketDatasetRecord record) => new(
+            record.Symbol,
+            Timeframe.OneMinute,
+            record.EventTimeUtc,
+            record.Open!.Value,
+            record.High!.Value,
+            record.Low!.Value,
+            record.Close!.Value,
+            record.Volume!.Value,
+            record.InstrumentId,
+            record.ReceivedTimeUtc,
+            record.Source,
+            record.IsFinal,
+            MarketDataQualityStatus.Healthy);
 
         private static string CreateTemporaryRoot() => Path.Combine(Path.GetTempPath(), $"tradingbot-dataset-{Guid.NewGuid():N}");
 

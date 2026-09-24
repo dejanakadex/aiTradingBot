@@ -64,7 +64,8 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IRiskEngine, RiskEngine>();
             services.AddTransient<IOrderManager, OrderManager>();
             services.AddSingleton<IExitManagementService, ExitManagementService>();
-            services.AddTransient<IFeatureEngine, FeatureEngine>();
+            services.AddTransient<IFeatureEngine>(sp => new FeatureEngine(
+                sp.GetRequiredService<IOptions<CanonicalFeatureSettings>>().Value));
             services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
             services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();

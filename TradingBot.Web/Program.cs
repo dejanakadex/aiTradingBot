@@ -76,6 +76,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "Replay configuration is invalid. Check worker, batch, history, delay and speed values.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<CanonicalFeatureSettings>()
+        .Bind(builder.Configuration.GetSection("CanonicalFeatures"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "CanonicalFeatures configuration is invalid. Check indicator periods, quote age and regime thresholds.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
