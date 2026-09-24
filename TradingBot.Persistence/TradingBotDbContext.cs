@@ -31,6 +31,8 @@ namespace TradingBot.Persistence
         public DbSet<HistoricalBackfillJobRecord> HistoricalBackfillJobRecords { get; set; }
         public DbSet<HistoricalBackfillSegmentRecord> HistoricalBackfillSegmentRecords { get; set; }
         public DbSet<HistoricalDataGapRecord> HistoricalDataGapRecords { get; set; }
+        public DbSet<ReplayRunRecord> ReplayRunRecords { get; set; }
+        public DbSet<ReplaySignalRecord> ReplaySignalRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -197,6 +199,25 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.JobId, x.StartUtc, x.EndUtc }).IsUnique();
                 b.HasIndex(x => x.InstrumentId);
                 b.HasIndex(x => x.DetectedAtUtc);
+            });
+
+            modelBuilder.Entity<ReplayRunRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.CreatedAtUtc);
+                b.HasIndex(x => x.UpdatedAtUtc);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<ReplaySignalRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.ReplayRunId, x.SignalId }).IsUnique();
+                b.HasIndex(x => new { x.ReplayRunId, x.DetectedAtUtc });
+                b.HasIndex(x => x.SourceEventId);
             });
         }
     }

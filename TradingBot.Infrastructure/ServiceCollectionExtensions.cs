@@ -65,6 +65,8 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IOrderManager, OrderManager>();
             services.AddSingleton<IExitManagementService, ExitManagementService>();
             services.AddTransient<IFeatureEngine, FeatureEngine>();
+            services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
+            services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();
             services.AddTransient<IAiUsageLimiter, AiUsageLimiter>();
             services.AddSingleton<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();
@@ -78,12 +80,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IMarketDatasetSink>(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddSingleton<IPatternQualityGate, PatternQualityGate>();
             services.AddTransient<IProtectiveStopMonitor, ProtectiveStopMonitor>();
-            services.AddTransient<IPatternDetector>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<PatternDetector>>();
-                var options = sp.GetRequiredService<IOptions<PatternDetectorOptions>>().Value;
-                return new PatternDetector(options, logger);
-            });
+            services.AddTransient<IPatternDetector>(sp => sp.GetRequiredService<IPatternDetectorFactory>().Create());
             services.AddTransient<IMarketSnapshotService, MarketSnapshotService>();
             services.AddSingleton<HttpClient>();
             services.AddTransient<IAiMarketAnalyzer, OpenAiMarketAnalyzer>();
@@ -92,6 +89,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService<InstrumentRegistryHostedService>();
             services.AddHostedService(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddHostedService<HistoricalBackfillHostedService>();
+            services.AddHostedService<DeterministicReplayHostedService>();
             services.AddHostedService<BrokerStateReconciliationHostedService>();
             services.AddHostedService<RuntimeBrokerReconciliationHostedService>();
             services.AddHostedService<ProtectiveStopInvariantHostedService>();

@@ -53,6 +53,8 @@ namespace TradingBot.Tests
             Assert.IsType<MarketDataCollectionStatusService>(provider.GetRequiredService<IMarketDataCollectionStatusService>());
             Assert.IsType<ParquetMarketDatasetStore>(provider.GetRequiredService<IMarketDatasetStore>());
             Assert.NotNull(provider.GetRequiredService<IMarketDatasetSink>());
+            Assert.IsType<PatternDetectorFactory>(provider.GetRequiredService<IPatternDetectorFactory>());
+            Assert.IsType<DeterministicReplayService>(provider.GetRequiredService<IDeterministicReplayService>());
         }
 
         [Fact]

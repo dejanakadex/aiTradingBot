@@ -71,6 +71,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "MarketDataCollection configuration is invalid. Check heartbeat, reconnect and gap-fill values.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<ReplaySettings>()
+        .Bind(builder.Configuration.GetSection("Replay"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "Replay configuration is invalid. Check worker, batch, history, delay and speed values.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -211,6 +216,26 @@ try
         Results.Ok(await backfill.GetJobsAsync(cancellationToken)));
     app.MapGet("/api/historical-backfill/gaps", async (string? instrumentId, IHistoricalBackfillService backfill, CancellationToken cancellationToken) =>
         Results.Ok(await backfill.GetGapsAsync(instrumentId, cancellationToken)));
+    app.MapGet("/api/replays", async (IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+        Results.Ok(await replay.GetAllAsync(cancellationToken)));
+    app.MapGet("/api/replays/{replayRunId:guid}", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+    {
+        var result = await replay.GetAsync(replayRunId, cancellationToken);
+        return result == null ? Results.NotFound() : Results.Ok(result);
+    });
+    app.MapGet("/api/replays/{replayRunId:guid}/signals", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+        Results.Ok(await replay.GetSignalsAsync(replayRunId, cancellationToken)));
+    app.MapPost("/api/replays", async (TradingBot.Application.DTOs.ReplayStartRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+    {
+        var result = await replay.StartAsync(request, cancellationToken);
+        return Results.Accepted($"/api/replays/{result.Id}", result);
+    });
+    app.MapPost("/api/replays/{replayRunId:guid}/pause", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+        Results.Ok(await replay.PauseAsync(replayRunId, cancellationToken)));
+    app.MapPost("/api/replays/{replayRunId:guid}/resume", async (Guid replayRunId, TradingBot.Application.DTOs.ReplaySpeedRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+        Results.Ok(await replay.ResumeAsync(replayRunId, request.SpeedMultiplier, cancellationToken)));
+    app.MapPost("/api/replays/{replayRunId:guid}/cancel", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
+        Results.Ok(await replay.CancelAsync(replayRunId, cancellationToken)));
     if (TradingBot.Web.DevelopmentEndpointGuard.ShouldExposeDevelopmentEndpoints(app.Environment))
     {
         app.MapGet("/api/dev/openai-smoke-test", (IOptions<OpenAiSettings> openAiOptions, IOpenAiApiKeyProvider apiKeyProvider) =>
