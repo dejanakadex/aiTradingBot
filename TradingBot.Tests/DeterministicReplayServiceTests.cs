@@ -82,6 +82,21 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ChangedPatternConfigurationAfterCheckpointFailsClosed()
+        {
+            await using var harness = await ReplayHarness.CreateAsync(CreateRecords(3));
+            var run = await harness.Service.StartAsync(Request());
+            run = await harness.Service.ProcessBatchAsync(run.Id, 1);
+            harness.Detectors.DetectorVersion = "patterns-v1+config-changed";
+
+            var result = await harness.Service.ProcessBatchAsync(run.Id, 100);
+
+            Assert.Equal(ReplayRunStatus.Faulted, result.Status);
+            Assert.Contains("configuration changed", result.LastError, StringComparison.OrdinalIgnoreCase);
+            Assert.Single(await harness.Service.GetSignalsAsync(run.Id));
+        }
+
+        [Fact]
         public async Task StartRejectsInvalidDatasetAndOutOfRangeSpeed()
         {
             await using var harness = await ReplayHarness.CreateAsync(CreateRecords(1));
@@ -219,6 +234,7 @@ namespace TradingBot.Tests
 
         private sealed class RecordingDetectorFactory : IPatternDetectorFactory
         {
+            public string DetectorVersion { get; set; } = "patterns-v1+config-test";
             public bool AllInputsWereOrderedAndAsOfCurrentEvent { get; private set; } = true;
             public IPatternDetector Create() => new RecordingDetector(this);
 

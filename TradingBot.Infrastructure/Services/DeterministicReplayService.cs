@@ -85,7 +85,7 @@ namespace TradingBot.Infrastructure.Services
                 InputEventCount = records.Count,
                 MarketDataVersion = PipelineContractVersions.MarketData,
                 FeatureVersion = PipelineContractVersions.Features,
-                PatternVersion = PipelineContractVersions.Patterns,
+                PatternVersion = _patternDetectorFactory.DetectorVersion,
                 StrategyVersion = PipelineContractVersions.Strategy,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -185,6 +185,10 @@ namespace TradingBot.Infrastructure.Services
             try
             {
                 var records = await ReadInputAsync(run.InstrumentId, run.FromUtc, run.ToUtc, cancellationToken).ConfigureAwait(false);
+                if (!run.PatternVersion.Equals(_patternDetectorFactory.DetectorVersion, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("Pattern detector configuration changed after the replay run was created; start a new run with the new version.");
+                }
                 var inputHash = ComputeInputHash(records);
                 if (records.Count != run.InputEventCount || !inputHash.Equals(run.InputSha256, StringComparison.OrdinalIgnoreCase))
                 {
@@ -288,6 +292,10 @@ namespace TradingBot.Infrastructure.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Deterministic replay {ReplayRunId} failed.", replayRunId);
+                foreach (var entry in db.ChangeTracker.Entries<ReplaySignalRecord>().Where(item => item.State == EntityState.Added))
+                {
+                    entry.State = EntityState.Detached;
+                }
                 await db.Entry(run).ReloadAsync(cancellationToken).ConfigureAwait(false);
                 run.Status = ReplayRunStatus.Faulted;
                 run.LastError = ex.Message;
@@ -454,17 +462,21 @@ namespace TradingBot.Infrastructure.Services
             var canonical = new StringBuilder(records.Count * 160);
             foreach (var item in records)
             {
-                canonical.Append(item.EventId).Append('|')
+                canonical.Append(item.SchemaVersion).Append('|')
+                    .Append(item.EventId).Append('|')
                     .Append(item.InstrumentId).Append('|')
                     .Append(item.Symbol).Append('|')
                     .Append(item.DataType).Append('|')
                     .Append(item.EventTimeUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.ReceivedTimeUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
+                    .Append(item.Source).Append('|')
                     .Append(item.Sequence?.ToString(CultureInfo.InvariantCulture) ?? string.Empty).Append('|')
                     .Append(item.IsFinal).Append('|').Append(item.Timeframe).Append('|')
+                    .Append(Decimal(item.Price)).Append('|').Append(Decimal(item.Size)).Append('|')
                     .Append(Decimal(item.Open)).Append('|').Append(Decimal(item.High)).Append('|')
                     .Append(Decimal(item.Low)).Append('|').Append(Decimal(item.Close)).Append('|')
                     .Append(Decimal(item.Volume)).Append('|').Append(item.QualityStatus).Append('|')
+                    .Append(item.QualityReason).Append('|').Append(item.CanPersist).Append('|')
                     .Append(item.CanTriggerTrading).Append('\n');
             }
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();

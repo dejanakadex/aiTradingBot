@@ -55,6 +55,13 @@ GET /api/datasets/manifest
 GET /api/datasets/verify
 GET /api/historical-backfill/jobs
 GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
+GET /api/replays
+GET /api/replays/{replayRunId}
+GET /api/replays/{replayRunId}/signals
+POST /api/replays
+POST /api/replays/{replayRunId}/pause
+POST /api/replays/{replayRunId}/resume
+POST /api/replays/{replayRunId}/cancel
 ```
 
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
@@ -62,6 +69,7 @@ GET /api/historical-backfill/gaps?instrumentId=US-STK-SPY-SMART
 The market-data endpoints expose persisted quality checkpoints/incidents, the in-memory latest bid/ask/trade plus 5s/15s aggregates, and independent collection heartbeat/reconnect/lag/gap-fill state for every configured instrument/timeframe.
 The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
+The replay endpoints create and control isolated research runs over verified Parquet bar data. Replay results never enter the live event bus or order pipeline. Protect mutating replay endpoints with authentication, authorization and rate limiting before exposing the application publicly.
 
 Run unit tests:
 
@@ -98,6 +106,7 @@ below to compile and test the real adapter in an environment where the official 
 - Historical backfill defaults to 365 days of 1m, 730 days of 5m and 1825 days of 15m data, split into pacing-safe segments. Override without editing shared broker settings, for example `HistoricalBackfill__OneMinute__LookbackDays`, `HistoricalBackfill__OneMinute__SegmentDays`, `HistoricalBackfill__PacingDelayMilliseconds` and `HistoricalBackfill__MaximumAttemptsPerSegment`.
 - Canonical raw/research events are written to `data/datasets` as Parquet by default and partitioned as `instrument=<id>/date=<UTC-date>/type=<bid|ask|trade|bar>`. Runtime output is ignored by Git. Override with `DatasetStorage__RootPath`; tune bounded backpressure and batching with `DatasetStorage__QueueCapacity`, `DatasetStorage__BatchSize` and `DatasetStorage__FlushIntervalSeconds`. Treat `DatasetStorage__SchemaVersion` as an immutable data-contract identifier for an existing dataset.
 - Collection is enabled independently of AI and trading readiness. `MarketDataCollection__MonitorIntervalSeconds`, `HeartbeatGraceSeconds`, `HeartbeatIntervalMultiplier`, reconnect delays and `MaximumGapFillLookbackMinutes` tune per-stream recovery. `RegularSessionOnly=true` prevents expected overnight/weekend silence from being classified as stale; exchange holidays remain a calendar limitation.
+- Deterministic replay is enabled by default. `Replay__EventsPerBatch`, `Replay__HistoryCandles`, `Replay__WorkerPollIntervalMilliseconds`, `Replay__MaximumDelayMilliseconds` and `Replay__MaximumSpeedMultiplier` tune its resource use. A run speed of `0` processes as fast as possible; a positive multiplier scales event-time delays.
 
 ### IBKR build prerequisite
 
@@ -153,6 +162,7 @@ the current Git tree and does not erase earlier commits.
 - Instrument-level `TradingEnabled` is only a requested permission. Paper/live order submission also requires the matching persisted readiness state, and no startup path automatically grants `LiveEnabled`.
 - Canonical `market-data-v2` events carry instrument ID, event/receive time, source, sequence and finality for bid, ask, trade and bar data. Persisted stream state makes stale, future, duplicate, out-of-order and gap conditions explicit.
 - Historical backfill persists jobs, segment attempts and gap reports per instrument/timeframe. Restart resumes the saved boundary, duplicate candles are ignored by the database unique key, and onboarding advances only through `Backfilling` to `Collecting` after every configured timeframe finishes.
+- Deterministic replay verifies and hashes its exact Parquet bar input, processes events in event/receive/ID order with as-of-only candle windows, and persists run checkpoints plus isolated signals. Pause/resume survives a new service instance; replay has no event-bus, broker or order dependency.
 - Only final `Healthy` candles reach pattern analysis. Gap candles may be retained for research but are blocked from trading; a second guard in the pattern worker rejects any unhealthy candle.
 - Healthy level-one events maintain latest bid/ask/trade, spread and rolling 5s/15s aggregates; `MarketSnapshotService` combines them with its 1m/5m/15m candle context.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.
@@ -176,6 +186,7 @@ High-priority files to open for Codex:
 - `TradingBot.Infrastructure/Services/TradingEventBus.cs`
 - `TradingBot.Infrastructure/Services/MarketDataPipeline.cs`
 - `TradingBot.Infrastructure/Services/MarketDataQualityService.cs`
+- `TradingBot.Infrastructure/Services/DeterministicReplayService.cs`
 - `TradingBot.Infrastructure/Services/LatestMarketDataService.cs`
 - `TradingBot.Infrastructure/Services/PatternDetector.cs`
 - `TradingBot.Infrastructure/Services/MarketSnapshotService.cs`
@@ -200,6 +211,7 @@ High-priority files to open for Codex:
 - `TradingBot.Infrastructure/Services/OperatingModeService.cs`
 - `TradingBot.Infrastructure/Background/CandlePatternDetectionBackgroundService.cs`
 - `TradingBot.Infrastructure/Background/MarketDataSubscriptionHostedService.cs`
+- `TradingBot.Infrastructure/Background/DeterministicReplayHostedService.cs`
 - `TradingBot.Infrastructure/Background/InstrumentRegistryHostedService.cs`
 - `TradingBot.Infrastructure/Background/PatternDecisionBackgroundService.cs`
 - `TradingBot.Infrastructure/Background/ApprovedOrderExecutionBackgroundService.cs`
@@ -250,6 +262,7 @@ High-priority files to open for Codex:
 - `TradingBot.Tests/AiPipelineOptimizationTests.cs`
 - `TradingBot.Tests/InstrumentRegistryServiceTests.cs`
 - `TradingBot.Tests/CanonicalMarketDataTests.cs`
+- `TradingBot.Tests/DeterministicReplayServiceTests.cs`
 
 Short technical notes for Codex
 
@@ -259,6 +272,7 @@ Short technical notes for Codex
 - Canonical market data: `MarketDataQualityService` persists stream checkpoints and incidents, blocks non-final/stale/future/duplicate/out-of-order/invalid events, and retains gap bars only for research. Raw quote/trade events and validated historical bars flow through a bounded writer into partitioned Parquet; SQLite remains limited to operational state, incidents and canonical candles.
 - Dataset storage: `ParquetMarketDatasetStore` writes atomic partition files, a stable `_manifest.json` and `_manifest.sha256`, records a SHA-256 for each file, verifies integrity before reads, and returns deterministically ordered/de-duplicated events for instrument/time/type ranges.
 - Collection reliability: each enabled instrument/timeframe owns an isolated subscription loop. It records heartbeat and receive lag, reconnects only the failed stream, keeps collection active in `AnalysisOnly`/pause/AI failure states, and invokes pacing-safe historical gap fill before resubscription. The 1m subscription also recreates its associated level-one bid/ask/trade subscription.
+- Deterministic replay: `DeterministicReplayService` reads verified Parquet bars, freezes the exact input with SHA-256 plus pipeline contract versions, reconstructs pattern-detector state at checkpoints and stores isolated replay signals. It never publishes to `ITradingEventBus` and cannot reach order execution.
 - Market data startup: `TradingSettings.Instruments` defines stable instrument IDs, broker metadata, allowed directions, strategy IDs, per-instrument timeframes and optional limits. `MarketDataSubscriptionHostedService` seeds and subscribes every enabled instrument. `TradingEnabled` defaults to false; `TradingExecutionGuard` joins it with persisted per-instrument readiness before paper/live submission, while global `AnalysisOnly` remains active.
 - Instrument onboarding: `InstrumentRegistryService` idempotently synchronizes configuration into SQLite, preserves progress and broker metadata across restarts, audits explicit status transitions and resets readiness when data-affecting configuration changes. Historical backfill resumes from durable checkpoints, emits validated bars to the research dataset, and advances instruments to collection without granting trading permission.
 - Pipeline identity: every pattern has a deterministic `SignalId` plus a per-run `CorrelationId`, `InstrumentId`, `StrategyId` and explicit market-data/feature/pattern/strategy contract versions. The same context is propagated into strategy and risk audit JSON.

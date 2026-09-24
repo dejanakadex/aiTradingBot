@@ -13,7 +13,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 4 — Historical backfill | Završeno | Trajni segmenti/checkpointi, broker-wide pacing, exponential retry, idempotentni candle upis, gap report i automatske onboarding tranzicije. |
 | 5 — Dataset storage | Završeno | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. CI: 219/219 testova, 0 warninga i 0 grešaka. |
 | 6 — Neovisna collection pouzdanost | Završeno | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. CI: 224/224 testova, 0 warninga i 0 grešaka. |
-| 7–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: završna verifikacija u tijeku. |
+| 8–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -154,6 +155,29 @@ Verifikacija: [GitHub Actions run 35979682906](https://github.com/dejanakadex/ai
 - Standardni CI provjerava fake broker put. Stvarni TWS/Gateway reconnect, IBKR pacing kod više paralelnih streamova i level-one recovery trebaju integration/soak test sa službenim `CSharpAPI.dll` i paper računom.
 - Ova točka ne implementira replay. Stabilni collection/dataset input sada je spreman za deterministic event-time replay u točki 7.
 
-## Sljedeći checkpoint — točka 7
+## Točka 7 — izvedeno
 
-Implementirati deterministički replay koji koristi isti feature/pattern kod kao live, obrađuje događaje strogo po event-timeu, nema pristup budućim podacima te podržava brzinu, pause/resume i checkpoint.
+Verifikacija: završni GitHub Actions run slijedi nakon dokumentacijskog commita.
+
+- `DeterministicReplayService` prije kreiranja runa provjerava Parquet manifest i file SHA-256 vrijednosti, čita samo traženi instrument/vremenski raspon i sprema hash svih polja točno odabranog ulaza uz market-data/feature/pattern/strategy verzije.
+- Događaji se dodatno dedupliciraju po `EventId` te obrađuju stabilnim redoslijedom `EventTimeUtc`, `ReceivedTimeUtc`, `EventId`, neovisno o redoslijedu kojim ih dataset store vrati.
+- Replay propušta samo finalne `Healthy` barove s `CanTriggerTrading=true`; svaki timeframe dobiva vlastiti as-of prozor. Feature i pattern evaluacija vide samo trenutnu i ranije svijeće, nikad buduće podatke.
+- Live i replay instanciraju isti `PatternDetector` preko zajedničkog `IPatternDetectorFactory`, a replay koristi isti `IFeatureEngine`. Pattern verzija uključuje SHA-256 fingerprint svih detector opcija i nastavak je fail-closed ako se konfiguracija promijeni. Replay nema ovisnost o `ITradingEventBus`, order manageru ili broker adapteru i ne može poslati nalog.
+- `ReplayRunRecords` trajno sprema status, brzinu, checkpoint, broj obrađenih događaja/signala, input/output hash i grešku. `ReplaySignalRecords` odvojeno sprema deterministički `SignalId`, source event, pattern, feature JSON i canonical sortirani metadata JSON.
+- Checkpoint se sprema nakon svakog događaja. Nova instanca servisa pri nastavku ponovno izgradi samo dotadašnju candle povijest i stateful pattern deduplikaciju, a unique `(ReplayRunId, SignalId)` indeks sprječava dvostruki signal.
+- Brzina `0` znači obradu bez namjerne pauze. Pozitivni multiplier reproducira razmak između event-timeova podijeljen multiplierom, uz konfigurabilan najveći pojedinačni delay.
+- Hosted worker obrađuje `Pending`/`Running` runove u konfigurabilnim batchovima. Dostupni su start/list/detail/signals/pause/resume/cancel endpointi pod `/api/replays`.
+- Ako se ulazni raspon promijeni nakon kreiranja runa, nastavak završava `Faulted` umjesto da proizvede nereproducibilan rezultat. Isti ulaz i verzije daju isti poredak signal ID-jeva i isti output SHA-256.
+- Testovi pokrivaju jednak rezultat dvaju runova, as-of/no-future-data prozor, trajni checkpoint nakon nove instance servisa, pause/resume bez duplikata, fail-closed promjenu dataseta ili pattern konfiguracije, neispravan integrity status, ograničenje brzine i stvarnu EF migraciju.
+
+## Odluke i ograničenja točke 7
+
+- Ova točka replaya završene canonical barove jer postojeći feature/pattern engine radi nad candleovima. Bid/ask/trade tick replay, spread/microstructure featurei i kratki 5s/15s canonical featurei pripadaju sljedećim točkama.
+- Replay namjerno stvara samo izolirane research signale. Ne piše live `PatternDetections`, ne poziva AI/strategy/risk/order tok i ne mijenja onboarding ili trading readiness.
+- Worker je zasad procesno serijaliziran kako dva runa ne bi opteretila SQLite i dataset nekontroliranom paralelnošću. Kontrolirani multi-run concurrency može se dodati nakon mjerenja I/O i CPU troška.
+- Mutacijski replay endpointi ne mogu trgovati, ali mogu trošiti CPU, disk i memoriju. Prije javnog izlaganja aplikacije treba ih zaštititi autentikacijom/autorizacijom i rate limitom.
+- `MaximumDelayMilliseconds` namjerno ograničava dugo čekanje između rijetkih događaja. Za stvarni 1x wall-clock replay vrijednost mora biti postavljena dovoljno visoko; za research je preporučena brzina `0`.
+
+## Sljedeći checkpoint — točka 8
+
+Implementirati canonical feature ugovor za VWAP, ATR, RSI, EMA, relativni volumen, spread, momentum, mean reversion, režim i normalizaciju likvidnosti/volatilnosti tako da live, backfill i replay daju jednake vrijednosti za isti `asOf`.
