@@ -14,7 +14,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 5 — Dataset storage | Završeno | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. CI: 219/219 testova, 0 warninga i 0 grešaka. |
 | 6 — Neovisna collection pouzdanost | Završeno | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. CI: 224/224 testova, 0 warninga i 0 grešaka. |
 | 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: 230/230 testova, 0 warninga i 0 grešaka. |
-| 8–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 8 — Canonical featurei | Završeno | Verzija `features-v2` s konfiguracijskim fingerprintom, eksplicitnim `AsOfUtc`, quote freshnessom, režimom i normaliziranim liquidity/volatility vrijednostima; isti engine koriste live, Parquet backfill i replay. CI: 237/237 testova. |
+| 9–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -181,3 +182,26 @@ Verifikacija: [GitHub Actions run 36035034631](https://github.com/dejanakadex/ai
 ## Sljedeći checkpoint — točka 8
 
 Implementirati canonical feature ugovor za VWAP, ATR, RSI, EMA, relativni volumen, spread, momentum, mean reversion, režim i normalizaciju likvidnosti/volatilnosti tako da live, backfill i replay daju jednake vrijednosti za isti `asOf`.
+
+## Točka 8 — izvedeno
+
+Verifikacija: [GitHub Actions run 36039004900](https://github.com/dejanakadex/aiTradingBot/actions/runs/36039004900) — .NET 10 Release build i 237/237 testova.
+
+- `CanonicalFeatureInput` uvodi eksplicitni `AsOfUtc` te event-timeove bid/ask/trade/spread podataka. Engine uklanja buduće candleove i quoteove, odbacuje prestare quoteove, deterministički deduplicira timestampove te validira jedan instrument/symbol/timeframe po izračunu.
+- `MarketFeatures` sada uz EMA, RSI, ATR, VWAP i relativni volumen nosi instrument, timeframe, sample count, momentum, mean-reversion z-score, EMA separaciju, spread/bps/spread-to-ATR, quote age, dollar-volume likvidnost, ATR/price i realiziranu volatilnost te deterministički market regime s razlogom.
+- `CanonicalFeatureSettings` centralizira periode i pragove. `FeatureEngine.FeatureVersion` kombinira `features-v2` sa SHA-256 fingerprintom cijele konfiguracije, a replay fail-closed odbija nastavak runa ako se feature konfiguracija promijeni.
+- Live pattern worker gradi strogo as-of povijest, koristi latest canonical quote/trade stanje i u audit detalje sprema cijeli canonical feature objekt i njegovu stvarnu konfiguracijsku verziju. Market snapshot za sva tri timeframea koristi isti ugovor.
+- Replay sada čita i event-time redom primjenjuje `bid`, `ask` i `trade` zapise uz barove. Svaki bar vidi samo quote stanje dostupno do njegova `asOf`; izolirani signal sprema puni canonical feature JSON.
+- Backfill ostaje raw/canonical market-data put, bez zasebne feature implementacije. Test kroz stvarni Parquet write/read dokazuje da backfill round-trip i live ulaz daju isti feature JSON, a dodatni testovi pokrivaju obrnuti redoslijed, buduće podatke, replay quote stanje i konfiguracijski fingerprint.
+
+## Odluke i ograničenja točke 8
+
+- VWAP se računa nad cijelim candle prozorom koji pozivatelj preda; još nije session-reset VWAP. To treba zadržati kao eksplicitnu definiciju ili u kasnijoj verziji ugovora odvojiti rolling i session VWAP.
+- Režim je deterministička klasifikacija iz ATR/price, EMA separation/ATR, momentuma i dostupnosti mean-reversion prozora. Pragovi su konfigurabilni, ali njihova statistička kalibracija pripada točkama 11–12.
+- `NormalizedLiquidity` je omjer zadnjeg dollar volumea i prosjeka prethodnog prozora. Ne tvrdi da je to broker depth niti procjena stvarnog fill kapaciteta; execution-grade likvidnost i edge-after-cost provjera dolaze u točki 16.
+- Spread je dostupan samo kad oba quotea zadovoljavaju isti as-of/freshness ugovor ili kad pozivatelj preda eksplicitni spread s vremenom. Nepotpuni, budući ili prestari quote ostavlja spread feature praznim umjesto da koristi buduću vrijednost.
+- Promjena feature formule ili značenja zahtijeva novu baznu verziju ugovora; promjena samo konfiguracije automatski mijenja fingerprint. Postojeći replay run tada se namjerno ne može nastaviti pod novim izračunom.
+
+## Sljedeći checkpoint — točka 9
+
+Implementirati pattern engine s punim pattern + instrument + strategija + timeframe identitetom, eksplicitnim hard uvjetima, score komponentama i razlozima te long/short domenom. Završni kriterij su pozitivni i negativni testovi za svaki pattern bez deduplikacijskih konflikata između instrumenata i timeframeova.
