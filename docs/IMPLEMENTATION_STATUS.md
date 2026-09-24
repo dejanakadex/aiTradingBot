@@ -13,7 +13,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 4 — Historical backfill | Završeno | Trajni segmenti/checkpointi, broker-wide pacing, exponential retry, idempotentni candle upis, gap report i automatske onboarding tranzicije. |
 | 5 — Dataset storage | Završeno | Particionirani Parquet raw/research storage, bounded writer, reproduktivan read path te manifest/schema/SHA-256 provjera bez punjenja operativnog SQLitea tickovima. CI: 219/219 testova, 0 warninga i 0 grešaka. |
 | 6 — Neovisna collection pouzdanost | Završeno | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. CI: 224/224 testova, 0 warninga i 0 grešaka. |
-| 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: završna verifikacija u tijeku. |
+| 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: 230/230 testova, 0 warninga i 0 grešaka. |
 | 8–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
@@ -157,7 +157,7 @@ Verifikacija: [GitHub Actions run 35979682906](https://github.com/dejanakadex/ai
 
 ## Točka 7 — izvedeno
 
-Verifikacija: završni GitHub Actions run slijedi nakon dokumentacijskog commita.
+Verifikacija: [GitHub Actions run 36035034631](https://github.com/dejanakadex/aiTradingBot/actions/runs/36035034631) — .NET 10 Release build, 230/230 testova, bez warninga i grešaka.
 
 - `DeterministicReplayService` prije kreiranja runa provjerava Parquet manifest i file SHA-256 vrijednosti, čita samo traženi instrument/vremenski raspon i sprema hash svih polja točno odabranog ulaza uz market-data/feature/pattern/strategy verzije.
 - Događaji se dodatno dedupliciraju po `EventId` te obrađuju stabilnim redoslijedom `EventTimeUtc`, `ReceivedTimeUtc`, `EventId`, neovisno o redoslijedu kojim ih dataset store vrati.
