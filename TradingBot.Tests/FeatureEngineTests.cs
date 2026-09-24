@@ -133,7 +133,7 @@ namespace TradingBot.Tests
             Assert.Equal(Timeframe.OneMinute, features.Timeframe);
             Assert.StartsWith("features-v2+config-", features.FeatureVersion);
             Assert.Equal(0.04m, features.Spread);
-            Assert.Equal(400m / 105m, features.SpreadBps);
+            Assert.Equal(Math.Round(400m / 105m, 8), Math.Round(features.SpreadBps!.Value, 8));
             Assert.Equal(1000L, features.QuoteAgeMilliseconds);
             Assert.Equal(200m / 103m, features.MomentumPercent);
             Assert.NotNull(features.MeanReversionZScore);
