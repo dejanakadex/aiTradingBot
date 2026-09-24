@@ -84,7 +84,7 @@ Verifikacija: [GitHub Actions run 35914113645](https://github.com/dejanakadex/ai
 
 ## Točka 4 — izvedeno
 
-Verifikacija: .NET 10 Release build i potpuni test suite na GitHub Actionsu; završni run upisuje se nakon zelenog CI prolaza.
+Verifikacija: [GitHub Actions run 35967896421](https://github.com/dejanakadex/aiTradingBot/actions/runs/35967896421) — .NET 10 Release build, 216/216 testova, bez warninga i grešaka.
 
 - Svaki konfigurirani instrument/timeframe dobiva trajni `HistoricalBackfillJobRecord`; svaki pokušaj segmenta sprema se zasebno u `HistoricalBackfillSegmentRecord`.
 - Checkpoint ide od najnovijih prema starijim podacima, pa se nakon prekida nastavlja na točnoj granici zadnjeg završenog segmenta.
