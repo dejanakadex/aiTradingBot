@@ -5,6 +5,7 @@ using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
+using TradingBot.Infrastructure.Services;
 
 namespace TradingBot.Infrastructure.Background
 {
