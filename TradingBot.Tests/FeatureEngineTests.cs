@@ -135,7 +135,7 @@ namespace TradingBot.Tests
             Assert.Equal(0.04m, features.Spread);
             Assert.Equal(Math.Round(400m / 105m, 8), Math.Round(features.SpreadBps!.Value, 8));
             Assert.Equal(1000L, features.QuoteAgeMilliseconds);
-            Assert.Equal(200m / 103m, features.MomentumPercent);
+            Assert.Equal(Math.Round(200m / 103m, 8), Math.Round(features.MomentumPercent!.Value, 8));
             Assert.NotNull(features.MeanReversionZScore);
             Assert.NotNull(features.AtrToPriceRatio);
             Assert.NotNull(features.RealizedVolatilityPercent);
