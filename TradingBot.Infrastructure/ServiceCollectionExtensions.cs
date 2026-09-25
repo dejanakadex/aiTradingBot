@@ -67,6 +67,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IFeatureEngine>(sp => new FeatureEngine(
                 sp.GetRequiredService<IOptions<CanonicalFeatureSettings>>().Value));
             services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
+            services.AddSingleton<ICandidateResearchService, CandidateResearchService>();
             services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();
             services.AddTransient<IAiUsageLimiter, AiUsageLimiter>();
@@ -91,6 +92,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddHostedService<HistoricalBackfillHostedService>();
             services.AddHostedService<DeterministicReplayHostedService>();
+            services.AddHostedService<CandidateLabelingHostedService>();
             services.AddHostedService<BrokerStateReconciliationHostedService>();
             services.AddHostedService<RuntimeBrokerReconciliationHostedService>();
             services.AddHostedService<ProtectiveStopInvariantHostedService>();

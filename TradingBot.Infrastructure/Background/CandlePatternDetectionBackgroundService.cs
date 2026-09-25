@@ -29,6 +29,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ILogger<CandlePatternDetectionBackgroundService> _logger;
         private readonly TradingSettings _tradingSettings;
         private readonly ILatestMarketDataService? _latestMarketDataService;
+        private readonly ICandidateResearchService? _candidateResearchService;
         private readonly ConcurrentDictionary<string, byte> _processedCandles = new();
 
         public CandlePatternDetectionBackgroundService(
@@ -41,7 +42,8 @@ namespace TradingBot.Infrastructure.Background
             ILogger<CandlePatternDetectionBackgroundService> logger,
             ITradingPipelineStatusService? pipelineStatusService = null,
             IOptions<TradingSettings>? tradingSettings = null,
-            ILatestMarketDataService? latestMarketDataService = null)
+            ILatestMarketDataService? latestMarketDataService = null,
+            ICandidateResearchService? candidateResearchService = null)
         {
             _eventBus = eventBus;
             _candleHistoryService = candleHistoryService;
@@ -53,6 +55,7 @@ namespace TradingBot.Infrastructure.Background
             _logger = logger;
             _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
             _latestMarketDataService = latestMarketDataService;
+            _candidateResearchService = candidateResearchService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -152,14 +155,24 @@ namespace TradingBot.Infrastructure.Background
                 var directions = configuredInstrument?.AllowedDirections.Count > 0
                     ? configuredInstrument.AllowedDirections
                     : new[] { TradeDirection.Long };
-                var patterns = strategyIds
-                    .SelectMany(strategyId => _patternDetector.Detect(new PatternDetectionInput
+                var detectedPatterns = new List<PatternCandidate>();
+                foreach (var strategyId in strategyIds)
+                {
+                    var batch = _patternDetector.Process(new PatternDetectionInput
                     {
                         Candles = candles,
                         StrategyId = strategyId,
                         FeatureVersion = _featureEngine.FeatureVersion,
                         Directions = directions
-                    }))
+                    });
+                    if (_candidateResearchService != null)
+                    {
+                        var sourceEventId = $"LIVE-BAR|{candle.InstrumentId}|{candle.Timeframe}|{candle.TimestampUtc:O}".ToUpperInvariant();
+                        await _candidateResearchService.PersistBatchAsync(batch, sourceEventId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    }
+                    detectedPatterns.AddRange(batch.Candidates);
+                }
+                var patterns = detectedPatterns
                     .DistinctBy(pattern => pattern.PatternKey, StringComparer.Ordinal)
                     .ToArray();
 

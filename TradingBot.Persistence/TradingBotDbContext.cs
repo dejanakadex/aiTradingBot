@@ -33,6 +33,8 @@ namespace TradingBot.Persistence
         public DbSet<HistoricalDataGapRecord> HistoricalDataGapRecords { get; set; }
         public DbSet<ReplayRunRecord> ReplayRunRecords { get; set; }
         public DbSet<ReplaySignalRecord> ReplaySignalRecords { get; set; }
+        public DbSet<ResearchCandidateRecord> ResearchCandidateRecords { get; set; }
+        public DbSet<CandidateLabelRecord> CandidateLabelRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -223,6 +225,29 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.ReplayRunId, x.SignalId }).IsUnique();
                 b.HasIndex(x => new { x.ReplayRunId, x.DetectedAtUtc });
                 b.HasIndex(x => x.SourceEventId);
+            });
+
+            modelBuilder.Entity<ResearchCandidateRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.RecordKey).IsUnique();
+                b.HasIndex(x => x.CandidateKey);
+                b.HasIndex(x => x.ReplayRunId);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.Outcome);
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.Timeframe, x.Direction, x.EvaluatedAtUtc });
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.HasMany(x => x.Labels)
+                    .WithOne(x => x.ResearchCandidate)
+                    .HasForeignKey(x => x.ResearchCandidateId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CandidateLabelRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.ResearchCandidateId, x.HorizonSeconds }).IsUnique();
+                b.HasIndex(x => new { x.Status, x.WindowEndUtc });
             });
         }
     }

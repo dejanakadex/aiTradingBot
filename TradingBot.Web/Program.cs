@@ -81,6 +81,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "CanonicalFeatures configuration is invalid. Check indicator periods, quote age and regime thresholds.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<CandidateLabelingSettings>()
+        .Bind(builder.Configuration.GetSection("CandidateLabeling"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "CandidateLabeling configuration is invalid. Check horizons, worker timing and cost assumptions.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -230,6 +235,10 @@ try
     });
     app.MapGet("/api/replays/{replayRunId:guid}/signals", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
         Results.Ok(await replay.GetSignalsAsync(replayRunId, cancellationToken)));
+    app.MapGet("/api/research/candidates", async (string? instrumentId, TradingBot.Domain.Enums.ResearchCandidateOutcome? outcome, int? count, ICandidateResearchService research, CancellationToken cancellationToken) =>
+        Results.Ok(await research.GetCandidatesAsync(instrumentId, outcome, count ?? 100, cancellationToken)));
+    app.MapGet("/api/research/candidates/{candidateId:long}/labels", async (long candidateId, ICandidateResearchService research, CancellationToken cancellationToken) =>
+        Results.Ok(await research.GetLabelsAsync(candidateId, cancellationToken)));
     app.MapPost("/api/replays", async (TradingBot.Application.DTOs.ReplayStartRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
     {
         var result = await replay.StartAsync(request, cancellationToken);

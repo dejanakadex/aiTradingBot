@@ -138,6 +138,23 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public void ProcessReturnsEveryEvaluatedPatternIncludingRejectedCandidates()
+        {
+            var detector = new PatternDetector(new PatternDetectorOptions(), NullLogger<PatternDetector>.Instance);
+            var candle = MakeC("X", 100m, 101m, 99m, 100m, 100m, DateTime.UtcNow, "US-STK-X-SMART");
+
+            var batch = detector.Process(new PatternDetectionInput
+            {
+                Candles = new[] { candle },
+                Directions = new[] { TradeDirection.Long, TradeDirection.Short }
+            });
+
+            Assert.Equal(10, batch.Evaluations.Count);
+            Assert.Contains(batch.Evaluations, item => !item.Accepted);
+            Assert.All(batch.Evaluations, item => Assert.Equal(candle.Close, item.ReferencePrice));
+        }
+
+        [Fact]
         public void HammerShapeWithoutPullback_HasWeakContextScore()
         {
             var det = new PatternDetector(new PatternDetectorOptions(), NullLogger<PatternDetector>.Instance);

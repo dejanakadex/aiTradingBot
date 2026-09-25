@@ -29,17 +29,20 @@ namespace TradingBot.Infrastructure.Services
             Candles = candles ?? Array.Empty<Candle>()
         });
 
-        public IReadOnlyList<PatternCandidate> Detect(PatternDetectionInput input)
+        public IReadOnlyList<PatternCandidate> Detect(PatternDetectionInput input) => Process(input).Candidates;
+
+        public PatternDetectionBatch Process(PatternDetectionInput input)
         {
             var candidates = new List<PatternCandidate>();
-            foreach (var evaluation in Evaluate(input))
+            var evaluations = Evaluate(input);
+            foreach (var evaluation in evaluations)
             {
                 var candidate = evaluation.Candidate;
                 if (candidate == null || !NotDuplicate(candidate)) continue;
                 candidates.Add(candidate);
                 _lastDetected[DedupKey(candidate)] = candidate.DetectedAtUtc;
             }
-            return candidates;
+            return new PatternDetectionBatch { Evaluations = evaluations, Candidates = candidates };
         }
 
         public IReadOnlyList<PatternEvaluation> Evaluate(PatternDetectionInput input)
@@ -361,6 +364,7 @@ namespace TradingBot.Infrastructure.Services
                 var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var component in componentArray) metadata[component.Code] = Format(component.Score);
                 metadata["finalQuality"] = Format(finalScore);
+                metadata["referencePrice"] = Format(candle.Close);
                 metadata["direction"] = direction.ToString();
                 metadata["patternVersion"] = DetectorVersion;
                 if (extraMetadata != null) foreach (var item in extraMetadata) metadata[item.Key] = item.Value;
@@ -378,8 +382,11 @@ namespace TradingBot.Infrastructure.Services
                 InstrumentId = candle.InstrumentId,
                 Symbol = candle.Symbol,
                 StrategyId = strategyId.Trim(),
+                FeatureVersion = featureVersion.Trim(),
+                PatternVersion = DetectorVersion,
                 Timeframe = candle.Timeframe,
                 EvaluatedAtUtc = candle.TimestampUtc,
+                ReferencePrice = candle.Close,
                 HardConditions = conditionArray,
                 ScoreComponents = componentArray,
                 Reasons = failedReasons.Length == 0 ? new[] { $"Accepted {direction} {type}; all hard conditions passed." } : failedReasons,

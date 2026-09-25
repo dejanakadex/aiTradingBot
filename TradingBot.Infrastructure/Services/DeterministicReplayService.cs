@@ -25,6 +25,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly IClock _clock;
         private readonly ReplaySettings _settings;
         private readonly ILogger<DeterministicReplayService> _logger;
+        private readonly ICandidateResearchService? _candidateResearchService;
         private readonly SemaphoreSlim _processingGate = new(1, 1);
 
         public DeterministicReplayService(
@@ -34,7 +35,8 @@ namespace TradingBot.Infrastructure.Services
             IPatternDetectorFactory patternDetectorFactory,
             IClock clock,
             IOptions<ReplaySettings> settings,
-            ILogger<DeterministicReplayService> logger)
+            ILogger<DeterministicReplayService> logger,
+            ICandidateResearchService? candidateResearchService = null)
         {
             _datasetStore = datasetStore ?? throw new ArgumentNullException(nameof(datasetStore));
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -43,6 +45,7 @@ namespace TradingBot.Infrastructure.Services
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _candidateResearchService = candidateResearchService;
         }
 
         public async Task<ReplayRunSnapshot> StartAsync(
@@ -249,7 +252,7 @@ namespace TradingBot.Infrastructure.Services
                         }
 
                         var features = _featureEngine.ComputeFeatures(quoteState.CreateFeatureInput(history, record.EventTimeUtc));
-                        var patterns = detector.Detect(new PatternDetectionInput
+                        var batch = detector.Process(new PatternDetectionInput
                         {
                             Candles = history,
                             StrategyId = run.StrategyId,
@@ -258,7 +261,11 @@ namespace TradingBot.Infrastructure.Services
                         });
                         if (!isWarmup)
                         {
-                            foreach (var pattern in patterns)
+                            if (_candidateResearchService != null)
+                            {
+                                await _candidateResearchService.PersistBatchAsync(batch, record.EventId, run.Id, cancellationToken).ConfigureAwait(false);
+                            }
+                            foreach (var pattern in batch.Candidates)
                             {
                                 await PersistSignalAsync(db, run, record.EventId, pattern, features, cancellationToken).ConfigureAwait(false);
                             }
@@ -290,6 +297,10 @@ namespace TradingBot.Infrastructure.Services
 
                 if (run.ProcessedEventCount == records.Count)
                 {
+                    if (_candidateResearchService != null)
+                    {
+                        await _candidateResearchService.LabelMatureCandidatesAsync(run.ToUtc, run.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    }
                     run.Status = ReplayRunStatus.Completed;
                     run.CompletedAtUtc = ToUtc(_clock.UtcNow);
                     run.SignalCount = await db.ReplaySignalRecords.CountAsync(item => item.ReplayRunId == run.Id, cancellationToken).ConfigureAwait(false);
@@ -526,6 +537,34 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.RelevantPriceLevelsJson).Append('|').Append(item.MetadataJson).Append('|')
                     .Append(item.FeaturesJson).Append('\n');
+            }
+            var candidates = await db.ResearchCandidateRecords.AsNoTracking()
+                .Where(item => item.ReplayRunId == replayRunId)
+                .OrderBy(item => item.EvaluatedAtUtc).ThenBy(item => item.CandidateKey)
+                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var item in candidates)
+            {
+                canonical.Append(item.CandidateKey).Append('|').Append(item.SourceEventId).Append('|')
+                    .Append(item.Outcome).Append('|').Append(item.DecisionStage).Append('|')
+                    .Append(item.ReferencePrice.ToString(CultureInfo.InvariantCulture)).Append('|')
+                    .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
+                    .Append(item.HardConditionsJson).Append('|').Append(item.ScoreComponentsJson).Append('|')
+                    .Append(item.ReasonsJson).Append('|').Append(item.LabelVersion).Append('\n');
+            }
+            var labels = await db.CandidateLabelRecords.AsNoTracking()
+                .Where(item => item.ResearchCandidate.ReplayRunId == replayRunId)
+                .OrderBy(item => item.ResearchCandidate.CandidateKey).ThenBy(item => item.HorizonSeconds)
+                .Select(item => new { item.ResearchCandidate.CandidateKey, Label = item })
+                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var item in labels)
+            {
+                var label = item.Label;
+                canonical.Append(item.CandidateKey).Append('|').Append(label.HorizonSeconds).Append('|')
+                    .Append(label.Status).Append('|').Append(label.TargetStopOutcome).Append('|')
+                    .Append(Decimal(label.ExitPrice)).Append('|').Append(Decimal(label.MaximumFavorableExcursionBps)).Append('|')
+                    .Append(Decimal(label.MaximumAdverseExcursionBps)).Append('|').Append(Decimal(label.GrossReturnBps)).Append('|')
+                    .Append(Decimal(label.EstimatedCostBps)).Append('|').Append(Decimal(label.NetReturnBps)).Append('|')
+                    .Append(label.ReasonsJson).Append('|').Append(label.LabelVersion).Append('\n');
             }
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();
         }

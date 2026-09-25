@@ -1195,6 +1195,74 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("ReplaySignalRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCandidateRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<string>("CandidateKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("Confidence").HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("DecisionStage").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Direction").HasColumnType("INTEGER");
+                    b.Property<DateTime>("EvaluatedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("FeatureVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("HardConditionsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("MetadataJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Outcome").HasColumnType("INTEGER");
+                    b.Property<int>("PatternType").HasColumnType("INTEGER");
+                    b.Property<string>("PatternVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("ReferencePrice").HasColumnType("TEXT");
+                    b.Property<string>("ReasonsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("RecordKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("ReplayRunId").HasColumnType("TEXT");
+                    b.Property<string>("ScoreComponentsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("SignalId").HasColumnType("TEXT");
+                    b.Property<string>("SourceEventId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Timeframe").HasColumnType("INTEGER");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("CandidateKey");
+                    b.HasIndex("InstrumentId");
+                    b.HasIndex("Outcome");
+                    b.HasIndex("RecordKey").IsUnique();
+                    b.HasIndex("ReplayRunId");
+                    b.HasIndex("InstrumentId", "StrategyId", "Timeframe", "Direction", "EvaluatedAtUtc");
+                    b.ToTable("ResearchCandidateRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.CandidateLabelRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<DateTime?>("CalculatedAtUtc").HasColumnType("TEXT");
+                    b.Property<decimal>("EntryPrice").HasColumnType("TEXT");
+                    b.Property<decimal?>("EstimatedCostBps").HasColumnType("TEXT");
+                    b.Property<decimal?>("ExitPrice").HasColumnType("TEXT");
+                    b.Property<string>("FirstStopEventId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("FirstTargetEventId").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal?>("GrossReturnBps").HasColumnType("TEXT");
+                    b.Property<int>("HorizonSeconds").HasColumnType("INTEGER");
+                    b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal?>("MaximumAdverseExcursionBps").HasColumnType("TEXT");
+                    b.Property<DateTime?>("MaximumEventTimeUtc").HasColumnType("TEXT");
+                    b.Property<decimal?>("MaximumFavorableExcursionBps").HasColumnType("TEXT");
+                    b.Property<decimal?>("NetReturnBps").HasColumnType("TEXT");
+                    b.Property<int>("ObservationCount").HasColumnType("INTEGER");
+                    b.Property<decimal?>("ObservedSpreadBps").HasColumnType("TEXT");
+                    b.Property<string>("ReasonsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("ResearchCandidateId").HasColumnType("INTEGER");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<int>("TargetStopOutcome").HasColumnType("INTEGER");
+                    b.Property<DateTime>("WindowEndUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("WindowStartUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("ResearchCandidateId", "HorizonSeconds").IsUnique();
+                    b.HasIndex("Status", "WindowEndUtc");
+                    b.ToTable("CandidateLabelRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.RiskDecisionRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -1269,6 +1337,20 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("Symbol");
 
                     b.ToTable("Trades");
+                });
+            modelBuilder.Entity("TradingBot.Persistence.CandidateLabelRecord", b =>
+                {
+                    b.HasOne("TradingBot.Persistence.ResearchCandidateRecord", "ResearchCandidate")
+                        .WithMany("Labels")
+                        .HasForeignKey("ResearchCandidateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                    b.Navigation("ResearchCandidate");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCandidateRecord", b =>
+                {
+                    b.Navigation("Labels");
                 });
 #pragma warning restore 612, 618
         }

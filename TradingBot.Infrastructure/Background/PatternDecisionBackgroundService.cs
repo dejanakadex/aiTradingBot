@@ -30,6 +30,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> _dbFactory;
         private readonly IClock _clock;
         private readonly ILogger<PatternDecisionBackgroundService> _logger;
+        private readonly ICandidateResearchService? _candidateResearchService;
         private readonly ConcurrentDictionary<string, byte> _processedPatterns = new();
 
         public PatternDecisionBackgroundService(
@@ -43,7 +44,8 @@ namespace TradingBot.Infrastructure.Background
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             IClock clock,
             ILogger<PatternDecisionBackgroundService> logger,
-            ITradingPipelineStatusService? pipelineStatusService = null)
+            ITradingPipelineStatusService? pipelineStatusService = null,
+            ICandidateResearchService? candidateResearchService = null)
         {
             _eventBus = eventBus;
             _pipelineChannel = pipelineChannel;
@@ -56,6 +58,7 @@ namespace TradingBot.Infrastructure.Background
             _dbFactory = dbFactory;
             _clock = clock;
             _logger = logger;
+            _candidateResearchService = candidateResearchService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -108,6 +111,7 @@ namespace TradingBot.Infrastructure.Background
                     pattern.Symbol,
                     reason);
                 await PersistPipelineDecisionAsync("PatternRejectedBeforeAi", pattern, reason, cancellationToken).ConfigureAwait(false);
+                await MarkBlockedAsync(pattern, "TradingHours", new[] { reason }, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -130,6 +134,7 @@ namespace TradingBot.Infrastructure.Background
                     patternAge,
                     maximumPatternAge);
                 await PersistPipelineDecisionAsync("PatternRejectedBeforeAi", pattern, reason, cancellationToken).ConfigureAwait(false);
+                await MarkBlockedAsync(pattern, "Freshness", new[] { reason }, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -148,6 +153,7 @@ namespace TradingBot.Infrastructure.Background
                     _statusService.Current.State,
                     _statusService.Current.TradingEnabled,
                     _tradingSettings.Enabled);
+                await MarkBlockedAsync(pattern, "TradingEngine", new[] { "Trading engine is not ready/enabled." }, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -174,6 +180,7 @@ namespace TradingBot.Infrastructure.Background
                         pattern.PatternType.ToString());
 
                     _logger.LogWarning("Skipping pattern {Pattern} for {Symbol}; account or position broker service is not registered", pattern.PatternType, pattern.Symbol);
+                    await MarkBlockedAsync(pattern, "BrokerAvailability", new[] { "Broker account/position services are unavailable." }, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -209,6 +216,7 @@ namespace TradingBot.Infrastructure.Background
                         pattern.Symbol,
                         reason);
                     await PersistPipelineDecisionAsync("PatternRejectedBeforeAi", pattern, reason, cancellationToken, setupCandidate: setupCandidate).ConfigureAwait(false);
+                    await MarkBlockedAsync(pattern, "PatternQualityGate", gateReasons, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -238,6 +246,7 @@ namespace TradingBot.Infrastructure.Background
                         pattern.Symbol,
                         criticSkipReason);
                     await PersistPipelineDecisionAsync("CriticSkipped", pattern, criticSkipReason, cancellationToken, analysis, setupCandidate).ConfigureAwait(false);
+                    await MarkBlockedAsync(pattern, "AiAnalyzer", new[] { criticSkipReason }, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -269,6 +278,7 @@ namespace TradingBot.Infrastructure.Background
                         pattern.PatternType.ToString());
 
                     _logger.LogInformation("Strategy rejected pattern {Pattern} for {Symbol}: {Reasons}", pattern.PatternType, pattern.Symbol, string.Join("; ", strategy.RejectionReasons));
+                    await MarkBlockedAsync(pattern, "Strategy", strategy.RejectionReasons, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -295,6 +305,7 @@ namespace TradingBot.Infrastructure.Background
                         pattern.PatternType.ToString());
 
                     _logger.LogInformation("Risk rejected pattern {Pattern} for {Symbol}: {Reason}", pattern.PatternType, pattern.Symbol, risk.Reason);
+                    await MarkBlockedAsync(pattern, "Risk", new[] { risk.Reason }, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -330,6 +341,28 @@ namespace TradingBot.Infrastructure.Background
                     pattern.PatternType.ToString());
 
                 _logger.LogError(ex, "Failed to process pattern {Pattern} for {Symbol}", pattern.PatternType, pattern.Symbol);
+                await MarkBlockedAsync(pattern, "PipelineError", new[] { ex.Message }, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private async Task MarkBlockedAsync(
+            PatternCandidate pattern,
+            string stage,
+            IReadOnlyCollection<string> reasons,
+            CancellationToken cancellationToken)
+        {
+            if (_candidateResearchService == null) return;
+            try
+            {
+                await _candidateResearchService.MarkBlockedAsync(pattern.PatternKey, stage, reasons, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to mark research candidate {CandidateKey} as blocked at {Stage}.", pattern.PatternKey, stage);
             }
         }
 
