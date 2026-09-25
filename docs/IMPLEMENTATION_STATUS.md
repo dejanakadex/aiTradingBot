@@ -15,7 +15,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 6 — Neovisna collection pouzdanost | Završeno | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. CI: 224/224 testova, 0 warninga i 0 grešaka. |
 | 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: 230/230 testova, 0 warninga i 0 grešaka. |
 | 8 — Canonical featurei | Završeno | Verzija `features-v2` s konfiguracijskim fingerprintom, eksplicitnim `AsOfUtc`, quote freshnessom, režimom i normaliziranim liquidity/volatility vrijednostima; isti engine koriste live, Parquet backfill i replay. CI: 237/237 testova. |
-| 9 — Pattern engine | U CI provjeri | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija implementirani su na branchu. |
+| 9 — Pattern engine | Završeno | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija. CI: 248/248 testova, 0 warninga i 0 grešaka. |
 | 10–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
@@ -207,7 +207,9 @@ Verifikacija: [GitHub Actions run 36039004900](https://github.com/dejanakadex/ai
 
 Implementirati pattern engine s punim pattern + instrument + strategija + timeframe identitetom, eksplicitnim hard uvjetima, score komponentama i razlozima te long/short domenom. Završni kriterij su pozitivni i negativni testovi za svaki pattern bez deduplikacijskih konflikata između instrumenata i timeframeova.
 
-## Točka 9 — implementirano, CI u tijeku
+## Točka 9 — izvedeno
+
+Verifikacija: [GitHub Actions run 36109324767](https://github.com/dejanakadex/aiTradingBot/actions/runs/36109324767) — .NET 10 Release build, 248/248 testova, bez warninga i grešaka.
 
 - Ugovor je podignut na `patterns-v2`; konfiguracija detektora daje vlastiti SHA-256 fingerprint, a live i replay kandidat nose stvarnu feature i pattern verziju.
 - `PatternCandidate` i persistirani `PatternDetection` sada nose smjer, instrument, strategiju, timeframe, deterministički signal/pattern ključ, hard uvjete, ponderirane score komponente i razloge evaluacije.
