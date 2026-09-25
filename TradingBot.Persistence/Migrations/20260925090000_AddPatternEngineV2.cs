@@ -11,6 +11,22 @@ namespace TradingBot.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Some supported legacy databases contain migration-history rows for the
+            // initial schema while the PatternDetections table itself is missing.
+            // Recreate its v1 shape before applying the additive v2 migration.
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "PatternDetections" (
+                    "Id" INTEGER NOT NULL CONSTRAINT "PK_PatternDetections" PRIMARY KEY AUTOINCREMENT,
+                    "Symbol" TEXT NOT NULL,
+                    "PatternType" INTEGER NOT NULL,
+                    "DetectedAtUtc" TEXT NOT NULL,
+                    "Details" TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS "IX_PatternDetections_PatternType" ON "PatternDetections" ("PatternType");
+                CREATE INDEX IF NOT EXISTS "IX_PatternDetections_Symbol" ON "PatternDetections" ("Symbol");
+                """);
+
             migrationBuilder.AddColumn<int>(name: "Direction", table: "ReplaySignalRecords", type: "INTEGER", nullable: false, defaultValue: 1);
 
             migrationBuilder.AddColumn<int>(name: "Direction", table: "PatternDetections", type: "INTEGER", nullable: false, defaultValue: 1);

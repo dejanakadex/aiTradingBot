@@ -35,6 +35,8 @@ namespace TradingBot.Tests
                 Assert.True(await ColumnExistsAsync(connection, "AiAnalysisRecords", "PromptVersion"));
                 Assert.True(await ColumnExistsAsync(connection, "AiApiUsageRecords", "AgentType"));
                 Assert.True(await ColumnExistsAsync(connection, "AiApiUsageRecords", "PromptVersion"));
+                Assert.True(await TableExistsAsync(connection, "PatternDetections"));
+                Assert.True(await ColumnExistsAsync(connection, "PatternDetections", "PatternKey"));
             }
             finally
             {
