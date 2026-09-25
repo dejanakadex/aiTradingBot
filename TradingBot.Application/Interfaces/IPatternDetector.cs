@@ -15,5 +15,11 @@ namespace TradingBot.Application.Interfaces
 
         IReadOnlyList<PatternEvaluation> Evaluate(PatternDetectionInput input) =>
             Detect(input).Select(PatternEvaluation.FromCandidate).ToArray();
+
+        PatternDetectionBatch Process(PatternDetectionInput input) => new()
+        {
+            Evaluations = Evaluate(input),
+            Candidates = Detect(input)
+        };
     }
 }
