@@ -16,7 +16,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: 230/230 testova, 0 warninga i 0 grešaka. |
 | 8 — Canonical featurei | Završeno | Verzija `features-v2` s konfiguracijskim fingerprintom, eksplicitnim `AsOfUtc`, quote freshnessom, režimom i normaliziranim liquidity/volatility vrijednostima; isti engine koriste live, Parquet backfill i replay. CI: 237/237 testova. |
 | 9 — Pattern engine | Završeno | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija. CI: 248/248 testova, 0 warninga i 0 grešaka. |
-| 10–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 10 — Kandidati i labele | Završeno | Svi prihvaćeni, odbijeni i blokirani pattern kandidati ulaze u verzionirani research zapis; šest as-of horizonata računa direction-aware MFE/MAE, target/stop-first i neto povrat nakon troška. CI: 255/255 testova, 0 warninga i 0 grešaka. |
+| 11–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -222,3 +223,30 @@ Verifikacija: [GitHub Actions run 36109324767](https://github.com/dejanakadex/ai
 ## Sljedeći checkpoint — točka 10
 
 Spremati prihvaćene, odbijene i blokirane kandidate te iz isključivo naknadnih podataka izračunati 5s/15s/30s/1m/3m/5m MFE/MAE i target/stop-first labele s realističnim troškom.
+
+## Točka 10 — izvedeno
+
+Verifikacija: [GitHub Actions run 36112293431](https://github.com/dejanakadex/aiTradingBot/actions/runs/36112293431) — .NET 10 Release build, 255/255 testova, bez warninga i grešaka.
+
+- `PatternDetector.Process` jednom evaluira cijelu long/short domenu te vraća svih deset evaluacija i stvarno emitirane kandidate. Time se u research skup spremaju negativni primjeri, a ne samo signali koji su prošli hard uvjete.
+- `ResearchCandidateRecords` trajno čuva stabilni candidate/record ključ, live ili replay scope, source event, instrument, strategiju, smjer, timeframe, reference cijenu, score, verzije, uvjete, komponente, razloge i metadata. Unique record ključ čini ponovljeni batch idempotentnim.
+- Početni ishodi razlikuju `Rejected` hard uvjete, `Blocked` deduplikaciju i `Accepted` emitirani pattern. Live decision tok naknadno označava kandidata blokiranim na trading-hours, freshness, engine, broker, quality, AI, strategy, risk ili error gateu bez gubitka izvorne evaluacije.
+- Svaki kandidat odmah dobiva pending labele za 5, 15, 30, 60, 180 i 300 sekundi. `labels-v1` uz SHA-256 konfiguracijski fingerprint sprema korištenu definiciju horizonata, targeta, stopa i troška.
+- Kalkulator koristi samo market događaje s `eventTime > candidateTime` i `eventTime <= horizonEnd`. Live worker čeka konfigurabilni dataset grace period; replay nema writer grace i labelira samo horizonte potpuno sadržane u reproduciranom rasponu.
+- MFE, MAE i gross return zrcalno se računaju za long i short. Neto rezultat oduzima opaženi spread kada postoje bid/ask događaji, inače konfigurirani fallback spread, te round-trip proviziju i slippage.
+- Target/stop-first koristi stabilni event-time/ID redoslijed. Ako ista agregirana opservacija dotakne target i stop, labela je `Ambiguous` umjesto da izmisli intrabar redoslijed; prazan završeni horizont je eksplicitno `InsufficientData`.
+- Live i deterministic replay koriste isti persistence/label servis. Replay output hash sada obuhvaća research kandidate i labele bez database-generated ID-jeva, pa isti input i verzije ostaju reproduktivni.
+- Migracija dodaje `ResearchCandidateRecords` i `CandidateLabelRecords` s cascade vezom te indeksima za idempotency, scope, instrument/outcome i pending maturity. Read-only endpointi su `GET /api/research/candidates` i `GET /api/research/candidates/{id}/labels`.
+- Testovi pokrivaju strogo as-of prozor, točnu horizon granicu, long/short MFE/MAE, opaženi/fallback trošak, target-first, stop-first, intrabar ambiguity, pending horizont, svih deset evaluacija, idempotentnu persistenciju, blokiranje i stvarnu EF migraciju.
+
+## Odluke i ograničenja točke 10
+
+- Entry/reference cijena je close svijeće na kojoj je pattern evaluiran, a trošak je istraživačka procjena. To nije tvrdnja o stvarnom fillu; execution-grade quote, latency i fill model pripada točki 16.
+- Kratke labele imaju punu vrijednost samo kada dataset sadrži dovoljno granularne trade/quote događaje. Sam 1m OHLC bar može dati MFE/MAE za dulji prozor, ali target/stop dodir unutar istog bara ostaje namjerno neodređen.
+- Opaženi spread je prosjek dostupnih uparenih quote stanja unutar horizonta. Ne modelira queue position, market impact, partial fill ni borrow trošak; te komponente zahtijevaju kalibraciju stvarnim paper/execution podacima.
+- Završena `InsufficientData` labela ne nagađa cijenu niti se automatski popunjava budućim događajem. Operativno treba pratiti dataset lag i gapove kako bi se razlikovao stvarni nedostatak podataka od kašnjenja writera.
+- Endpointi su read-only, ali prije javnog izlaganja i dalje trebaju autentikaciju/autorizaciju. Točka ne mijenja `AnalysisOnly`, instrument trading dozvole ni short execution zabranu.
+
+## Sljedeći checkpoint — točka 11
+
+Izgraditi evaluaciju po instrumentu, strategiji, vremenu, režimu i likvidnosti uz walk-forward podjele, expectancy, profit factor, drawdown i osjetljivost na trošak. Završni holdout period mora ostati netaknut, a prag se ne smije birati samo prema win rateu.
