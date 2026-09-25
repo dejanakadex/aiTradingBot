@@ -98,8 +98,13 @@ namespace TradingBot.Persistence
             modelBuilder.Entity<PatternDetection>(b =>
             {
                 b.HasKey(x => x.Id);
+                b.HasIndex(x => x.PatternKey).IsUnique().HasFilter("PatternKey <> ''");
+                b.HasIndex(x => x.SignalId);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.Timeframe, x.Direction, x.DetectedAtUtc });
                 b.HasIndex(x => x.PatternType);
                 b.HasIndex(x => x.Symbol);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
             });
 
             modelBuilder.Entity<AiAnalysisRecord>(b =>

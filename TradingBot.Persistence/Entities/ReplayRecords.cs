@@ -39,6 +39,7 @@ namespace TradingBot.Persistence
         public Guid SignalId { get; set; }
         public string SourceEventId { get; set; } = string.Empty;
         public PatternType PatternType { get; set; }
+        public TradeDirection Direction { get; set; }
         public string Symbol { get; set; } = string.Empty;
         public Timeframe Timeframe { get; set; }
         public DateTime DetectedAtUtc { get; set; }

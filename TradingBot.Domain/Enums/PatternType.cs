@@ -10,6 +10,10 @@ namespace TradingBot.Domain.Enums
         Hammer,
         BullishEngulfing,
         BreakoutAndRetest,
-        VwapReclaim
+        VwapReclaim,
+        ShootingStar,
+        BearishEngulfing,
+        BreakdownAndRetest,
+        VwapReject
     }
 }

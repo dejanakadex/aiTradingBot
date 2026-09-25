@@ -43,6 +43,7 @@ namespace TradingBot.Application.DTOs
         Guid SignalId,
         string SourceEventId,
         PatternType PatternType,
+        TradeDirection Direction,
         string Symbol,
         Timeframe Timeframe,
         DateTime DetectedAtUtc,

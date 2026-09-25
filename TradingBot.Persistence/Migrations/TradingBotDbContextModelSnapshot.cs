@@ -820,9 +820,32 @@ namespace TradingBot.Persistence.Migrations
 
             modelBuilder.Entity("TradingBot.Persistence.PatternDetection", b =>
                 {
+                    b.Property<int>("Direction")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("PatternKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PatternVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SignalId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StrategyId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Details")
                         .IsRequired()
@@ -838,11 +861,24 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Timeframe")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PatternType");
 
+                    b.HasIndex("InstrumentId");
+
+                    b.HasIndex("PatternKey")
+                        .IsUnique()
+                        .HasFilter("PatternKey <> ''");
+
+                    b.HasIndex("SignalId");
+
                     b.HasIndex("Symbol");
+
+                    b.HasIndex("InstrumentId", "StrategyId", "Timeframe", "Direction", "DetectedAtUtc");
 
                     b.ToTable("PatternDetections");
                 });
@@ -1111,6 +1147,9 @@ namespace TradingBot.Persistence.Migrations
 
                     b.Property<DateTime>("DetectedAtUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("FeaturesJson")
                         .IsRequired()

@@ -43,6 +43,18 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public void PatternCandidate_UnsupportedDirection_Throws()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => new PatternCandidate(
+                PatternType.Hammer,
+                "SYM",
+                Timeframe.OneMinute,
+                DateTime.UtcNow,
+                0.8m,
+                direction: (TradeDirection)42));
+        }
+
+        [Fact]
         public void TradeSignal_InvalidQuantityOrConfidence_Throws()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new TradeSignal("SYM", Timeframe.OneHour, TradeAction.Enter, 0.5m, 0m, DateTime.UtcNow));

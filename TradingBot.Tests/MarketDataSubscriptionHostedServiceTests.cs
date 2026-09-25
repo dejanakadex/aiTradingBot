@@ -7,6 +7,7 @@ using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
+using TradingBot.Domain.Models;
 using TradingBot.Infrastructure.Background;
 using TradingBot.Infrastructure.Options;
 using TradingBot.Infrastructure.Services;
@@ -279,14 +280,24 @@ namespace TradingBot.Tests
         }
 
         [Fact]
-        public async Task FakeLiveBarsProduceCandlesAndPatternProcessingRuns()
+        public async Task FakeLiveBarsProduceCandlesAndParallelStrategyPatterns()
         {
-            var harness = CreateHarness(new TradingSettings
+            var tradingSettings = new TradingSettings
             {
-                Symbols = new[] { "SPY" },
-                MarketDataTimeframes = new[] { "1m" },
+                Instruments = new[]
+                {
+                    new InstrumentSettings
+                    {
+                        InstrumentId = "US-STK-SPY-SMART",
+                        Symbol = "SPY",
+                        AllowedDirections = new[] { TradeDirection.Long },
+                        StrategyIds = new[] { "hammer-scalp-a", "hammer-scalp-b" },
+                        MarketDataTimeframes = new[] { "1m" }
+                    }
+                },
                 MaximumCandleAgeSeconds = 300
-            }, new OpenAiSettings
+            };
+            var harness = CreateHarness(tradingSettings, new OpenAiSettings
             {
                 MarketContext = new OpenAiMarketContextSettings
                 {
@@ -303,7 +314,8 @@ namespace TradingBot.Tests
                 new PatternDetector(new PatternDetectorOptions(), NullLogger<PatternDetector>.Instance),
                 harness.Status,
                 harness.Factory,
-                NullLogger<CandlePatternDetectionBackgroundService>.Instance);
+                NullLogger<CandlePatternDetectionBackgroundService>.Instance,
+                tradingSettings: Options.Create(tradingSettings));
 
             await patternService.StartAsync(CancellationToken.None);
             await harness.Service.StartAsync(CancellationToken.None);
@@ -333,19 +345,40 @@ namespace TradingBot.Tests
                 Volume = 1000m
             });
 
-            var pattern = await harness.EventBus.PatternCandidateReader.ReadAsync(new CancellationTokenSource(3000).Token);
+            using var patternTimeout = new CancellationTokenSource(3000);
+            var patterns = new[]
+            {
+                await harness.EventBus.PatternCandidateReader.ReadAsync(patternTimeout.Token),
+                await harness.EventBus.PatternCandidateReader.ReadAsync(patternTimeout.Token)
+            };
 
             await harness.Service.StopAsync(CancellationToken.None);
             await patternService.StopAsync(CancellationToken.None);
 
-            Assert.Equal(PatternType.Hammer, pattern.PatternType);
+            Assert.All(patterns, pattern => Assert.Equal(PatternType.Hammer, pattern.PatternType));
+            Assert.Equal(new[] { "hammer-scalp-a", "hammer-scalp-b" }, patterns.Select(pattern => pattern.StrategyId).Order().ToArray());
+            Assert.Equal(2, patterns.Select(pattern => pattern.PatternKey).Distinct().Count());
             await using (var db = harness.Factory.CreateDbContext())
             {
                 Assert.True(await db.Candles.AnyAsync(c => c.Symbol == "SPY" && c.Timeframe == Timeframe.OneMinute));
-                var persistedPattern = await db.PatternDetections.SingleAsync(p => p.Symbol == "SPY");
-                Assert.Equal(PatternType.Hammer, persistedPattern.PatternType);
-                Assert.Contains("aboveVwap", persistedPattern.Details);
-                Assert.Contains("confidence", persistedPattern.Details);
+                var persistedPatterns = await db.PatternDetections.Where(p => p.Symbol == "SPY").OrderBy(p => p.StrategyId).ToArrayAsync();
+                Assert.Equal(2, persistedPatterns.Length);
+                Assert.Equal(new[] { "hammer-scalp-a", "hammer-scalp-b" }, persistedPatterns.Select(pattern => pattern.StrategyId).ToArray());
+                Assert.Equal(2, persistedPatterns.Select(pattern => pattern.PatternKey).Distinct().Count());
+                Assert.All(persistedPatterns, persistedPattern =>
+                {
+                    Assert.Equal(PatternType.Hammer, persistedPattern.PatternType);
+                    Assert.Equal("US-STK-SPY-SMART", persistedPattern.InstrumentId);
+                    Assert.Equal(Timeframe.OneMinute, persistedPattern.Timeframe);
+                    Assert.Equal(TradeDirection.Long, persistedPattern.Direction);
+                    Assert.NotEqual(Guid.Empty, persistedPattern.SignalId);
+                    Assert.NotEmpty(persistedPattern.PatternKey);
+                    Assert.StartsWith("patterns-v2+config-", persistedPattern.PatternVersion);
+                    Assert.Contains("aboveVwap", persistedPattern.Details);
+                    Assert.Contains("confidence", persistedPattern.Details);
+                    Assert.Contains("hardConditions", persistedPattern.Details);
+                    Assert.Contains("scoreComponents", persistedPattern.Details);
+                });
             }
 
             harness.Dispose();

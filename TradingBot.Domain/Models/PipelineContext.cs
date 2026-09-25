@@ -7,7 +7,7 @@ namespace TradingBot.Domain.Models
     {
         public const string MarketData = "market-data-v2";
         public const string Features = "features-v2";
-        public const string Patterns = "patterns-v1";
+        public const string Patterns = "patterns-v2";
         public const string Strategy = "strategy-v1";
         public const string DefaultStrategyId = "deterministic-patterns";
     }
@@ -69,7 +69,8 @@ namespace TradingBot.Domain.Models
             string instrumentId,
             string signalKey,
             string strategyId = PipelineContractVersions.DefaultStrategyId,
-            string featureVersion = PipelineContractVersions.Features)
+            string featureVersion = PipelineContractVersions.Features,
+            string patternVersion = PipelineContractVersions.Patterns)
         {
             if (string.IsNullOrWhiteSpace(signalKey)) throw new ArgumentException("signal key required", nameof(signalKey));
 
@@ -84,7 +85,7 @@ namespace TradingBot.Domain.Models
                 strategyId,
                 PipelineContractVersions.MarketData,
                 featureVersion,
-                PipelineContractVersions.Patterns,
+                patternVersion,
                 PipelineContractVersions.Strategy);
         }
     }

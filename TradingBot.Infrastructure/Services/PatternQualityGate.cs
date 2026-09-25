@@ -30,6 +30,16 @@ namespace TradingBot.Infrastructure.Services
             var rule = _options.ForPattern(pattern.PatternType);
             var minimumQuality = Math.Max(_options.MinimumTradeSetupQuality, rule.MinimumQualityForTradeSetup);
 
+            foreach (var condition in pattern.HardConditions.Where(condition => !condition.Passed))
+            {
+                reasons.Add($"Pattern hard condition '{condition.Code}' failed: {condition.Reason}");
+            }
+
+            if (pattern.Direction == TradeDirection.Short)
+            {
+                reasons.Add("Short pattern is research-only until short strategy, risk, borrow and execution support is implemented.");
+            }
+
             if (!IsConfiguredAiTimeframe(pattern.Timeframe))
             {
                 reasons.Add($"Pattern timeframe {pattern.Timeframe} is not configured as an AI entry trigger.");
@@ -164,6 +174,9 @@ namespace TradingBot.Infrastructure.Services
 
         private static decimal? GetScore(PatternCandidate pattern, string key)
         {
+            var component = pattern.ScoreComponents.FirstOrDefault(item => item.Code.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (component != null) return Math.Clamp(component.Score, 0m, 1m);
+
             if (!pattern.Metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
             {
                 return null;

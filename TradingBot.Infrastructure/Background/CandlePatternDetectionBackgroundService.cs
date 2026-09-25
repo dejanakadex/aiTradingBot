@@ -142,8 +142,25 @@ namespace TradingBot.Infrastructure.Background
                     LastTrade = latest?.LastTrade,
                     LastTradeTimeUtc = latest?.LastTradeTimeUtc
                 });
-                var patterns = _patternDetector.Detect(candles)
-                    .Select(ApplyConfiguredIdentity)
+                var configuredInstrument = _tradingSettings.GetEnabledInstruments()
+                    .FirstOrDefault(configured => string.Equals(configured.InstrumentId, candle.InstrumentId, StringComparison.OrdinalIgnoreCase))
+                    ?? _tradingSettings.GetEnabledInstruments()
+                        .FirstOrDefault(configured => string.Equals(configured.Symbol, candle.Symbol, StringComparison.OrdinalIgnoreCase));
+                var strategyIds = configuredInstrument?.StrategyIds.Count > 0
+                    ? configuredInstrument.StrategyIds
+                    : new[] { PipelineContractVersions.DefaultStrategyId };
+                var directions = configuredInstrument?.AllowedDirections.Count > 0
+                    ? configuredInstrument.AllowedDirections
+                    : new[] { TradeDirection.Long };
+                var patterns = strategyIds
+                    .SelectMany(strategyId => _patternDetector.Detect(new PatternDetectionInput
+                    {
+                        Candles = candles,
+                        StrategyId = strategyId,
+                        FeatureVersion = _featureEngine.FeatureVersion,
+                        Directions = directions
+                    }))
+                    .DistinctBy(pattern => pattern.PatternKey, StringComparer.Ordinal)
                     .ToArray();
 
                 _logger.LogInformation(
@@ -195,30 +212,6 @@ namespace TradingBot.Infrastructure.Background
             }
         }
 
-        private PatternCandidate ApplyConfiguredIdentity(PatternCandidate pattern)
-        {
-            var instrument = _tradingSettings.GetEnabledInstruments()
-                .FirstOrDefault(configured => string.Equals(configured.Symbol, pattern.Symbol, StringComparison.OrdinalIgnoreCase));
-            var strategyId = instrument?.StrategyIds
-                .FirstOrDefault(strategy => string.Equals(strategy, PipelineContractVersions.DefaultStrategyId, StringComparison.OrdinalIgnoreCase))
-                ?? pattern.Context.StrategyId;
-            var context = PipelineContext.CreateForSignal(
-                instrument?.InstrumentId ?? pattern.Context.InstrumentId,
-                $"{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
-                strategyId,
-                _featureEngine.FeatureVersion);
-
-            return new PatternCandidate(
-                pattern.PatternType,
-                pattern.Symbol,
-                pattern.Timeframe,
-                pattern.DetectedAtUtc,
-                pattern.Confidence,
-                pattern.RelevantPriceLevels,
-                new Dictionary<string, string>(pattern.Metadata),
-                context);
-        }
-
         private async Task PersistPatternDetectionAsync(
             PatternCandidate pattern,
             MarketFeatures features,
@@ -233,6 +226,11 @@ namespace TradingBot.Infrastructure.Background
                 context = pattern.Context,
                 relevantPriceLevels = pattern.RelevantPriceLevels,
                 metadata = pattern.Metadata,
+                direction = pattern.Direction.ToString(),
+                patternVersion = pattern.PatternVersion,
+                hardConditions = pattern.HardConditions,
+                scoreComponents = pattern.ScoreComponents,
+                evaluationReasons = pattern.EvaluationReasons,
                 featureVersion = features.FeatureVersion,
                 canonicalFeatures = features,
                 aboveVwap = features.Vwap.HasValue ? latestCandle.Close >= features.Vwap.Value : (bool?)null,
@@ -246,9 +244,7 @@ namespace TradingBot.Infrastructure.Background
             {
                 await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
                 var exists = await db.PatternDetections.AnyAsync(
-                    p => p.Symbol == pattern.Symbol
-                        && p.PatternType == pattern.PatternType
-                        && p.DetectedAtUtc == pattern.DetectedAtUtc,
+                    p => p.PatternKey == pattern.PatternKey,
                     cancellationToken).ConfigureAwait(false);
 
                 if (exists)
@@ -263,8 +259,15 @@ namespace TradingBot.Infrastructure.Background
 
                 db.PatternDetections.Add(new TradingBot.Persistence.PatternDetection
                 {
+                    PatternKey = pattern.PatternKey,
+                    SignalId = pattern.Context.SignalId,
+                    InstrumentId = pattern.InstrumentId,
                     Symbol = pattern.Symbol,
+                    StrategyId = pattern.StrategyId,
                     PatternType = pattern.PatternType,
+                    Timeframe = pattern.Timeframe,
+                    Direction = pattern.Direction,
+                    PatternVersion = pattern.PatternVersion,
                     DetectedAtUtc = pattern.DetectedAtUtc,
                     Details = details
                 });

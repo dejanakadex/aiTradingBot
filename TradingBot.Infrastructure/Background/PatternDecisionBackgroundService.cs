@@ -85,7 +85,7 @@ namespace TradingBot.Infrastructure.Background
 
         internal async Task ProcessPatternAsync(PatternCandidate pattern, CancellationToken cancellationToken)
         {
-            var key = $"{pattern.Symbol}:{pattern.Timeframe}:{pattern.PatternType}:{pattern.DetectedAtUtc:O}";
+            var key = pattern.PatternKey;
             if (!_processedPatterns.TryAdd(key, 0))
             {
                 _logger.LogDebug("Skipping duplicate pattern {Key}", key);

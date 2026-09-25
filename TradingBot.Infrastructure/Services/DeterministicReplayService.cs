@@ -249,7 +249,13 @@ namespace TradingBot.Infrastructure.Services
                         }
 
                         var features = _featureEngine.ComputeFeatures(quoteState.CreateFeatureInput(history, record.EventTimeUtc));
-                        var patterns = detector.Detect(history);
+                        var patterns = detector.Detect(new PatternDetectionInput
+                        {
+                            Candles = history,
+                            StrategyId = run.StrategyId,
+                            FeatureVersion = run.FeatureVersion,
+                            Directions = new[] { TradeDirection.Long, TradeDirection.Short }
+                        });
                         if (!isWarmup)
                         {
                             foreach (var pattern in patterns)
@@ -358,9 +364,10 @@ namespace TradingBot.Infrastructure.Services
         {
             var context = PipelineContext.CreateForSignal(
                 run.InstrumentId,
-                $"{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
+                $"{pattern.Direction}|{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
                 run.StrategyId,
-                run.FeatureVersion);
+                run.FeatureVersion,
+                run.PatternVersion);
             if (db.ReplaySignalRecords.Local.Any(item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId)
                 || await db.ReplaySignalRecords.AnyAsync(
                     item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId,
@@ -380,6 +387,7 @@ namespace TradingBot.Infrastructure.Services
                 SignalId = context.SignalId,
                 SourceEventId = sourceEventId,
                 PatternType = pattern.PatternType,
+                Direction = pattern.Direction,
                 Symbol = pattern.Symbol,
                 Timeframe = pattern.Timeframe,
                 DetectedAtUtc = pattern.DetectedAtUtc,
@@ -512,6 +520,7 @@ namespace TradingBot.Infrastructure.Services
             {
                 canonical.Append(item.SignalId.ToString("D")).Append('|')
                     .Append(item.SourceEventId).Append('|').Append(item.PatternType).Append('|')
+                    .Append(item.Direction).Append('|')
                     .Append(item.Symbol).Append('|').Append(item.Timeframe).Append('|')
                     .Append(item.DetectedAtUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
@@ -602,6 +611,7 @@ namespace TradingBot.Infrastructure.Services
 
         private static ReplaySignalSnapshot ToSnapshot(ReplaySignalRecord item) => new(
             item.Id, item.ReplayRunId, item.SignalId, item.SourceEventId, item.PatternType,
+            item.Direction,
             item.Symbol, item.Timeframe, item.DetectedAtUtc, item.Confidence,
             item.RelevantPriceLevelsJson, item.MetadataJson, item.FeaturesJson);
     }

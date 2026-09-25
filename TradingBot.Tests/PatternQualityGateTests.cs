@@ -168,6 +168,34 @@ namespace TradingBot.Tests
             Assert.Equal(0.9m, setup.Quality.GeometryScore);
         }
 
+        [Fact]
+        public void ShortPatternIsExplicitlyResearchOnlyUntilDownstreamExecutionSupportsIt()
+        {
+            var gate = CreateGate();
+            var pattern = new PatternCandidate(
+                PatternType.ShootingStar,
+                "SPY",
+                Timeframe.OneMinute,
+                Now,
+                0.9m,
+                new[] { 99m, 101m },
+                new Dictionary<string, string>
+                {
+                    ["geometryScore"] = "0.9",
+                    ["contextScore"] = "0.8",
+                    ["confirmationScore"] = "0.8",
+                    ["volumeScore"] = "0.8",
+                    ["locationScore"] = "0.8",
+                    ["finalQuality"] = "0.9"
+                },
+                direction: TradeDirection.Short);
+
+            var approved = gate.TryCreateTradeSetup(pattern, Snapshot(), out _, out var reasons);
+
+            Assert.False(approved);
+            Assert.Contains(reasons, reason => reason.Contains("research-only", StringComparison.OrdinalIgnoreCase));
+        }
+
         private static PatternQualityGate CreateGate(PatternDetectorOptions? options = null)
         {
             options ??= new PatternDetectorOptions

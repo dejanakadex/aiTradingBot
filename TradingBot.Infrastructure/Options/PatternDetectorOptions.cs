@@ -20,6 +20,11 @@ namespace TradingBot.Infrastructure.Options
         public DoubleBottomPatternOptions DoubleBottom { get; set; } = new();
         public BreakoutAndRetestPatternOptions BreakoutAndRetest { get; set; } = new();
         public VwapReclaimPatternOptions VwapReclaim { get; set; } = new();
+        public HammerPatternOptions ShootingStar { get; set; } = new();
+        public BullishEngulfingPatternOptions BearishEngulfing { get; set; } = new();
+        public DoubleBottomPatternOptions DoubleTop { get; set; } = new();
+        public BreakoutAndRetestPatternOptions BreakdownAndRetest { get; set; } = new();
+        public VwapReclaimPatternOptions VwapReject { get; set; } = new();
 
         public PatternRuleOptions ForPattern(PatternType patternType)
         {
@@ -30,6 +35,11 @@ namespace TradingBot.Infrastructure.Options
                 PatternType.DoubleBottom => DoubleBottom,
                 PatternType.BreakoutAndRetest => BreakoutAndRetest,
                 PatternType.VwapReclaim => VwapReclaim,
+                PatternType.ShootingStar => ShootingStar,
+                PatternType.BearishEngulfing => BearishEngulfing,
+                PatternType.DoubleTop => DoubleTop,
+                PatternType.BreakdownAndRetest => BreakdownAndRetest,
+                PatternType.VwapReject => VwapReject,
                 _ => new PatternRuleOptions()
             };
         }
