@@ -15,7 +15,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 6 — Neovisna collection pouzdanost | Završeno | Per-stream heartbeat/lag/status, izolirani reconnect i pacing-safe automatski gap-fill neovisni o trading/AI readinessu. CI: 224/224 testova, 0 warninga i 0 grešaka. |
 | 7 — Deterministički replay | Završeno | Parquet event-time replay s fiksnim input hashom/verzijama, istim feature/pattern kodom kao live, trajnim checkpointom, brzinom i pause/resume kontrolom. CI: 230/230 testova, 0 warninga i 0 grešaka. |
 | 8 — Canonical featurei | Završeno | Verzija `features-v2` s konfiguracijskim fingerprintom, eksplicitnim `AsOfUtc`, quote freshnessom, režimom i normaliziranim liquidity/volatility vrijednostima; isti engine koriste live, Parquet backfill i replay. CI: 237/237 testova. |
-| 9–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 9 — Pattern engine | U CI provjeri | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija implementirani su na branchu. |
+| 10–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -205,3 +206,17 @@ Verifikacija: [GitHub Actions run 36039004900](https://github.com/dejanakadex/ai
 ## Sljedeći checkpoint — točka 9
 
 Implementirati pattern engine s punim pattern + instrument + strategija + timeframe identitetom, eksplicitnim hard uvjetima, score komponentama i razlozima te long/short domenom. Završni kriterij su pozitivni i negativni testovi za svaki pattern bez deduplikacijskih konflikata između instrumenata i timeframeova.
+
+## Točka 9 — implementirano, CI u tijeku
+
+- Ugovor je podignut na `patterns-v2`; konfiguracija detektora daje vlastiti SHA-256 fingerprint, a live i replay kandidat nose stvarnu feature i pattern verziju.
+- `PatternCandidate` i persistirani `PatternDetection` sada nose smjer, instrument, strategiju, timeframe, deterministički signal/pattern ključ, hard uvjete, ponderirane score komponente i razloge evaluacije.
+- Long pravila za Hammer, Bullish Engulfing, Double Bottom, Breakout and Retest i VWAP Reclaim imaju zrcalna short pravila: Shooting Star, Bearish Engulfing, Double Top, Breakdown and Retest i VWAP Reject.
+- Live worker evaluira sve konfigurirane `StrategyIds` i dopuštene smjerove za instrument. Deduplikacija uključuje instrument, strategiju, smjer, timeframe i pattern, pa jednaki setupi na različitim tokovima ne blokiraju jedan drugoga.
+- Replay koristi isti engine za oba smjera, sprema smjer signala i uključuje ga u deterministički output hash. Migracija nadograđuje postojeće pattern/replay zapise bez gubitka legacy povijesti.
+- Short kandidati zasad ostaju research-only: quality gate ih eksplicitno odbija prije AI/strategy/order puta dok točke 13–16 ne uvedu short risk, borrow, arbitration i execution podršku.
+- Testovi pokrivaju pozitivne i negativne slučajeve svih deset pravila, izolaciju deduplikacije, više paralelnih strategija u live workeru, short fail-closed gate te EF migraciju i unique pattern ključ.
+
+## Sljedeći checkpoint — točka 10
+
+Spremati prihvaćene, odbijene i blokirane kandidate te iz isključivo naknadnih podataka izračunati 5s/15s/30s/1m/3m/5m MFE/MAE i target/stop-first labele s realističnim troškom.
