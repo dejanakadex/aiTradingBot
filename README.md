@@ -60,6 +60,9 @@ GET /api/replays/{replayRunId}
 GET /api/replays/{replayRunId}/signals
 GET /api/research/candidates?instrumentId=US-STK-SPY-SMART&outcome=Accepted&count=100
 GET /api/research/candidates/{candidateId}/labels
+GET /api/research/evaluations?count=50
+GET /api/research/evaluations/{evaluationId}
+POST /api/research/evaluations
 POST /api/replays
 POST /api/replays/{replayRunId}/pause
 POST /api/replays/{replayRunId}/resume
@@ -72,7 +75,7 @@ The market-data endpoints expose persisted quality checkpoints/incidents, the in
 The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 The replay endpoints create and control isolated research runs over verified Parquet bar data. Replay results never enter the live event bus or order pipeline. Protect mutating replay endpoints with authentication, authorization and rate limiting before exposing the application publicly.
-The research endpoints expose accepted, rejected and blocked pattern evaluations plus their versioned as-of MFE/MAE, target/stop-first and after-cost labels. They are read-only and do not enable trading.
+The research candidate endpoints expose accepted, rejected and blocked pattern evaluations plus their versioned as-of MFE/MAE, target/stop-first and after-cost labels. Evaluation runs perform version-locked walk-forward/holdout analysis with cost stress and segmented metrics; they never enable trading. Protect the evaluation POST endpoint before public exposure.
 
 Run unit tests:
 
@@ -113,6 +116,7 @@ below to compile and test the real adapter in an environment where the official 
 - Canonical features use one versioned, as-of engine in live snapshots, pattern processing and replay. Indicator windows and regime/quote thresholds are configured through `CanonicalFeatures__*`; any setting change produces a different feature-version fingerprint and prevents an incompatible replay resume.
 - Pattern detection uses the versioned `patterns-v2` contract. Each signal is isolated by instrument, strategy, direction, timeframe, pattern and event time; long and mirrored short rule thresholds are configurable through `PatternDetector__*`.
 - Candidate labeling is enabled by default without requiring a shared settings file. Override worker cadence, writer grace, horizons, target/stop and cost assumptions with `CandidateLabeling__WorkerIntervalSeconds`, `CandidateLabeling__DataAvailabilityGraceSeconds`, `CandidateLabeling__HorizonsSeconds__0`, `CandidateLabeling__TargetMoveBps`, `CandidateLabeling__StopMoveBps`, `CandidateLabeling__CommissionPerSideBps`, `CandidateLabeling__SlippagePerSideBps` and `CandidateLabeling__FallbackRoundTripSpreadBps`. Any change produces a new label-version fingerprint.
+- Research evaluation defaults to 60 training days, 14 validation days, a 14-day non-overlapping step and a final untouched 30-day holdout. Configure these with `ResearchEvaluation__TrainingWindowDays`, `ValidationWindowDays`, `StepDays` and `HoldoutDays`; minimum sample sizes, `ConfidenceThresholds`, `CostStressMultipliers` and liquidity bounds are configurable through the same section. Every change produces a new `evaluation-v1` fingerprint, and a run refuses mixed feature/pattern/label versions.
 
 ### IBKR build prerequisite
 

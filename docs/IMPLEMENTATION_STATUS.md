@@ -17,7 +17,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 8 — Canonical featurei | Završeno | Verzija `features-v2` s konfiguracijskim fingerprintom, eksplicitnim `AsOfUtc`, quote freshnessom, režimom i normaliziranim liquidity/volatility vrijednostima; isti engine koriste live, Parquet backfill i replay. CI: 237/237 testova. |
 | 9 — Pattern engine | Završeno | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija. CI: 248/248 testova, 0 warninga i 0 grešaka. |
 | 10 — Kandidati i labele | Završeno | Svi prihvaćeni, odbijeni i blokirani pattern kandidati ulaze u verzionirani research zapis; šest as-of horizonata računa direction-aware MFE/MAE, target/stop-first i neto povrat nakon troška. CI: 255/255 testova, 0 warninga i 0 grešaka. |
-| 11–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 11 — Evaluacija | Završeno | Verziona walk-forward evaluacija s purged vremenskim granicama, netaknutim završnim holdoutom, expectancy/profit-factor/drawdown odabirom, cost stressom i out-of-sample segmentima. CI: 262/262 testova, 0 warninga i 0 grešaka. |
+| 12–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -250,3 +251,32 @@ Verifikacija: [GitHub Actions run 36112293431](https://github.com/dejanakadex/ai
 ## Sljedeći checkpoint — točka 11
 
 Izgraditi evaluaciju po instrumentu, strategiji, vremenu, režimu i likvidnosti uz walk-forward podjele, expectancy, profit factor, drawdown i osjetljivost na trošak. Završni holdout period mora ostati netaknut, a prag se ne smije birati samo prema win rateu.
+
+## Točka 11 — izvedeno
+
+Verifikacija: [GitHub Actions run 36184406649](https://github.com/dejanakadex/aiTradingBot/actions/runs/36184406649) — .NET 10 Release build, 262/262 testova, bez warninga i grešaka.
+
+- `evaluation-v1` uvodi konfiguracijski fingerprint za training/validation/step/holdout prozore, minimalne uzorke, confidence pragove, cost multipliere i granice likvidnosti. Promjena bilo koje pretpostavke proizvodi novu evaluation verziju.
+- Evaluacija radi odvojeno nad live kandidatima ili jednim eksplicitnim replay runom; opcionalni instrument i strategija dodatno sužavaju scope. Jedan run prihvaća točno jedan horizon i fail-closed odbija miješane feature, pattern ili label verzije.
+- Završni period rezervira se prije izbora praga. Kandidat čija buduća labela prelazi training/validation/holdout granicu izbacuje se iz ranijeg skupa, čime se uklanja leakage preko MFE/MAE horizonta.
+- Svaki walk-forward fold bira confidence prag samo na svom ranijem rolling training prozoru i primjenjuje ga na kasniji, nepreklapajući validation prozor. Završni prag bira se iz cijelog pre-holdout dijela, a holdout se mjeri tek nakon tog izbora.
+- Odabir praga namjerno ne optimizira win rate. Kandidati moraju zadovoljiti minimalni uzorak; pozitivna expectancy ima prednost, zatim se rangira po expectancyju, profit factoru, manjem drawdownu i veličini uzorka.
+- `EvaluationMetrics` sprema broj dobitaka/gubitaka/breakevena, win rate, expectancy, net profit, gross profit/loss, profit factor, kronološki maximum drawdown, prosječni MFE/MAE te target-first, stop-first i ambiguous udjele.
+- Cost sensitivity ponovno računa holdout net rezultat za konfigurirane multipliere stvarnog procijenjenog troška. Ne mijenja labelu ni odabrani prag i jasno pokazuje preživljava li edge skuplje izvršenje.
+- Out-of-sample segmenti obuhvaćaju instrument, strategiju, pattern, smjer, timeframe, UTC dan, New York dio sesije, market regime i normalized-liquidity bucket. Live i replay kandidat sada trajno spremaju režim, likvidnost i normaliziranu volatilnost iz točno njegovog as-of feature konteksta.
+- `ResearchEvaluationRunRecords` čuva request scope, granice, verzije, input/output SHA-256, odabrani prag, foldove, threshold tablicu, tri glavna metric seta, cost sensitivity i segmente. Jednaki input i konfiguracija vraćaju isti immutable/idempotentni run.
+- API podržava `POST /api/research/evaluations`, listu i detalj runa. Testovi dokazuju da promjena završnog holdout rezultata ne može promijeniti prag, da viši win rate ne pobjeđuje bolji expectancy, da su rejected primjeri neeligible, da miješane verzije padaju, te provjeravaju metrike, segmente, trošak, idempotency i stvarnu migraciju.
+
+## Odluke i ograničenja točke 11
+
+- `Rejected` hard-condition evaluacije ostaju u research skupu i input auditu, ali ne mogu postati tradeable izbor confidence praga. Prag se bira samo među `Accepted` i kasnije `Blocked` kandidatima koji su prošli pattern hard uvjete.
+- Zadane postavke traže 60 dana traininga, 14 dana validationa, korak od 14 dana i netaknuti završni holdout od 30 dana, uz minimalno 100/30/50 uzoraka. Run namjerno odbija premalo podataka umjesto da vrati statistički privlačan, ali nepouzdan rezultat.
+- Profit factor je nedefiniran kada nema gubitaka i tada ostaje `null`; takav threshold se pri internom rangiranju tretira kao bolji od konačnog omjera samo ako stvarno ima pozitivan gross profit.
+- Segmenti se računaju nad stvarno odabranim out-of-sample validation i holdout kandidatima. Vrlo mali segment može biti informativan, ali se ne smije koristiti kao novi prag bez zasebne minimalne veličine i točke 12.
+- Holdout rezultat je vidljiv nakon završenog runa radi konačne procjene, ali ne ulazi u izbor praga. Ponavljano ručno podešavanje konfiguracije prema tom rezultatu pretvorilo bi ga u validation skup i mora se organizacijski zabraniti.
+- Ova točka ne mijenja runtime trading pragove niti automatski promovira strategiju. Kalibrirane vjerojatnosti, stabilni pragovi i auditirana ručna potvrda pripadaju točki 12; bot ostaje `AnalysisOnly`.
+- Mutacijski evaluation endpoint može trošiti CPU i čitati velik broj zapisa. Prije javnog izlaganja treba autentikaciju, autorizaciju i rate limiting.
+
+## Sljedeći checkpoint — točka 12
+
+Implementirati kalibrirane vjerojatnosti, stabilne pragove i rangiranje konkurentnih prilika uz verzioniranu ručnu potvrdu. Svaka promjena praga ili modela mora biti auditirana i uspoređena s determinističkim baselineom bez ponovnog optimiziranja na završnom holdoutu.
