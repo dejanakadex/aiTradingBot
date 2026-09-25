@@ -68,6 +68,7 @@ namespace TradingBot.Infrastructure
                 sp.GetRequiredService<IOptions<CanonicalFeatureSettings>>().Value));
             services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
             services.AddSingleton<ICandidateResearchService, CandidateResearchService>();
+            services.AddSingleton<IResearchEvaluationService, ResearchEvaluationService>();
             services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();
             services.AddTransient<IAiUsageLimiter, AiUsageLimiter>();

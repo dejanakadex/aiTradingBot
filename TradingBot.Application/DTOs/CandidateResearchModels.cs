@@ -23,6 +23,9 @@ namespace TradingBot.Application.DTOs
         string FeatureVersion,
         string PatternVersion,
         string LabelVersion,
+        string MarketRegime,
+        decimal? NormalizedLiquidity,
+        decimal? NormalizedVolatility,
         string ReasonsJson,
         DateTime CreatedAtUtc,
         DateTime UpdatedAtUtc);

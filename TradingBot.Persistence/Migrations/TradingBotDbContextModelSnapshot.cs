@@ -1208,7 +1208,10 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<string>("HardConditionsJson").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
                     b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("MarketRegime").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("MetadataJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal?>("NormalizedLiquidity").HasColumnType("TEXT");
+                    b.Property<decimal?>("NormalizedVolatility").HasColumnType("TEXT");
                     b.Property<int>("Outcome").HasColumnType("INTEGER");
                     b.Property<int>("PatternType").HasColumnType("INTEGER");
                     b.Property<string>("PatternVersion").IsRequired().HasColumnType("TEXT");
@@ -1261,6 +1264,45 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("ResearchCandidateId", "HorizonSeconds").IsUnique();
                     b.HasIndex("Status", "WindowEndUtc");
                     b.ToTable("CandidateLabelRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ResearchEvaluationRunRecord", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+                    b.Property<DateTime>("CompletedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("CostSensitivityJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("EligibleCandidateCount").HasColumnType("INTEGER");
+                    b.Property<string>("EvaluationVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("FeatureVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("FoldsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("FromUtc").HasColumnType("TEXT");
+                    b.Property<int>("HorizonSeconds").HasColumnType("INTEGER");
+                    b.Property<DateTime>("HoldoutStartUtc").HasColumnType("TEXT");
+                    b.Property<string>("HoldoutMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("InputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("OutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("PatternVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("PreHoldoutMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("PreHoldoutThresholdsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("ReplayRunId").HasColumnType("TEXT");
+                    b.Property<string>("RunKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("SelectedConfidenceThreshold").HasColumnType("TEXT");
+                    b.Property<string>("SelectionReason").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("SegmentsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("SourceCandidateCount").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("ToUtc").HasColumnType("TEXT");
+                    b.Property<int>("WalkForwardFoldCount").HasColumnType("INTEGER");
+                    b.Property<string>("WalkForwardMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("EvaluationVersion");
+                    b.HasIndex("ReplayRunId");
+                    b.HasIndex("RunKey").IsUnique();
+                    b.HasIndex("InstrumentId", "StrategyId", "HorizonSeconds", "CompletedAtUtc");
+                    b.ToTable("ResearchEvaluationRunRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.RiskDecisionRecord", b =>

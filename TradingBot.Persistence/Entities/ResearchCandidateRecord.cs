@@ -24,6 +24,9 @@ namespace TradingBot.Persistence
         public string FeatureVersion { get; set; } = string.Empty;
         public string PatternVersion { get; set; } = string.Empty;
         public string LabelVersion { get; set; } = string.Empty;
+        public string MarketRegime { get; set; } = string.Empty;
+        public decimal? NormalizedLiquidity { get; set; }
+        public decimal? NormalizedVolatility { get; set; }
         public string HardConditionsJson { get; set; } = string.Empty;
         public string ScoreComponentsJson { get; set; } = string.Empty;
         public string ReasonsJson { get; set; } = string.Empty;

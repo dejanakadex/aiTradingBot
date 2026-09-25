@@ -35,6 +35,7 @@ namespace TradingBot.Persistence
         public DbSet<ReplaySignalRecord> ReplaySignalRecords { get; set; }
         public DbSet<ResearchCandidateRecord> ResearchCandidateRecords { get; set; }
         public DbSet<CandidateLabelRecord> CandidateLabelRecords { get; set; }
+        public DbSet<ResearchEvaluationRunRecord> ResearchEvaluationRunRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -248,6 +249,16 @@ namespace TradingBot.Persistence
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => new { x.ResearchCandidateId, x.HorizonSeconds }).IsUnique();
                 b.HasIndex(x => new { x.Status, x.WindowEndUtc });
+            });
+
+            modelBuilder.Entity<ResearchEvaluationRunRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.RunKey).IsUnique();
+                b.HasIndex(x => x.ReplayRunId);
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds, x.CompletedAtUtc });
+                b.HasIndex(x => x.EvaluationVersion);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
             });
         }
     }

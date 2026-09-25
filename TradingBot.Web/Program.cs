@@ -86,6 +86,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "CandidateLabeling configuration is invalid. Check horizons, worker timing and cost assumptions.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<ResearchEvaluationSettings>()
+        .Bind(builder.Configuration.GetSection("ResearchEvaluation"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ResearchEvaluation configuration is invalid. Check windows, sample sizes, thresholds and cost multipliers.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -239,6 +244,15 @@ try
         Results.Ok(await research.GetCandidatesAsync(instrumentId, outcome, count ?? 100, cancellationToken)));
     app.MapGet("/api/research/candidates/{candidateId:long}/labels", async (long candidateId, ICandidateResearchService research, CancellationToken cancellationToken) =>
         Results.Ok(await research.GetLabelsAsync(candidateId, cancellationToken)));
+    app.MapGet("/api/research/evaluations", async (int? count, IResearchEvaluationService evaluation, CancellationToken cancellationToken) =>
+        Results.Ok(await evaluation.GetAllAsync(count ?? 50, cancellationToken)));
+    app.MapGet("/api/research/evaluations/{evaluationId:guid}", async (Guid evaluationId, IResearchEvaluationService evaluation, CancellationToken cancellationToken) =>
+    {
+        var result = await evaluation.GetAsync(evaluationId, cancellationToken);
+        return result == null ? Results.NotFound() : Results.Ok(result);
+    });
+    app.MapPost("/api/research/evaluations", async (TradingBot.Application.DTOs.ResearchEvaluationRequest request, IResearchEvaluationService evaluation, CancellationToken cancellationToken) =>
+        Results.Ok(await evaluation.RunAsync(request, cancellationToken)));
     app.MapPost("/api/replays", async (TradingBot.Application.DTOs.ReplayStartRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
     {
         var result = await replay.StartAsync(request, cancellationToken);

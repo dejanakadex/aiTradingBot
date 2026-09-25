@@ -168,7 +168,8 @@ namespace TradingBot.Infrastructure.Background
                     if (_candidateResearchService != null)
                     {
                         var sourceEventId = $"LIVE-BAR|{candle.InstrumentId}|{candle.Timeframe}|{candle.TimestampUtc:O}".ToUpperInvariant();
-                        await _candidateResearchService.PersistBatchAsync(batch, sourceEventId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                        var evaluationContext = new CandidateEvaluationContext(features.Regime, features.NormalizedLiquidity, features.AtrToPriceRatio);
+                        await _candidateResearchService.PersistBatchAsync(batch, sourceEventId, evaluationContext: evaluationContext, cancellationToken: cancellationToken).ConfigureAwait(false);
                     }
                     detectedPatterns.AddRange(batch.Candidates);
                 }

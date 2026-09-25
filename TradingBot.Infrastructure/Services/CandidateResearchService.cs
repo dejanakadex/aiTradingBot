@@ -43,6 +43,7 @@ namespace TradingBot.Infrastructure.Services
             PatternDetectionBatch batch,
             string sourceEventId,
             Guid? replayRunId = null,
+            CandidateEvaluationContext? evaluationContext = null,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(batch);
@@ -103,6 +104,9 @@ namespace TradingBot.Infrastructure.Services
                     FeatureVersion = evaluation.FeatureVersion,
                     PatternVersion = evaluation.PatternVersion,
                     LabelVersion = LabelVersion,
+                    MarketRegime = evaluationContext?.MarketRegime.ToString() ?? MarketRegime.Unknown.ToString(),
+                    NormalizedLiquidity = evaluationContext?.NormalizedLiquidity,
+                    NormalizedVolatility = evaluationContext?.NormalizedVolatility,
                     HardConditionsJson = JsonSerializer.Serialize(evaluation.HardConditions, JsonOptions),
                     ScoreComponentsJson = JsonSerializer.Serialize(evaluation.ScoreComponents, JsonOptions),
                     ReasonsJson = JsonSerializer.Serialize(reasons, JsonOptions),
@@ -285,7 +289,8 @@ namespace TradingBot.Infrastructure.Services
             item.Id, item.RecordKey, item.CandidateKey, item.ReplayRunId, item.SignalId, item.SourceEventId,
             item.InstrumentId, item.Symbol, item.StrategyId, item.PatternType, item.Direction, item.Timeframe,
             item.EvaluatedAtUtc, item.ReferencePrice, item.Confidence, item.Outcome, item.DecisionStage,
-            item.FeatureVersion, item.PatternVersion, item.LabelVersion, item.ReasonsJson, item.CreatedAtUtc, item.UpdatedAtUtc);
+            item.FeatureVersion, item.PatternVersion, item.LabelVersion, item.MarketRegime,
+            item.NormalizedLiquidity, item.NormalizedVolatility, item.ReasonsJson, item.CreatedAtUtc, item.UpdatedAtUtc);
 
         private static CandidateLabelSnapshot ToSnapshot(CandidateLabelRecord item) => new(
             item.Id, item.ResearchCandidateId, item.HorizonSeconds, item.Status, item.TargetStopOutcome,

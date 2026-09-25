@@ -263,7 +263,8 @@ namespace TradingBot.Infrastructure.Services
                         {
                             if (_candidateResearchService != null)
                             {
-                                await _candidateResearchService.PersistBatchAsync(batch, record.EventId, run.Id, cancellationToken).ConfigureAwait(false);
+                                var evaluationContext = new CandidateEvaluationContext(features.Regime, features.NormalizedLiquidity, features.AtrToPriceRatio);
+                                await _candidateResearchService.PersistBatchAsync(batch, record.EventId, run.Id, evaluationContext, cancellationToken).ConfigureAwait(false);
                             }
                             foreach (var pattern in batch.Candidates)
                             {
@@ -548,6 +549,9 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.Outcome).Append('|').Append(item.DecisionStage).Append('|')
                     .Append(item.ReferencePrice.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
+                    .Append(item.MarketRegime).Append('|')
+                    .Append(Decimal(item.NormalizedLiquidity)).Append('|')
+                    .Append(Decimal(item.NormalizedVolatility)).Append('|')
                     .Append(item.HardConditionsJson).Append('|').Append(item.ScoreComponentsJson).Append('|')
                     .Append(item.ReasonsJson).Append('|').Append(item.LabelVersion).Append('\n');
             }
