@@ -142,7 +142,7 @@ namespace TradingBot.Infrastructure.Services
                     return new PortfolioReservationResult(false, null, 0m, 0m, 0m, reasons);
                 }
 
-                var allowedValue = capacities.Append(("proposed position", proposedSizing.PositionValue)).Min(x => x.Value);
+                var allowedValue = capacities.Append((Name: "proposed position", Value: proposedSizing.PositionValue)).Min(x => x.Value);
                 if (allowedValue <= 0m)
                 {
                     await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
