@@ -78,7 +78,8 @@ namespace TradingBot.Persistence.Migrations
             migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_EvaluationRunId", "ResearchCalibrationProfileRecords", "EvaluationRunId");
             migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_Status", "ResearchCalibrationProfileRecords", "Status");
             migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_CalibrationVersion", "ResearchCalibrationProfileRecords", "CalibrationVersion");
-            migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_InstrumentId_StrategyId_HorizonSeconds_ModelVersion", "ResearchCalibrationProfileRecords", new[] { "InstrumentId", "StrategyId", "HorizonSeconds", "ModelVersion" });
+            migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_InstrumentId_StrategyId_HorizonSeconds_ModelVersion", "ResearchCalibrationProfileRecords", new[] { "InstrumentId", "StrategyId", "HorizonSeconds", "ModelVersion" }, unique: true);
+            migrationBuilder.CreateIndex("IX_ResearchCalibrationProfileRecords_InstrumentId_StrategyId_HorizonSeconds", "ResearchCalibrationProfileRecords", new[] { "InstrumentId", "StrategyId", "HorizonSeconds" }, unique: true, filter: "\"Status\" = 1");
             migrationBuilder.CreateIndex("IX_ResearchCalibrationApprovalRecords_CalibrationProfileId_Revision", "ResearchCalibrationApprovalRecords", new[] { "CalibrationProfileId", "Revision" }, unique: true);
             migrationBuilder.CreateIndex("IX_ResearchCalibrationApprovalRecords_CreatedAtUtc", "ResearchCalibrationApprovalRecords", "CreatedAtUtc");
             migrationBuilder.CreateIndex("IX_ResearchCalibrationApprovalRecords_Action", "ResearchCalibrationApprovalRecords", "Action");

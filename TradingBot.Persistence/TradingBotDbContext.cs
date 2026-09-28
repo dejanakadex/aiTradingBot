@@ -269,7 +269,10 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.ProfileKey).IsUnique();
                 b.HasIndex(x => x.EvaluationRunId);
                 b.HasIndex(x => x.Status);
-                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds, x.ModelVersion });
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds, x.ModelVersion }).IsUnique();
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds })
+                    .IsUnique()
+                    .HasFilter("\"Status\" = 1");
                 b.HasIndex(x => x.CalibrationVersion);
                 b.Property(x => x.InstrumentId).UseCollation("NOCASE");
                 b.Property(x => x.Revision).IsConcurrencyToken();

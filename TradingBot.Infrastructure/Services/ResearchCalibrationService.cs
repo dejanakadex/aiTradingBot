@@ -154,6 +154,7 @@ namespace TradingBot.Infrastructure.Services
             }
             if (!Enum.IsDefined(request.Decision)) throw new ArgumentOutOfRangeException(nameof(request), "Unknown calibration decision.");
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             var record = await db.ResearchCalibrationProfileRecords
                 .Include(item => item.ApprovalHistory)
                 .SingleOrDefaultAsync(item => item.Id == id, cancellationToken).ConfigureAwait(false)
@@ -203,6 +204,10 @@ namespace TradingBot.Infrastructure.Services
                         CreatedAtUtc = now
                     });
                 }
+                if (currentlyApproved.Length > 0)
+                {
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
                 record.Status = ResearchCalibrationStatus.Approved;
             }
             else
@@ -221,6 +226,7 @@ namespace TradingBot.Infrastructure.Services
                 CreatedAtUtc = now
             });
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return ToSnapshot(record);
         }
 

@@ -63,6 +63,11 @@ GET /api/research/candidates/{candidateId}/labels
 GET /api/research/evaluations?count=50
 GET /api/research/evaluations/{evaluationId}
 POST /api/research/evaluations
+GET /api/research/calibrations?count=50
+GET /api/research/calibrations/{calibrationId}
+POST /api/research/calibrations
+POST /api/research/calibrations/{calibrationId}/decision
+POST /api/research/calibrations/{calibrationId}/rank
 POST /api/replays
 POST /api/replays/{replayRunId}/pause
 POST /api/replays/{replayRunId}/resume
@@ -75,7 +80,7 @@ The market-data endpoints expose persisted quality checkpoints/incidents, the in
 The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 The replay endpoints create and control isolated research runs over verified Parquet bar data. Replay results never enter the live event bus or order pipeline. Protect mutating replay endpoints with authentication, authorization and rate limiting before exposing the application publicly.
-The research candidate endpoints expose accepted, rejected and blocked pattern evaluations plus their versioned as-of MFE/MAE, target/stop-first and after-cost labels. Evaluation runs perform version-locked walk-forward/holdout analysis with cost stress and segmented metrics; they never enable trading. Protect the evaluation POST endpoint before public exposure.
+The research candidate endpoints expose accepted, rejected and blocked pattern evaluations plus their versioned as-of MFE/MAE, target/stop-first and after-cost labels. Evaluation runs perform version-locked walk-forward/holdout analysis with cost stress and segmented metrics. Calibration profiles fit monotonic probabilities only on pre-holdout data, verify threshold stability across walk-forward folds, compare once against the deterministic holdout baseline, and require an audited manual decision before they may rank opportunities. None of these endpoints enables trading. Protect all mutating research endpoints with authentication, authorization and rate limiting before public exposure.
 
 Run unit tests:
 
@@ -117,6 +122,7 @@ below to compile and test the real adapter in an environment where the official 
 - Pattern detection uses the versioned `patterns-v2` contract. Each signal is isolated by instrument, strategy, direction, timeframe, pattern and event time; long and mirrored short rule thresholds are configurable through `PatternDetector__*`.
 - Candidate labeling is enabled by default without requiring a shared settings file. Override worker cadence, writer grace, horizons, target/stop and cost assumptions with `CandidateLabeling__WorkerIntervalSeconds`, `CandidateLabeling__DataAvailabilityGraceSeconds`, `CandidateLabeling__HorizonsSeconds__0`, `CandidateLabeling__TargetMoveBps`, `CandidateLabeling__StopMoveBps`, `CandidateLabeling__CommissionPerSideBps`, `CandidateLabeling__SlippagePerSideBps` and `CandidateLabeling__FallbackRoundTripSpreadBps`. Any change produces a new label-version fingerprint.
 - Research evaluation defaults to 60 training days, 14 validation days, a 14-day non-overlapping step and a final untouched 30-day holdout. Configure these with `ResearchEvaluation__TrainingWindowDays`, `ValidationWindowDays`, `StepDays` and `HoldoutDays`; minimum sample sizes, `ConfidenceThresholds`, `CostStressMultipliers` and liquidity bounds are configurable through the same section. Every change produces a new `evaluation-v1` fingerprint, and a run refuses mixed feature/pattern/label versions.
+- Research calibration uses a versioned `calibration-v1` isotonic map and defaults to at least 100 pre-holdout observations, three completed folds and 20 observations per initial calibration bin. `ResearchCalibration__MaximumStableThresholdRange`, `StableThresholdTolerance`, `MinimumFoldAgreementRatio` and baseline-degradation settings control the fail-closed approval gate. Any change creates a different calibration fingerprint; approval requires the exact output SHA-256, reviewer and reason.
 
 ### IBKR build prerequisite
 
@@ -173,6 +179,7 @@ the current Git tree and does not erase earlier commits.
 - Canonical `market-data-v2` events carry instrument ID, event/receive time, source, sequence and finality for bid, ask, trade and bar data. Persisted stream state makes stale, future, duplicate, out-of-order and gap conditions explicit.
 - Historical backfill persists jobs, segment attempts and gap reports per instrument/timeframe. Restart resumes the saved boundary, duplicate candles are ignored by the database unique key, and onboarding advances only through `Backfilling` to `Collecting` after every configured timeframe finishes.
 - Deterministic replay verifies and hashes its exact Parquet bar input, processes events in event/receive/ID order with as-of-only candle windows, and persists run checkpoints plus isolated signals. Pause/resume survives a new service instance; replay has no event-bus, broker or order dependency.
+- Research calibration converts raw pattern confidence into monotonic empirical probabilities, measures Brier/log-loss/ECE out of sample, derives a fold-stable confidence threshold and stores immutable model artifacts. Only a manually approved version may rank competing opportunities, and exact pipeline versions plus profile hash are checked on every ranking call. The ranker is research-only and is not connected to risk or order submission.
 - Only final `Healthy` candles reach pattern analysis. Gap candles may be retained for research but are blocked from trading; a second guard in the pattern worker rejects any unhealthy candle.
 - Healthy level-one events maintain latest bid/ask/trade, spread and rolling 5s/15s aggregates; `MarketSnapshotService` combines them with its 1m/5m/15m candle context.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.

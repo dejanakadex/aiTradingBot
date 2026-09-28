@@ -18,7 +18,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 9 — Pattern engine | Završeno | `patterns-v2`, puni signal identitet, strukturirani uvjeti/scoreovi/razlozi, long/short detekcija i izolirana deduplikacija. CI: 248/248 testova, 0 warninga i 0 grešaka. |
 | 10 — Kandidati i labele | Završeno | Svi prihvaćeni, odbijeni i blokirani pattern kandidati ulaze u verzionirani research zapis; šest as-of horizonata računa direction-aware MFE/MAE, target/stop-first i neto povrat nakon troška. CI: 255/255 testova, 0 warninga i 0 grešaka. |
 | 11 — Evaluacija | Završeno | Verziona walk-forward evaluacija s purged vremenskim granicama, netaknutim završnim holdoutom, expectancy/profit-factor/drawdown odabirom, cost stressom i out-of-sample segmentima. CI: 262/262 testova, 0 warninga i 0 grešaka. |
-| 12–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 12 — Kalibracija/rangiranje | Završeno | `calibration-v1` izotoničke vjerojatnosti, fold-stabilan prag, baseline usporedba, auditirana ručna potvrda i fail-closed rangiranje prilika. CI: 269/269 testova, 0 warninga i 0 grešaka. |
+| 13–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -280,3 +281,29 @@ Verifikacija: [GitHub Actions run 36184406649](https://github.com/dejanakadex/ai
 ## Sljedeći checkpoint — točka 12
 
 Implementirati kalibrirane vjerojatnosti, stabilne pragove i rangiranje konkurentnih prilika uz verzioniranu ručnu potvrdu. Svaka promjena praga ili modela mora biti auditirana i uspoređena s determinističkim baselineom bez ponovnog optimiziranja na završnom holdoutu.
+
+## Točka 12 — izvedeno
+
+Verifikacija: [GitHub Actions run 36484379002](https://github.com/dejanakadex/aiTradingBot/actions/runs/36484379002) — .NET 10 Release build, 269/269 testova, bez warninga i grešaka.
+
+- `calibration-v1` uključuje SHA-256 fingerprint minimalnog uzorka i binova, pravila stabilnosti, dopuštenih baseline degradacija, obveznog razloga odobrenja i limita batch rangiranja. Jednaki evaluation input i konfiguracija daju isti idempotentni profil.
+- Izotonička PAV kalibracija pretvara raw pattern confidence u monotono neopadajuću empirijsku vjerojatnost dobitnog neto ishoda. Početni binovi poštuju minimalnu veličinu, a profil sprema granice, uzorke, opaženi win rate i prosječni neto povrat svakog završnog bloka.
+- Svaki walk-forward fold fitira vlastitu kalibraciju isključivo na svom training prozoru i mjeri je na kasnijem validation prozoru. Spremaju se raw i calibrated Brier score, log loss i expected calibration error; završna mapa fitira se samo na cijelom pre-holdout skupu.
+- Stabilni confidence prag je medijan training pragova završenih foldova. Minimalan broj foldova, najveći dopušteni raspon i udio foldova unutar tolerancije čine fail-closed stability gate; holdout ne sudjeluje u tom izboru.
+- Završni holdout koristi se tek nakon zaključavanja mape i praga. Predloženi prag uspoređuje se s determinističkim baselineom točke 11 po expectancyju, maximum drawdownu i zadržanom uzorku, a calibrated probability dodatno se uspoređuje s raw confidenceom.
+- Profil trajno sprema evaluation/pipeline verzije, input/output hash, kalibracijsku mapu, metrike i baseline usporedbu. Ako se underlying evaluation input promijeni nakon runa, kalibracija ga odbija i zahtijeva novi evaluation umjesto tihog ponovnog fitanja.
+- Ručna odluka zahtijeva reviewer, obrazloženje i točan output SHA-256 pregledanog profila. Approval/rejection se sprema u append-only povijest revizija; odobrenje nove verzije istog instrument/strategija/horizon scopea auditirano označava prethodno odobrenu verziju kao `Superseded`, a parcijalni unique indeks sprječava dva istodobno aktivna profila.
+- Rangiranje radi samo s ručno odobrenim profilom, provjerava njegov hash, točne feature/pattern/label verzije i scope. Prilike rangira po eligibilityju, očekivanom neto povratu nakon dodatnog troška, kalibriranoj vjerojatnosti i stabilnom tie-breaku; ne šalje naloge niti mijenja trading konfiguraciju.
+- API dodaje listu/detalj/generiranje pod `/api/research/calibrations`, eksplicitni `/decision` i deterministički `/rank`. Testovi pokrivaju monotoni fit, metrike, netaknuti holdout, nestabilan prag, idempotency, reviewed hash, manual approval, supersede audit, fail-closed verzije, rangiranje i stvarnu EF migraciju.
+
+## Odluke i ograničenja točke 12
+
+- Kalibracijski ishod je binarna vjerojatnost `NetReturnBps > 0` za jedan label horizon. Ne predstavlja vjerojatnost target-first ishoda niti veličinu povrata; očekivani neto povrat rankera zato zasebno koristi pre-holdout prosječni dobitak i gubitak.
+- Holdout usporedba smije biti završna accept/reject provjera unaprijed definiranih pravila. Mijenjanje kalibracijskih postavki nakon gledanja rezultata istog holdouta i ponovno odobravanje bilo bi leakage; takva promjena zahtijeva novi vremenski holdout/evaluation ciklus.
+- `Reviewer` je zasad auditno polje koje dostavlja API pozivatelj, ne potvrđen identitet. Prije javnog ili višekorisničkog rada mutacijski endpointi moraju dobiti autentikaciju, autorizaciju, stvarni user identity i rate limiting.
+- Odobreni profil nije spojen na live strategy/risk/order pipeline. To je namjerno: portfolio rezervacije i limiti dolaze u točki 13, konflikti signala u točki 14, lifecycle u točki 15 i execution-grade edge provjera u točki 16.
+- Scope bez instrumenta/strategije može rangirati više instrumenata samo ako svi koriste iste zaključane pipeline verzije. Za različite podatkovne režime treba izraditi i zasebno odobriti uže profile umjesto ručnog prepisivanja rezultata.
+
+## Sljedeći checkpoint — točka 13
+
+Implementirati portfolio risk nalaze R01–R02 te globalne, per-instrument i per-strategy limite, atomske pending rezervacije kapitala, gross/net exposure, cooldown i korelacijski limit. Paralelne odluke ne smiju moći rezervirati isti kapital, a nulti kapacitet mora uvijek odbiti nalog.

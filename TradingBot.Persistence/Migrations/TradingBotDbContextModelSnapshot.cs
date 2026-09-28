@@ -1343,7 +1343,10 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("EvaluationRunId");
                     b.HasIndex("ProfileKey").IsUnique();
                     b.HasIndex("Status");
-                    b.HasIndex("InstrumentId", "StrategyId", "HorizonSeconds", "ModelVersion");
+                    b.HasIndex("InstrumentId", "StrategyId", "HorizonSeconds")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+                    b.HasIndex("InstrumentId", "StrategyId", "HorizonSeconds", "ModelVersion").IsUnique();
                     b.ToTable("ResearchCalibrationProfileRecords");
                 });
 
