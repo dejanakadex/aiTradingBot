@@ -27,11 +27,11 @@ namespace TradingBot.Infrastructure.Services
 
         public ChannelReader<ApprovedTradePlan> ApprovedTradePlanReader => _approvedTradePlans.Reader;
 
-        public async ValueTask PublishAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default)
+        public async ValueTask<bool> PublishAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default)
         {
             if (_approvedTradePlans.Writer.TryWrite(plan))
             {
-                return;
+                return true;
             }
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -42,7 +42,7 @@ namespace TradingBot.Infrastructure.Services
                 if (await _approvedTradePlans.Writer.WaitToWriteAsync(timeout.Token).ConfigureAwait(false)
                     && _approvedTradePlans.Writer.TryWrite(plan))
                 {
-                    return;
+                    return true;
                 }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -53,6 +53,7 @@ namespace TradingBot.Infrastructure.Services
             _logger.LogWarning(
                 "Approved trade plan channel is full; dropping approved plan for {Symbol}. This fails closed because no broker order will be submitted.",
                 plan.StrategyDecision.Symbol);
+            return false;
         }
     }
 }

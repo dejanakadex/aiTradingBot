@@ -9,6 +9,6 @@ namespace TradingBot.Application.Interfaces
     {
         ChannelReader<ApprovedTradePlan> ApprovedTradePlanReader { get; }
 
-        ValueTask PublishAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default);
+        ValueTask<bool> PublishAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default);
     }
 }

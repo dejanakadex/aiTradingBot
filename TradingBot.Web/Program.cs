@@ -123,6 +123,17 @@ try
         .Validate(settings => settings.MaximumLeverage >= 1m, "RiskSettings:MaximumLeverage must be at least 1.")
         .Validate(settings => settings.MaximumOpenPositions >= 1, "RiskSettings:MaximumOpenPositions must be at least 1.")
         .Validate(settings => settings.MaximumConsecutiveLosses >= 1, "RiskSettings:MaximumConsecutiveLosses must be at least 1.")
+        .Validate(settings => settings.MaximumGrossExposure > 0m, "RiskSettings:MaximumGrossExposure must be greater than zero.")
+        .Validate(settings => settings.MaximumNetExposure > 0m, "RiskSettings:MaximumNetExposure must be greater than zero.")
+        .Validate(settings => settings.MaximumInstrumentExposure > 0m, "RiskSettings:MaximumInstrumentExposure must be greater than zero.")
+        .Validate(settings => settings.MaximumStrategyExposure > 0m, "RiskSettings:MaximumStrategyExposure must be greater than zero.")
+        .Validate(settings => settings.MaximumPendingReservations >= 1, "RiskSettings:MaximumPendingReservations must be at least 1.")
+        .Validate(settings => settings.MaximumPendingReservationsPerInstrument >= 1, "RiskSettings:MaximumPendingReservationsPerInstrument must be at least 1.")
+        .Validate(settings => settings.MaximumPendingReservationsPerStrategy >= 1, "RiskSettings:MaximumPendingReservationsPerStrategy must be at least 1.")
+        .Validate(settings => settings.ReservationTimeoutSeconds >= 1, "RiskSettings:ReservationTimeoutSeconds must be at least 1.")
+        .Validate(settings => settings.CommittedReservationTimeoutSeconds >= 1, "RiskSettings:CommittedReservationTimeoutSeconds must be at least 1.")
+        .Validate(settings => settings.InstrumentCooldownSeconds >= 0, "RiskSettings:InstrumentCooldownSeconds cannot be negative.")
+        .Validate(settings => settings.MaximumCorrelationGroupExposure > 0m, "RiskSettings:MaximumCorrelationGroupExposure must be greater than zero.")
         .ValidateOnStart();
 
     builder.Services.AddOptions<ExitStrategySettings>()
@@ -214,6 +225,8 @@ try
         ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
     });
     app.MapGet("/api/reconciliation/status", (ITradingEngineStatusService statusService) => Results.Ok(statusService.Current));
+    app.MapGet("/api/risk/portfolio", async (string? accountId, IPortfolioRiskService portfolioRisk, CancellationToken cancellationToken) =>
+        Results.Ok(await portfolioRisk.GetStateAsync(accountId, cancellationToken)));
     app.MapGet("/api/instruments", async (IInstrumentRegistryService registry, CancellationToken cancellationToken) =>
         Results.Ok(await registry.GetAllAsync(cancellationToken)));
     app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>

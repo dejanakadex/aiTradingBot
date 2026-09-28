@@ -57,10 +57,9 @@ namespace TradingBot.Infrastructure.Services
             var maxByBuyingPower = accountInfo.BuyingPower / entryPrice;
             var maxByLeverage = leverageRemaining / entryPrice;
 
-            var quantity = new[] { maxByRisk, maxByPositionValue, maxByBuyingPower, maxByLeverage }
-                .Where(q => q > 0m)
-                .DefaultIfEmpty(0m)
-                .Min();
+            // Every capacity is mandatory. Filtering out a zero capacity would incorrectly
+            // turn an exhausted leverage/buying-power limit into an approved position.
+            var quantity = new[] { maxByRisk, maxByPositionValue, maxByBuyingPower, maxByLeverage }.Min();
 
             if (quantity <= 0m)
             {

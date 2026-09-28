@@ -27,13 +27,14 @@ namespace TradingBot.Infrastructure.Services
         private readonly IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> _dbFactory;
         private readonly IClock _clock;
         private readonly ILogger<RiskEngine> _logger;
+        private readonly IPortfolioRiskService? _portfolioRiskService;
 
         public RiskEngine(
             IOptions<RiskSettings> settings,
             IPositionSizer positionSizer,
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             ILogger<RiskEngine> logger)
-            : this(settings, positionSizer, dbFactory, new SystemClock(), logger)
+            : this(settings, positionSizer, dbFactory, null, new SystemClock(), logger)
         {
         }
 
@@ -43,12 +44,24 @@ namespace TradingBot.Infrastructure.Services
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             IClock clock,
             ILogger<RiskEngine> logger)
+            : this(settings, positionSizer, dbFactory, null, clock, logger)
+        {
+        }
+
+        public RiskEngine(
+            IOptions<RiskSettings> settings,
+            IPositionSizer positionSizer,
+            IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
+            IPortfolioRiskService? portfolioRiskService,
+            IClock clock,
+            ILogger<RiskEngine> logger)
         {
             _settings = settings?.Value ?? new RiskSettings();
             _positionSizer = positionSizer ?? throw new ArgumentNullException(nameof(positionSizer));
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _portfolioRiskService = portfolioRiskService;
         }
 
         public async Task<RiskDecision> EvaluateAsync(
@@ -66,10 +79,33 @@ namespace TradingBot.Infrastructure.Services
             ValidateConfiguredLimits(strategyDecision, accountInfo, currentPositions, todaysCompletedTrades, openOrders, reasons);
 
             PositionSizingResult sizing = new();
+            Guid? reservationId = null;
             if (reasons.Count == 0 && strategyDecision.EntryMin.HasValue && strategyDecision.StopPrice.HasValue)
             {
                 sizing = _positionSizer.CalculatePositionSize(strategyDecision.EntryMin.Value, strategyDecision.StopPrice.Value, accountInfo, currentPositions);
                 reasons.AddRange(sizing.RejectionReasons);
+            }
+
+            if (reasons.Count == 0 && _portfolioRiskService != null)
+            {
+                var reservation = await _portfolioRiskService.TryReserveAsync(
+                    strategyDecision,
+                    accountInfo,
+                    currentPositions,
+                    openOrders,
+                    sizing,
+                    cancellationToken).ConfigureAwait(false);
+                reasons.AddRange(reservation.RejectionReasons);
+                if (reservation.Approved)
+                {
+                    reservationId = reservation.ReservationId;
+                    sizing = new PositionSizingResult
+                    {
+                        Quantity = reservation.Quantity,
+                        PositionValue = reservation.PositionValue,
+                        RiskAmount = reservation.RiskAmount
+                    };
+                }
             }
 
             var approved = reasons.Count == 0;
@@ -81,7 +117,8 @@ namespace TradingBot.Infrastructure.Services
                 approved ? sizing.RiskAmount : 0m,
                 decidedAt,
                 reasons,
-                strategyDecision.Context);
+                strategyDecision.Context,
+                reservationId);
 
             await PersistAsync(strategyDecision, accountInfo, currentPositions, todaysCompletedTrades, openOrders, decision, cancellationToken).ConfigureAwait(false);
 

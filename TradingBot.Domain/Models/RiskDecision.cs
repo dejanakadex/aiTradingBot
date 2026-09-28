@@ -14,6 +14,7 @@ namespace TradingBot.Domain.Models
         public decimal RiskAmount { get; }
         public IReadOnlyList<string> RejectionReasons { get; }
         public PipelineContext? Context { get; }
+        public Guid? ReservationId { get; }
 
         public RiskDecision(RiskDecisionType decision, string reason, decimal approvedQuantity, DateTime decidedAtUtc, PipelineContext? context = null)
         {
@@ -27,9 +28,10 @@ namespace TradingBot.Domain.Models
             RiskAmount = 0m;
             RejectionReasons = Array.Empty<string>();
             Context = context;
+            ReservationId = null;
         }
 
-        public RiskDecision(RiskDecisionType decision, string reason, decimal approvedQuantity, decimal positionValue, decimal riskAmount, DateTime decidedAtUtc, IReadOnlyList<string>? rejectionReasons = null, PipelineContext? context = null)
+        public RiskDecision(RiskDecisionType decision, string reason, decimal approvedQuantity, decimal positionValue, decimal riskAmount, DateTime decidedAtUtc, IReadOnlyList<string>? rejectionReasons = null, PipelineContext? context = null, Guid? reservationId = null)
         {
             if (approvedQuantity < 0m) throw new ArgumentOutOfRangeException(nameof(approvedQuantity));
             if (positionValue < 0m) throw new ArgumentOutOfRangeException(nameof(positionValue));
@@ -43,6 +45,7 @@ namespace TradingBot.Domain.Models
             DecidedAtUtc = decidedAtUtc.Kind == DateTimeKind.Utc ? decidedAtUtc : decidedAtUtc.ToUniversalTime();
             RejectionReasons = rejectionReasons ?? Array.Empty<string>();
             Context = context;
+            ReservationId = reservationId;
         }
     }
 }

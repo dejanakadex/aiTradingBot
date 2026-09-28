@@ -26,6 +26,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ExitStrategySettings _exitStrategySettings;
         private readonly TradingSettings _tradingSettings;
         private readonly ILogger<ApprovedOrderExecutionBackgroundService> _logger;
+        private readonly IPortfolioRiskService? _portfolioRiskService;
         private readonly ConcurrentDictionary<string, byte> _submittedPlans = new();
 
         public ApprovedOrderExecutionBackgroundService(
@@ -60,7 +61,8 @@ namespace TradingBot.Infrastructure.Background
             IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> dbFactory,
             IOptions<ExitStrategySettings> exitStrategySettings,
             IOptions<TradingSettings> tradingSettings,
-            ILogger<ApprovedOrderExecutionBackgroundService> logger)
+            ILogger<ApprovedOrderExecutionBackgroundService> logger,
+            IPortfolioRiskService? portfolioRiskService = null)
         {
             _pipelineChannel = pipelineChannel;
             _orderManager = orderManager;
@@ -72,6 +74,7 @@ namespace TradingBot.Infrastructure.Background
             _exitStrategySettings = exitStrategySettings.Value;
             _tradingSettings = tradingSettings.Value;
             _logger = logger;
+            _portfolioRiskService = portfolioRiskService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -115,6 +118,7 @@ namespace TradingBot.Infrastructure.Background
                     _statusService.Current.State,
                     _statusService.Current.TradingEnabled,
                     _tradingSettings.Enabled);
+                await ReleaseReservationAsync(plan, "Trading was no longer ready or enabled before submission.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -128,6 +132,7 @@ namespace TradingBot.Infrastructure.Background
                     plan.Pattern.PatternType.ToString());
 
                 _logger.LogWarning("Approved trade plan skipped because entry/stop/target is incomplete for {Symbol}", plan.StrategyDecision.Symbol);
+                await ReleaseReservationAsync(plan, "Entry, stop or target was incomplete before submission.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -142,6 +147,7 @@ namespace TradingBot.Infrastructure.Background
                     plan.Pattern.PatternType.ToString());
 
                 _logger.LogWarning("Duplicate approved trade plan prevented for {Key}", key);
+                await ReleaseReservationAsync(plan, "Duplicate approved trade plan was prevented.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -171,6 +177,7 @@ namespace TradingBot.Infrastructure.Background
                         plan.Pattern.PatternType.ToString());
 
                     _logger.LogInformation("Stored hypothetical trade for {Symbol}; mode={Mode}", plan.StrategyDecision.Symbol, mode);
+                    await ReleaseReservationAsync(plan, "Analysis-only hypothetical trade completed without broker exposure.", cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -185,6 +192,14 @@ namespace TradingBot.Infrastructure.Background
                         plan.Pattern.PatternType.ToString());
 
                     _logger.LogInformation("Submitted fixed bracket trade plan for {Symbol}; mode={Mode}, brokerOrderId={BrokerOrderId}, status={Status}", plan.StrategyDecision.Symbol, mode, result.BrokerOrderId, result.Status);
+                    if (result.Submitted || result.Status == OrderStatus.PendingBrokerConfirmation)
+                    {
+                        await CommitReservationAsync(plan, result.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await ReleaseReservationAsync(plan, $"Bracket order was not accepted: {result.Message}", cancellationToken).ConfigureAwait(false);
+                    }
                     return;
                 }
 
@@ -199,9 +214,18 @@ namespace TradingBot.Infrastructure.Background
                         plan.Pattern.PatternType.ToString());
 
                     _logger.LogWarning("Entry limit buy was not submitted for {Symbol}: {Message}", plan.StrategyDecision.Symbol, entryResult.Message);
+                    if (entryResult.Status == OrderStatus.PendingBrokerConfirmation)
+                    {
+                        await CommitReservationAsync(plan, entryResult.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await ReleaseReservationAsync(plan, $"Entry order was not accepted: {entryResult.Message}", cancellationToken).ConfigureAwait(false);
+                    }
                     return;
                 }
 
+                await CommitReservationAsync(plan, entryResult.BrokerOrderId, cancellationToken).ConfigureAwait(false);
                 await _exitManagementService.RegisterApprovedEntryAsync(plan, entryResult, cancellationToken).ConfigureAwait(false);
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.OrderExecution,
@@ -228,6 +252,20 @@ namespace TradingBot.Infrastructure.Background
 
                 _logger.LogError(ex, "Failed to submit approved trade plan for {Symbol}", plan.StrategyDecision.Symbol);
             }
+        }
+
+        private Task CommitReservationAsync(ApprovedTradePlan plan, string? brokerOrderId, CancellationToken cancellationToken)
+        {
+            return _portfolioRiskService != null && plan.RiskDecision.ReservationId.HasValue
+                ? _portfolioRiskService.CommitAsync(plan.RiskDecision.ReservationId.Value, brokerOrderId, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        private Task ReleaseReservationAsync(ApprovedTradePlan plan, string reason, CancellationToken cancellationToken)
+        {
+            return _portfolioRiskService != null && plan.RiskDecision.ReservationId.HasValue
+                ? _portfolioRiskService.ReleaseAsync(plan.RiskDecision.ReservationId.Value, reason, cancellationToken)
+                : Task.CompletedTask;
         }
 
         private async Task PersistHypotheticalTradeAsync(

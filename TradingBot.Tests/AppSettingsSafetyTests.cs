@@ -39,7 +39,10 @@ namespace TradingBot.Tests
             Assert.Equal(10m, risk.GetProperty("MaximumRiskPerTrade").GetDecimal());
             Assert.Equal(50m, risk.GetProperty("MaximumDailyLoss").GetDecimal());
             Assert.Equal(1m, risk.GetProperty("MaximumLeverage").GetDecimal());
-            Assert.Equal(1, risk.GetProperty("MaximumOpenPositions").GetInt32());
+            Assert.Equal(3, risk.GetProperty("MaximumOpenPositions").GetInt32());
+            Assert.Equal(3000m, risk.GetProperty("MaximumGrossExposure").GetDecimal());
+            Assert.Equal(1000m, risk.GetProperty("MaximumInstrumentExposure").GetDecimal());
+            Assert.Equal(3, risk.GetProperty("MaximumPendingReservations").GetInt32());
             Assert.Equal(3, risk.GetProperty("MaximumConsecutiveLosses").GetInt32());
 
             Assert.Equal("Data Source=data/trading.db", root.GetProperty("DatabaseSettings").GetProperty("ConnectionString").GetString());

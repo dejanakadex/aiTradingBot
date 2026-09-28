@@ -1236,6 +1236,75 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("ResearchCandidateRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.PortfolioRiskReservationAuditRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("FromStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReservationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ToStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReservationId");
+
+                    b.HasIndex("TimestampUtc");
+
+                    b.ToTable("PortfolioRiskReservationAuditRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.PortfolioRiskReservationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("BrokerOrderId").HasColumnType("TEXT");
+                    b.Property<DateTime?>("CommittedAtUtc").HasColumnType("TEXT");
+                    b.Property<Guid>("CorrelationId").HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiresAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().UseCollation("NOCASE").HasColumnType("TEXT");
+                    b.Property<decimal>("PositionValue").HasColumnType("TEXT");
+                    b.Property<decimal>("Quantity").HasColumnType("TEXT");
+                    b.Property<decimal>("ReferencePrice").HasColumnType("TEXT");
+                    b.Property<DateTime?>("ReleasedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ReservationKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("RiskAmount").HasColumnType("TEXT");
+                    b.Property<Guid>("SignalId").HasColumnType("TEXT");
+                    b.Property<decimal>("SignedExposure").HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Symbol").IsRequired().UseCollation("NOCASE").HasColumnType("TEXT");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+                    b.HasIndex("AccountId");
+                    b.HasIndex("ReservationKey").IsUnique();
+                    b.HasIndex("SignalId");
+                    b.HasIndex("InstrumentId", "Status");
+                    b.HasIndex("Status", "ExpiresAtUtc");
+                    b.HasIndex("StrategyId", "Status");
+                    b.ToTable("PortfolioRiskReservationRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.CandidateLabelRecord", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");

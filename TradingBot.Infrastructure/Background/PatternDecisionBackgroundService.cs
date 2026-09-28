@@ -165,6 +165,7 @@ namespace TradingBot.Infrastructure.Background
                 var aiCritic = scope.ServiceProvider.GetRequiredService<IAiTradeCritic>();
                 var strategyEngine = scope.ServiceProvider.GetRequiredService<IStrategyEngine>();
                 var riskEngine = scope.ServiceProvider.GetRequiredService<IRiskEngine>();
+                var portfolioRisk = scope.ServiceProvider.GetService<IPortfolioRiskService>();
                 var accountService = scope.ServiceProvider.GetService<IAccountService>();
                 var positionService = scope.ServiceProvider.GetService<IPositionService>();
                 var orderExecutionService = scope.ServiceProvider.GetRequiredService<IOrderExecutionService>();
@@ -289,11 +290,26 @@ namespace TradingBot.Infrastructure.Background
                     pattern.Symbol,
                     pattern.PatternType.ToString());
 
-                var accountId = _ibkrSettings.AccountId ?? string.Empty;
+                var accountId = ResolveAccountId();
                 var account = await accountService.GetAccountInfoAsync(accountId, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(accountId)
+                    || string.IsNullOrWhiteSpace(account.AccountId)
+                    || !account.AccountId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
+                {
+                    var reason = "Broker account returned by the active session does not match the configured account.";
+                    _pipelineStatusService?.Mark(
+                        TradingPipelineStage.StrategyAndRisk,
+                        TradingPipelineActivityState.Rejected,
+                        reason,
+                        pattern.Symbol,
+                        pattern.PatternType.ToString());
+                    await MarkBlockedAsync(pattern, "BrokerAccount", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
                 var positions = (await positionService.GetPositionsAsync(accountId, cancellationToken).ConfigureAwait(false)).ToList();
                 var openOrders = (await orderExecutionService.GetOpenOrdersAsync(cancellationToken).ConfigureAwait(false)).ToList();
-                var risk = await riskEngine.EvaluateAsync(strategy, account, positions, Array.Empty<Trade>(), openOrders, cancellationToken).ConfigureAwait(false);
+                var completedTrades = await LoadCurrentTradingSessionTradesAsync(cancellationToken).ConfigureAwait(false);
+                var risk = await riskEngine.EvaluateAsync(strategy, account, positions, completedTrades, openOrders, cancellationToken).ConfigureAwait(false);
 
                 if (risk.Decision != RiskDecisionType.Approve)
                 {
@@ -316,7 +332,7 @@ namespace TradingBot.Infrastructure.Background
                     pattern.Symbol,
                     pattern.PatternType.ToString());
 
-                await _pipelineChannel.PublishAsync(new ApprovedTradePlan
+                var published = await _pipelineChannel.PublishAsync(new ApprovedTradePlan
                 {
                     Snapshot = snapshot,
                     Pattern = pattern,
@@ -325,6 +341,10 @@ namespace TradingBot.Infrastructure.Background
                     StrategyDecision = strategy,
                     RiskDecision = risk
                 }, cancellationToken).ConfigureAwait(false);
+                if (!published && risk.ReservationId.HasValue && portfolioRisk != null)
+                {
+                    await portfolioRisk.ReleaseAsync(risk.ReservationId.Value, "Approved plan could not be queued for execution.", cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -409,6 +429,48 @@ namespace TradingBot.Infrastructure.Background
             if (start == end) return true;
             if (start < end) return time >= start && time < end;
             return time >= start || time < end;
+        }
+
+        private string ResolveAccountId()
+        {
+            if (_tradingSettings.OperatingMode == TradingOperatingMode.PaperTrading)
+            {
+                return _ibkrSettings.PaperAccountId ?? string.Empty;
+            }
+
+            if (_tradingSettings.OperatingMode == TradingOperatingMode.AnalysisOnly
+                && !string.IsNullOrWhiteSpace(_ibkrSettings.PaperAccountId))
+            {
+                return _ibkrSettings.PaperAccountId;
+            }
+
+            return _ibkrSettings.AccountId ?? string.Empty;
+        }
+
+        private async Task<IReadOnlyList<Trade>> LoadCurrentTradingSessionTradesAsync(CancellationToken cancellationToken)
+        {
+            var now = ToUtc(_clock.UtcNow);
+            var eastern = ResolveEasternTimeZone();
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, eastern);
+            var localStart = DateTime.SpecifyKind(
+                localNow.Date.AddHours(Math.Clamp(_tradingSettings.TradingStartHourNewYork, 0, 23))
+                    .AddMinutes(Math.Clamp(_tradingSettings.TradingStartMinuteNewYork, 0, 59)),
+                DateTimeKind.Unspecified);
+            var sessionStartUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, eastern);
+
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var persisted = await db.Trades.AsNoTracking()
+                .Where(x => x.ClosedUtc.HasValue && x.ExitPrice.HasValue && x.ClosedUtc >= sessionStartUtc && x.ClosedUtc <= now)
+                .OrderBy(x => x.ClosedUtc)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return persisted.Select(x =>
+            {
+                var trade = new Trade(x.Symbol, x.Size, x.EntryPrice, ToUtc(x.OpenedUtc));
+                trade.Close(x.ExitPrice!.Value, ToUtc(x.ClosedUtc!.Value));
+                return trade;
+            }).ToArray();
         }
 
         private static TimeZoneInfo ResolveEasternTimeZone()

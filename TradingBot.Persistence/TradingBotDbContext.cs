@@ -38,6 +38,8 @@ namespace TradingBot.Persistence
         public DbSet<ResearchEvaluationRunRecord> ResearchEvaluationRunRecords { get; set; }
         public DbSet<ResearchCalibrationProfileRecord> ResearchCalibrationProfileRecords { get; set; }
         public DbSet<ResearchCalibrationApprovalRecord> ResearchCalibrationApprovalRecords { get; set; }
+        public DbSet<PortfolioRiskReservationRecord> PortfolioRiskReservationRecords { get; set; }
+        public DbSet<PortfolioRiskReservationAuditRecord> PortfolioRiskReservationAuditRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -288,6 +290,27 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.CalibrationProfileId, x.Revision }).IsUnique();
                 b.HasIndex(x => x.CreatedAtUtc);
                 b.HasIndex(x => x.Action);
+            });
+
+            modelBuilder.Entity<PortfolioRiskReservationRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.ReservationKey).IsUnique();
+                b.HasIndex(x => x.AccountId);
+                b.HasIndex(x => x.SignalId);
+                b.HasIndex(x => new { x.Status, x.ExpiresAtUtc });
+                b.HasIndex(x => new { x.InstrumentId, x.Status });
+                b.HasIndex(x => new { x.StrategyId, x.Status });
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Symbol).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<PortfolioRiskReservationAuditRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.ReservationId);
+                b.HasIndex(x => x.TimestampUtc);
             });
         }
     }

@@ -89,6 +89,40 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public void PositionSizer_RejectsWhenLeverageCapacityIsExactlyZero()
+        {
+            var sizer = CreateSizer(new RiskSettings
+            {
+                MaximumRiskPerTrade = 1000m,
+                MaximumPositionValue = 100000m,
+                MaximumLeverage = 1m
+            });
+            var positions = new[] { new PositionDto { Symbol = "QQQ", Quantity = 100m, AveragePrice = 100m } };
+
+            var result = sizer.CalculatePositionSize(100m, 95m, BuildAccount(netLiquidation: 10000m, buyingPower: 100000m), positions);
+
+            Assert.Equal(0m, result.Quantity);
+            Assert.Contains(result.RejectionReasons, reason => reason.Contains("No position size remains"));
+        }
+
+        [Fact]
+        public void PositionSizer_RejectsWhenLeverageCapacityIsOverdrawn()
+        {
+            var sizer = CreateSizer(new RiskSettings
+            {
+                MaximumRiskPerTrade = 1000m,
+                MaximumPositionValue = 100000m,
+                MaximumLeverage = 1m
+            });
+            var positions = new[] { new PositionDto { Symbol = "QQQ", Quantity = 101m, AveragePrice = 100m } };
+
+            var result = sizer.CalculatePositionSize(100m, 95m, BuildAccount(netLiquidation: 10000m, buyingPower: 100000m), positions);
+
+            Assert.Equal(0m, result.Quantity);
+            Assert.NotEmpty(result.RejectionReasons);
+        }
+
+        [Fact]
         public async Task RiskEngine_ApprovesAtExactLimitsAndPersists()
         {
             var engine = CreateEngine(out var factory, out var connection, new RiskSettings

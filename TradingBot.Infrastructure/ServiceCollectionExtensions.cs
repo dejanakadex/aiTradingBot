@@ -61,6 +61,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IStrategyEngine, StrategyEngine>();
             services.AddSingleton<IRiskManagementService, RiskManagementService>();
             services.AddTransient<IPositionSizer, PositionSizer>();
+            services.AddSingleton<IPortfolioRiskService, PortfolioRiskService>();
             services.AddTransient<IRiskEngine, RiskEngine>();
             services.AddTransient<IOrderManager, OrderManager>();
             services.AddSingleton<IExitManagementService, ExitManagementService>();
