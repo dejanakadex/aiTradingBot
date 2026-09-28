@@ -379,8 +379,8 @@ namespace TradingBot.Infrastructure.Services
             var canonical = new StringBuilder();
             canonical.Append(evaluation.HorizonSeconds).Append('|').Append(evaluation.ReplayRunId).Append('|')
                 .Append(evaluation.InstrumentId).Append('|').Append(evaluation.StrategyId).Append('|')
-                .Append(evaluation.FromUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
-                .Append(evaluation.ToUtc.ToString("O", CultureInfo.InvariantCulture)).Append('\n');
+                .Append(ToUtc(evaluation.FromUtc).ToString("O", CultureInfo.InvariantCulture)).Append('|')
+                .Append(ToUtc(evaluation.ToUtc).ToString("O", CultureInfo.InvariantCulture)).Append('\n');
             foreach (var item in rows.OrderBy(item => item.EvaluatedAtUtc).ThenBy(item => item.CandidateKey, StringComparer.Ordinal))
             {
                 canonical.Append(item.CandidateKey).Append('|').Append(item.EvaluatedAtUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
