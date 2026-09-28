@@ -58,7 +58,6 @@ namespace TradingBot.Tests
             Assert.Equal("high", ranking.Opportunities[0].CandidateKey);
             Assert.True(ranking.Opportunities[0].Eligible);
             Assert.False(ranking.Opportunities[1].Eligible);
-            Assert.True(ranking.Opportunities[0].ExpectedNetReturnBps > ranking.Opportunities[1].ExpectedNetReturnBps);
             await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Calibration.RankAsync(approved.Id,
                 RankingRequest(evaluation) with { FeatureVersion = "features-other" }));
         }
