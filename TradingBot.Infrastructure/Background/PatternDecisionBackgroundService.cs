@@ -431,7 +431,7 @@ namespace TradingBot.Infrastructure.Background
             return time >= start || time < end;
         }
 
-        private string ResolveAccountId()
+        internal string ResolveAccountId()
         {
             if (_tradingSettings.OperatingMode == TradingOperatingMode.PaperTrading)
             {
@@ -447,7 +447,7 @@ namespace TradingBot.Infrastructure.Background
             return _ibkrSettings.AccountId ?? string.Empty;
         }
 
-        private async Task<IReadOnlyList<Trade>> LoadCurrentTradingSessionTradesAsync(CancellationToken cancellationToken)
+        internal async Task<IReadOnlyList<Trade>> LoadCurrentTradingSessionTradesAsync(CancellationToken cancellationToken)
         {
             var now = ToUtc(_clock.UtcNow);
             var eastern = ResolveEasternTimeZone();

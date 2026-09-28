@@ -19,7 +19,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 10 — Kandidati i labele | Završeno | Svi prihvaćeni, odbijeni i blokirani pattern kandidati ulaze u verzionirani research zapis; šest as-of horizonata računa direction-aware MFE/MAE, target/stop-first i neto povrat nakon troška. CI: 255/255 testova, 0 warninga i 0 grešaka. |
 | 11 — Evaluacija | Završeno | Verziona walk-forward evaluacija s purged vremenskim granicama, netaknutim završnim holdoutom, expectancy/profit-factor/drawdown odabirom, cost stressom i out-of-sample segmentima. CI: 262/262 testova, 0 warninga i 0 grešaka. |
 | 12 — Kalibracija/rangiranje | Završeno | `calibration-v1` izotoničke vjerojatnosti, fold-stabilan prag, baseline usporedba, auditirana ručna potvrda i fail-closed rangiranje prilika. CI: 269/269 testova, 0 warninga i 0 grešaka. |
-| 13–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 13 — Portfolio risk | Završeno | R01–R02, session trade history, ispravan paper/live račun, atomske trajne rezervacije, gross/net i globalni/per-instrument/per-strategy/cooldown/korelacijski limiti. CI: 276/276 testova. |
+| 14–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -304,6 +305,28 @@ Verifikacija: [GitHub Actions run 36484379002](https://github.com/dejanakadex/ai
 - Odobreni profil nije spojen na live strategy/risk/order pipeline. To je namjerno: portfolio rezervacije i limiti dolaze u točki 13, konflikti signala u točki 14, lifecycle u točki 15 i execution-grade edge provjera u točki 16.
 - Scope bez instrumenta/strategije može rangirati više instrumenata samo ako svi koriste iste zaključane pipeline verzije. Za različite podatkovne režime treba izraditi i zasebno odobriti uže profile umjesto ručnog prepisivanja rezultata.
 
-## Sljedeći checkpoint — točka 13
+## Točka 13 — izvedeno
 
-Implementirati portfolio risk nalaze R01–R02 te globalne, per-instrument i per-strategy limite, atomske pending rezervacije kapitala, gross/net exposure, cooldown i korelacijski limit. Paralelne odluke ne smiju moći rezervirati isti kapital, a nulti kapacitet mora uvijek odbiti nalog.
+Verifikacija: GitHub Actions .NET 10 Release build i 276/276 testova bez warninga i grešaka.
+
+- `PositionSizer` više ne uklanja nulti leverage kapacitet prije izračuna minimuma. Točna granica i prekoračenje sada vraćaju nultu količinu i odbijanje.
+- Produkcijski pattern/risk tok bira `PaperAccountId` u paper modu (i kada je dostupan u AnalysisOnly), zahtijeva da broker vrati isti account ID te učitava stvarno zatvorene tradeove od početka aktualne New York sesije. Time dnevni gubitak, broj tradeova, uzastopni gubici i loss cooldown rade nad stvarnim podacima.
+- `PortfolioRiskService` serijalizira provjeru i upis u istoj `Serializable` SQLite transakciji. Rezervacija ima stabilan signal/account ključ, trajni status `Pending`, `Committed`, `Released` ili `Expired`, concurrency verziju i append-only audit svake tranzicije.
+- Svaka odluka uključuje postojeće broker pozicije i sve aktivne rezervacije u globalni gross/net exposure, buying power i leverage. Dodatno se primjenjuju per-instrument, per-strategy, globalni broj otvorenih pozicija/rezervacija, instrument cooldown i konfigurabilne korelacijske grupe.
+- Ako je dopušten samo dio predložene vrijednosti, količina i risk izračunavaju se iz preostalog najmanjeg kapaciteta. Bilo koji obvezni kapacitet manji ili jednak nuli odbija nalog.
+- `RiskDecision` nosi `ReservationId`. Puni execution kanal otpušta rezervaciju; AnalysisOnly je otpušta nakon hipotetskog zapisa; odbijen nalog je otpušta; broker-prihvaćen ili nejasan nalog prelazi u `Committed` fail-closed stanje s konfigurabilnim timeoutom.
+- Bounded approved-plan kanal sada javlja je li objava uspjela, pa se rezervacija ne ostavlja zauzetom kada je red pun. Read-only `GET /api/risk/portfolio?accountId=...` prikazuje aktivne rezervacije i rezervirani gross/net exposure.
+- EF migracija dodaje trajne reservation i audit tablice s unique signal ključem i indeksima po accountu, statusu, isteku, instrumentu i strategiji.
+- Testovi pokrivaju paralelnu borbu za isti slot, durable commit/release audit, korelacijsko smanjenje količine, session trade history, izbor paper računa te nulti i prekoračeni leverage.
+
+## Odluke i ograničenja točke 13
+
+- Trenutni izvršni put je i dalje long-only; short patterni ostaju research-only dok borrow/direction-aware izvršenje ne bude eksplicitno uvedeno.
+- Broker `OrderStatusDto` još nema puni symbol/quantity/price intent. Zato committed rezervacija konzervativno ostaje aktivna do timeouta, dok broker pozicije i broj otvorenih naloga ostaju dodatne granice. Potpuno event-driven oslobađanje i reconciliation dolaze s durable order/position lifecycleom u točki 15.
+- Per-strategy izloženost zasad se može točno atribuirati aktivnim rezervacijama. Atribucija već fillanih neto broker pozicija pojedinoj strategiji pripada virtualnoj atribuciji u točki 14.
+- Korelacijske grupe su eksplicitna konfiguracija simbola/instrument ID-jeva, ne procjena korelacije iz podataka. Statistička matrica može se dodati kasnije tek uz definirani lookback, minimalni uzorak i režim.
+- Zadani način rada ostaje `AnalysisOnly`; ova točka sama ne daje nijednom instrumentu paper/live readiness.
+
+## Sljedeći checkpoint — točka 14
+
+Implementirati signal arbitration za paralelne instrumente i više strategija na istom instrumentu: deduplikaciju, eksplicitnu politiku konflikta (`Reject`/`Priority`, bez tihog netiranja), virtualnu strategijsku atribuciju nasuprot jednoj stvarnoj broker neto poziciji i zaštitu da izlaz jedne strategije ne može prodati količinu druge.

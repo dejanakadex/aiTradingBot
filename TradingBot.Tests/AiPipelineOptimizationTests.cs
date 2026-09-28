@@ -139,11 +139,46 @@ namespace TradingBot.Tests
             harness.Dispose();
         }
 
+        [Fact]
+        public async Task RiskHistory_LoadsOnlyTradesClosedInCurrentNewYorkSession()
+        {
+            var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Wait, 0.90m));
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                db.Trades.AddRange(
+                    new TradingBot.Persistence.Trade { Symbol = "SPY", OpenedUtc = MarketOpenUtc.AddMinutes(-30), ClosedUtc = MarketOpenUtc.AddMinutes(-5), Size = 1m, EntryPrice = 100m, ExitPrice = 99m },
+                    new TradingBot.Persistence.Trade { Symbol = "SPY", OpenedUtc = MarketOpenUtc.AddDays(-1), ClosedUtc = MarketOpenUtc.AddDays(-1).AddMinutes(5), Size = 1m, EntryPrice = 100m, ExitPrice = 90m });
+                await db.SaveChangesAsync();
+            }
+
+            var trades = await harness.Service.LoadCurrentTradingSessionTradesAsync(CancellationToken.None);
+
+            var trade = Assert.Single(trades);
+            Assert.Equal(99m, trade.ExitPrice);
+            Assert.Equal(TradeStatus.Closed, trade.Status);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public void RiskAccountSelection_UsesConfiguredPaperAccount()
+        {
+            var harness = CreateHarness(
+                0.60m,
+                Analysis(AiMarketActions.Wait, 0.90m),
+                operatingMode: TradingOperatingMode.PaperTrading,
+                paperAccountId: "PAPER123");
+
+            Assert.Equal("PAPER123", harness.Service.ResolveAccountId());
+            harness.Dispose();
+        }
+
         private static Harness CreateHarness(
             decimal minimumPatternQualityForAiAnalysis,
             AiMarketAnalysisResult analyzerResult,
             decimal minimumAiConfidence = 0.60m,
-            DateTime? nowUtc = null)
+            DateTime? nowUtc = null,
+            TradingOperatingMode operatingMode = TradingOperatingMode.AnalysisOnly,
+            string? paperAccountId = null)
         {
             var factory = CreateInMemoryFactory(out var connection);
             var eventBus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
@@ -183,6 +218,7 @@ namespace TradingBot.Tests
                 Options.Create(new TradingSettings
                 {
                     Enabled = true,
+                    OperatingMode = operatingMode,
                     MinimumPatternQualityForAiAnalysis = (double)minimumPatternQualityForAiAnalysis,
                     MinimumAiConfidence = minimumAiConfidence,
                     MaximumCandleAgeSeconds = 300,
@@ -191,7 +227,7 @@ namespace TradingBot.Tests
                     TradingEndHourNewYork = 16,
                     TradingEndMinuteNewYork = 0
                 }),
-                Options.Create(new IbkrSettings { AccountId = "DU123" }),
+                Options.Create(new IbkrSettings { AccountId = "DU123", PaperAccountId = paperAccountId }),
                 factory,
                 new FixedClock(nowUtc ?? MarketOpenUtc),
                 NullLogger<PatternDecisionBackgroundService>.Instance);

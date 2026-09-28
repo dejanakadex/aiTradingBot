@@ -53,6 +53,8 @@ Pozitivne postojeće osnove:
 
 ### R01 — P1: dnevne risk zaštite nemaju stvarnu povijest tradeova
 
+Status: **riješeno u točki 13** — produkcijski pipeline bira račun prema operating modu, potvrđuje ID broker sesije i učitava zatvorene tradeove aktualne New York sesije prije risk odluke.
+
 Izvor: [PatternDecisionBackgroundService.cs](../TradingBot.Infrastructure/Background/PatternDecisionBackgroundService.cs#L282), `ProcessPatternAsync`; [RiskEngine.cs](../TradingBot.Infrastructure/Services/RiskEngine.cs).
 
 Poziv `EvaluateAsync` uvijek dobiva `Array.Empty<Trade>()`. Zato provjere dnevnog gubitka, broja tradeova, uzastopnih gubitaka i cooldowna ne vide stvarne zatvorene tradeove, iako ih sam `RiskEngine` zna provjeravati. Postojeći unit testovi daju povijest izravno engineu i ne dokazuju ispravnost ovog pozivatelja. Uz to ovaj poziv koristi `IbkrSettings.AccountId`, dok se za paper način drugdje bira `PaperAccountId`.
@@ -60,6 +62,8 @@ Poziv `EvaluateAsync` uvijek dobiva `Array.Empty<Trade>()`. Zato provjere dnevno
 Popravak: jedinstveno odabrani broker račun i dohvat provjerene povijesti za definiranu trading sesiju. Test: nakon stvarno evidentiranih gubitaka kandidat kroz cijeli pipeline mora biti odbijen prije slanja naloga.
 
 ### R02 — P1: iscrpljen leverage limit može se zanemariti
+
+Status: **riješeno u točki 13** — svi obvezni kapaciteti sudjeluju u minimumu; nulti ili negativni buying-power/leverage/portfolio kapacitet odbija nalog, uz testove točne granice i prekoračenja.
 
 Izvor: [PositionSizer.cs](../TradingBot.Infrastructure/Services/PositionSizer.cs#L51), linije 51–63.
 
