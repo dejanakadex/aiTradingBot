@@ -91,6 +91,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "ResearchEvaluation configuration is invalid. Check windows, sample sizes, thresholds and cost multipliers.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<ResearchCalibrationSettings>()
+        .Bind(builder.Configuration.GetSection("ResearchCalibration"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ResearchCalibration configuration is invalid. Check samples, stability, baseline comparison and approval limits.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<OpenAiSettings>()
         .Bind(builder.Configuration.GetSection("OpenAiSettings"))
         .Validate(settings => Uri.TryCreate(settings.ResponsesEndpoint, UriKind.Absolute, out _), "OpenAiSettings:ResponsesEndpoint must be an absolute URL.")
@@ -253,6 +258,19 @@ try
     });
     app.MapPost("/api/research/evaluations", async (TradingBot.Application.DTOs.ResearchEvaluationRequest request, IResearchEvaluationService evaluation, CancellationToken cancellationToken) =>
         Results.Ok(await evaluation.RunAsync(request, cancellationToken)));
+    app.MapGet("/api/research/calibrations", async (int? count, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
+        Results.Ok(await calibration.GetAllAsync(count ?? 50, cancellationToken)));
+    app.MapGet("/api/research/calibrations/{calibrationId:guid}", async (Guid calibrationId, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
+    {
+        var result = await calibration.GetAsync(calibrationId, cancellationToken);
+        return result == null ? Results.NotFound() : Results.Ok(result);
+    });
+    app.MapPost("/api/research/calibrations", async (TradingBot.Application.DTOs.ResearchCalibrationRequest request, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
+        Results.Ok(await calibration.GenerateAsync(request, cancellationToken)));
+    app.MapPost("/api/research/calibrations/{calibrationId:guid}/decision", async (Guid calibrationId, TradingBot.Application.DTOs.ResearchCalibrationDecisionRequest request, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
+        Results.Ok(await calibration.DecideAsync(calibrationId, request, cancellationToken)));
+    app.MapPost("/api/research/calibrations/{calibrationId:guid}/rank", async (Guid calibrationId, TradingBot.Application.DTOs.OpportunityRankingRequest request, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
+        Results.Ok(await calibration.RankAsync(calibrationId, request, cancellationToken)));
     app.MapPost("/api/replays", async (TradingBot.Application.DTOs.ReplayStartRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
     {
         var result = await replay.StartAsync(request, cancellationToken);

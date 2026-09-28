@@ -36,6 +36,8 @@ namespace TradingBot.Persistence
         public DbSet<ResearchCandidateRecord> ResearchCandidateRecords { get; set; }
         public DbSet<CandidateLabelRecord> CandidateLabelRecords { get; set; }
         public DbSet<ResearchEvaluationRunRecord> ResearchEvaluationRunRecords { get; set; }
+        public DbSet<ResearchCalibrationProfileRecord> ResearchCalibrationProfileRecords { get; set; }
+        public DbSet<ResearchCalibrationApprovalRecord> ResearchCalibrationApprovalRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -259,6 +261,30 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds, x.CompletedAtUtc });
                 b.HasIndex(x => x.EvaluationVersion);
                 b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+            });
+
+            modelBuilder.Entity<ResearchCalibrationProfileRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.ProfileKey).IsUnique();
+                b.HasIndex(x => x.EvaluationRunId);
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.HorizonSeconds, x.ModelVersion });
+                b.HasIndex(x => x.CalibrationVersion);
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Revision).IsConcurrencyToken();
+                b.HasMany(x => x.ApprovalHistory)
+                    .WithOne(x => x.CalibrationProfile)
+                    .HasForeignKey(x => x.CalibrationProfileId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ResearchCalibrationApprovalRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.CalibrationProfileId, x.Revision }).IsUnique();
+                b.HasIndex(x => x.CreatedAtUtc);
+                b.HasIndex(x => x.Action);
             });
         }
     }

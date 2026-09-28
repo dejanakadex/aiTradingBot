@@ -1305,6 +1305,66 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("ResearchEvaluationRunRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCalibrationProfileRecord", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+                    b.Property<decimal>("AverageEstimatedCostBps").HasColumnType("TEXT");
+                    b.Property<decimal>("AverageLossBps").HasColumnType("TEXT");
+                    b.Property<decimal>("AverageWinBps").HasColumnType("TEXT");
+                    b.Property<string>("BaselineComparisonJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("CalibrationPointsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("CalibrationVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("DecidedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("EvaluationVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("EvaluationRunId").HasColumnType("TEXT");
+                    b.Property<string>("FeatureVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("HoldoutCalibratedMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("HoldoutRawMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("HorizonSeconds").HasColumnType("INTEGER");
+                    b.Property<string>("InputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("MinimumCalibratedProbability").HasColumnType("TEXT");
+                    b.Property<int>("ModelVersion").HasColumnType("INTEGER");
+                    b.Property<string>("OutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("PatternVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ProfileKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("ReplayRunId").HasColumnType("TEXT");
+                    b.Property<int>("Revision").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.Property<decimal>("StableConfidenceThreshold").HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ThresholdStabilityJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("WalkForwardCalibratedMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("WalkForwardRawMetricsJson").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("CalibrationVersion");
+                    b.HasIndex("EvaluationRunId");
+                    b.HasIndex("ProfileKey").IsUnique();
+                    b.HasIndex("Status");
+                    b.HasIndex("InstrumentId", "StrategyId", "HorizonSeconds", "ModelVersion");
+                    b.ToTable("ResearchCalibrationProfileRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCalibrationApprovalRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<string>("Action").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("CalibrationProfileId").HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("ExpectedOutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("RelatedProfileId").HasColumnType("TEXT");
+                    b.Property<string>("Reviewer").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Revision").HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("Action");
+                    b.HasIndex("CreatedAtUtc");
+                    b.HasIndex("CalibrationProfileId", "Revision").IsUnique();
+                    b.ToTable("ResearchCalibrationApprovalRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.RiskDecisionRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -1388,6 +1448,21 @@ namespace TradingBot.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                     b.Navigation("ResearchCandidate");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCalibrationApprovalRecord", b =>
+                {
+                    b.HasOne("TradingBot.Persistence.ResearchCalibrationProfileRecord", "CalibrationProfile")
+                        .WithMany("ApprovalHistory")
+                        .HasForeignKey("CalibrationProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                    b.Navigation("CalibrationProfile");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ResearchCalibrationProfileRecord", b =>
+                {
+                    b.Navigation("ApprovalHistory");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.ResearchCandidateRecord", b =>

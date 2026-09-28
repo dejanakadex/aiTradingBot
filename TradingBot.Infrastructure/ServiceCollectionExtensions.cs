@@ -69,6 +69,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
             services.AddSingleton<ICandidateResearchService, CandidateResearchService>();
             services.AddSingleton<IResearchEvaluationService, ResearchEvaluationService>();
+            services.AddSingleton<IResearchCalibrationService, ResearchCalibrationService>();
             services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();
             services.AddTransient<IAiUsageLimiter, AiUsageLimiter>();
