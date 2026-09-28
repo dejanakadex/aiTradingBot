@@ -149,9 +149,9 @@ namespace TradingBot.Infrastructure.Services
                     return Rejected("No portfolio capacity remains.");
                 }
 
-                var scale = allowedValue / proposedSizing.PositionValue;
-                var quantity = proposedSizing.Quantity * scale;
-                var riskAmount = proposedSizing.RiskAmount * scale;
+                var quantity = allowedValue / strategyDecision.EntryMin.Value;
+                var riskPerUnit = strategyDecision.EntryMin.Value - (strategyDecision.StopPrice ?? strategyDecision.EntryMin.Value);
+                var riskAmount = quantity * Math.Max(0m, riskPerUnit);
                 if (quantity <= 0m)
                 {
                     await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);

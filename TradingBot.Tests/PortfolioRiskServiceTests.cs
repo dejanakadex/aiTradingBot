@@ -42,8 +42,8 @@ namespace TradingBot.Tests
                 CancellationToken.None));
             var results = await Task.WhenAll(tasks);
 
-            Assert.Single(results.Where(x => x.Approved));
-            Assert.Single(results.Where(x => !x.Approved));
+            Assert.Single(results, x => x.Approved);
+            Assert.Single(results, x => !x.Approved);
             await using var db = harness.Factory.CreateDbContext();
             Assert.Single(await db.PortfolioRiskReservationRecords.Where(x => x.Status == PortfolioReservationStatus.Pending).ToListAsync());
             Assert.Single(await db.PortfolioRiskReservationAuditRecords.ToListAsync());
