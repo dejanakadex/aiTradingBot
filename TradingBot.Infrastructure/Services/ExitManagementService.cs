@@ -34,6 +34,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ExitStrategySettings _settings;
         private readonly TradingSettings _tradingSettings;
         private readonly ILogger<ExitManagementService> _logger;
+        private readonly ISignalArbitrationService? _signalArbitrationService;
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, byte> _processedMarketUpdates = new(StringComparer.OrdinalIgnoreCase);
 
@@ -46,7 +47,8 @@ namespace TradingBot.Infrastructure.Services
             IFeatureEngine featureEngine,
             IOptions<ExitStrategySettings> settings,
             IOptions<TradingSettings> tradingSettings,
-            ILogger<ExitManagementService> logger)
+            ILogger<ExitManagementService> logger,
+            ISignalArbitrationService? signalArbitrationService = null)
         {
             _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -57,6 +59,7 @@ namespace TradingBot.Infrastructure.Services
             _settings = settings?.Value ?? new ExitStrategySettings();
             _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _signalArbitrationService = signalArbitrationService;
 
             _executionService.OrderStatusUpdated += OnOrderStatusUpdatedAsync;
             _executionService.OrderFilled += OnOrderFilledAsync;
@@ -96,6 +99,9 @@ namespace TradingBot.Infrastructure.Services
             {
                 db.ExitManagementRecords.Add(new TradingBot.Persistence.ExitManagementRecord
                 {
+                    SignalId = plan.Context.SignalId,
+                    InstrumentId = plan.Context.InstrumentId,
+                    StrategyId = plan.Context.StrategyId,
                     Symbol = plan.StrategyDecision.Symbol,
                     EntryBrokerOrderId = entryOrder.BrokerOrderId,
                     State = ExitManagementState.WaitingForEntryFill,
@@ -279,6 +285,10 @@ namespace TradingBot.Infrastructure.Services
 
             record.FilledQuantity = status.FilledQuantity;
             record.UpdatedUtc = DateTime.UtcNow;
+            if (_signalArbitrationService != null && record.SignalId.HasValue)
+            {
+                await _signalArbitrationService.RecordEntryFillAsync(record.SignalId.Value, status.FilledQuantity, cancellationToken).ConfigureAwait(false);
+            }
             if (record.TradeId == null)
             {
                 var trade = new TradingBot.Persistence.Trade
@@ -339,6 +349,8 @@ namespace TradingBot.Infrastructure.Services
                 return;
             }
 
+            if (!await EnsureExitAuthorizedAsync(db, record, record.FilledQuantity, cancellationToken).ConfigureAwait(false)) return;
+
             var request = BuildProtectiveStopRequest(record, record.FilledQuantity, record.CurrentProtectiveStop, "ProtectiveStop");
             OrderStatusDto status;
             try
@@ -365,6 +377,10 @@ namespace TradingBot.Infrastructure.Services
             record.ProtectedQuantity = record.FilledQuantity;
             record.State = ExitManagementState.InitialProtection;
             record.UpdatedUtc = DateTime.UtcNow;
+            if (_signalArbitrationService != null && record.SignalId.HasValue)
+            {
+                await _signalArbitrationService.RegisterExitOrderAsync(record.SignalId.Value, brokerOrderId, record.FilledQuantity, cancellationToken).ConfigureAwait(false);
+            }
             await AddAuditAsync(db, record, null, record.CurrentProtectiveStop, ExitStopUpdateReason.InitialProtection, marketPrice, null, cancellationToken).ConfigureAwait(false);
         }
 
@@ -451,6 +467,8 @@ namespace TradingBot.Infrastructure.Services
                 return;
             }
 
+            if (!await EnsureExitAuthorizedAsync(db, record, record.FilledQuantity, cancellationToken).ConfigureAwait(false)) return;
+
             var modificationService = _serviceProvider.GetService<IOrderModificationService>();
             if (modificationService == null)
             {
@@ -498,6 +516,8 @@ namespace TradingBot.Infrastructure.Services
                 return;
             }
 
+            if (!await EnsureExitAuthorizedAsync(db, record, record.FilledQuantity, cancellationToken).ConfigureAwait(false)) return;
+
             var request = new OrderRequestDto
             {
                 Symbol = record.Symbol,
@@ -512,7 +532,12 @@ namespace TradingBot.Infrastructure.Services
             try
             {
                 var status = await _executionService.SubmitOrderAsync(request, cancellationToken).ConfigureAwait(false);
-                await PersistOrderRecordAsync(db, status.BrokerOrderId ?? status.OrderId, request, "MaximumHoldingTimeExit", status, cancellationToken).ConfigureAwait(false);
+                var brokerOrderId = status.BrokerOrderId ?? status.OrderId;
+                await PersistOrderRecordAsync(db, brokerOrderId, request, "MaximumHoldingTimeExit", status, cancellationToken).ConfigureAwait(false);
+                if (_signalArbitrationService != null && record.SignalId.HasValue && !string.IsNullOrWhiteSpace(brokerOrderId))
+                {
+                    await _signalArbitrationService.RegisterExitOrderAsync(record.SignalId.Value, brokerOrderId, record.FilledQuantity, cancellationToken).ConfigureAwait(false);
+                }
                 await AddAuditAsync(db, record, record.CurrentProtectiveStop, record.CurrentProtectiveStop, ExitStopUpdateReason.MaximumHoldingTimeExit, marketPrice, null, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or TaskCanceledException)
@@ -559,6 +584,25 @@ namespace TradingBot.Infrastructure.Services
 
             reason = string.Empty;
             return true;
+        }
+
+        private async Task<bool> EnsureExitAuthorizedAsync(
+            TradingBot.Persistence.TradingBotDbContext db,
+            TradingBot.Persistence.ExitManagementRecord record,
+            decimal quantity,
+            CancellationToken cancellationToken)
+        {
+            if (_signalArbitrationService == null) return true;
+            if (!record.SignalId.HasValue)
+            {
+                await MarkFaultedAsync(db, record, "Exit rejected because the position has no virtual signal attribution.", cancellationToken).ConfigureAwait(false);
+                return false;
+            }
+
+            var decision = await _signalArbitrationService.ValidateExitQuantityAsync(record.SignalId.Value, quantity, cancellationToken).ConfigureAwait(false);
+            if (decision.Approved) return true;
+            await MarkFaultedAsync(db, record, $"Virtual allocation rejected exit: {decision.Reason}", cancellationToken).ConfigureAwait(false);
+            return false;
         }
 
         private static OrderRequestDto BuildProtectiveStopRequest(

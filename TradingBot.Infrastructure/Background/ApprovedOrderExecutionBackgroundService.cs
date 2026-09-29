@@ -27,6 +27,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly TradingSettings _tradingSettings;
         private readonly ILogger<ApprovedOrderExecutionBackgroundService> _logger;
         private readonly IPortfolioRiskService? _portfolioRiskService;
+        private readonly ISignalArbitrationService? _signalArbitrationService;
         private readonly ConcurrentDictionary<string, byte> _submittedPlans = new();
 
         public ApprovedOrderExecutionBackgroundService(
@@ -62,7 +63,8 @@ namespace TradingBot.Infrastructure.Background
             IOptions<ExitStrategySettings> exitStrategySettings,
             IOptions<TradingSettings> tradingSettings,
             ILogger<ApprovedOrderExecutionBackgroundService> logger,
-            IPortfolioRiskService? portfolioRiskService = null)
+            IPortfolioRiskService? portfolioRiskService = null,
+            ISignalArbitrationService? signalArbitrationService = null)
         {
             _pipelineChannel = pipelineChannel;
             _orderManager = orderManager;
@@ -75,6 +77,7 @@ namespace TradingBot.Infrastructure.Background
             _tradingSettings = tradingSettings.Value;
             _logger = logger;
             _portfolioRiskService = portfolioRiskService;
+            _signalArbitrationService = signalArbitrationService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -118,7 +121,7 @@ namespace TradingBot.Infrastructure.Background
                     _statusService.Current.State,
                     _statusService.Current.TradingEnabled,
                     _tradingSettings.Enabled);
-                await ReleaseReservationAsync(plan, "Trading was no longer ready or enabled before submission.", cancellationToken).ConfigureAwait(false);
+                await RejectPlanAsync(plan, "Trading was no longer ready or enabled before submission.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -132,7 +135,7 @@ namespace TradingBot.Infrastructure.Background
                     plan.Pattern.PatternType.ToString());
 
                 _logger.LogWarning("Approved trade plan skipped because entry/stop/target is incomplete for {Symbol}", plan.StrategyDecision.Symbol);
-                await ReleaseReservationAsync(plan, "Entry, stop or target was incomplete before submission.", cancellationToken).ConfigureAwait(false);
+                await RejectPlanAsync(plan, "Entry, stop or target was incomplete before submission.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -147,12 +150,28 @@ namespace TradingBot.Infrastructure.Background
                     plan.Pattern.PatternType.ToString());
 
                 _logger.LogWarning("Duplicate approved trade plan prevented for {Key}", key);
-                await ReleaseReservationAsync(plan, "Duplicate approved trade plan was prevented.", cancellationToken).ConfigureAwait(false);
+                await RejectPlanAsync(plan, "Duplicate approved trade plan was prevented.", cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             try
             {
+                if (_signalArbitrationService != null)
+                {
+                    if (!plan.ArbitrationId.HasValue)
+                    {
+                        await RejectPlanAsync(plan, "Approved plan is missing its arbitration identity.", cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+
+                    var claim = await _signalArbitrationService.ClaimForExecutionAsync(plan.ArbitrationId.Value, cancellationToken).ConfigureAwait(false);
+                    if (!claim.Approved)
+                    {
+                        await RejectPlanAsync(plan, $"Signal arbitration execution claim rejected: {claim.Reason}", cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.OrderExecution,
                     TradingPipelineActivityState.Active,
@@ -178,6 +197,8 @@ namespace TradingBot.Infrastructure.Background
 
                     _logger.LogInformation("Stored hypothetical trade for {Symbol}; mode={Mode}", plan.StrategyDecision.Symbol, mode);
                     await ReleaseReservationAsync(plan, "Analysis-only hypothetical trade completed without broker exposure.", cancellationToken).ConfigureAwait(false);
+                    if (_signalArbitrationService != null && plan.ArbitrationId.HasValue)
+                        await _signalArbitrationService.CompleteAnalysisOnlyAsync(plan.ArbitrationId.Value, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -192,6 +213,8 @@ namespace TradingBot.Infrastructure.Background
                         plan.Pattern.PatternType.ToString());
 
                     _logger.LogInformation("Submitted fixed bracket trade plan for {Symbol}; mode={Mode}, brokerOrderId={BrokerOrderId}, status={Status}", plan.StrategyDecision.Symbol, mode, result.BrokerOrderId, result.Status);
+                    if (_signalArbitrationService != null && plan.ArbitrationId.HasValue)
+                        await _signalArbitrationService.RecordSubmissionAsync(plan.ArbitrationId.Value, result, cancellationToken).ConfigureAwait(false);
                     if (result.Submitted || result.Status == OrderStatus.PendingBrokerConfirmation)
                     {
                         await CommitReservationAsync(plan, result.BrokerOrderId, cancellationToken).ConfigureAwait(false);
@@ -204,6 +227,8 @@ namespace TradingBot.Infrastructure.Background
                 }
 
                 var entryResult = await _orderManager.SubmitLimitBuyAsync(entry, plan.RiskDecision, cancellationToken).ConfigureAwait(false);
+                if (_signalArbitrationService != null && plan.ArbitrationId.HasValue)
+                    await _signalArbitrationService.RecordSubmissionAsync(plan.ArbitrationId.Value, entryResult, cancellationToken).ConfigureAwait(false);
                 if (!entryResult.Submitted)
                 {
                     _pipelineStatusService?.Mark(
@@ -266,6 +291,17 @@ namespace TradingBot.Infrastructure.Background
             return _portfolioRiskService != null && plan.RiskDecision.ReservationId.HasValue
                 ? _portfolioRiskService.ReleaseAsync(plan.RiskDecision.ReservationId.Value, reason, cancellationToken)
                 : Task.CompletedTask;
+        }
+
+        private async Task RejectPlanAsync(ApprovedTradePlan plan, string reason, CancellationToken cancellationToken)
+        {
+            if (_signalArbitrationService != null && plan.ArbitrationId.HasValue)
+            {
+                await _signalArbitrationService.RejectAsync(plan.ArbitrationId.Value, reason, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            await ReleaseReservationAsync(plan, reason, cancellationToken).ConfigureAwait(false);
         }
 
         private async Task PersistHypotheticalTradeAsync(

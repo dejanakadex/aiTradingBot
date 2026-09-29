@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using TradingBot.Application.Configuration;
+using TradingBot.Domain.Enums;
 using Xunit;
 
 namespace TradingBot.Tests
@@ -69,6 +71,18 @@ namespace TradingBot.Tests
             Assert.Equal(60, openAiContext.GetProperty("OneMinuteCandles").GetInt32());
             Assert.Equal(50, openAiContext.GetProperty("FiveMinuteCandles").GetInt32());
             Assert.Equal(40, openAiContext.GetProperty("FifteenMinuteCandles").GetInt32());
+        }
+
+        [Fact]
+        public void SignalArbitration_DefaultsRejectConflictsAndDuplicateStrategyAllocations()
+        {
+            var settings = new SignalArbitrationSettings();
+
+            Assert.Equal(SignalConflictPolicy.Reject, settings.ConflictPolicy);
+            Assert.True(settings.AllowSameDirectionScaleIn);
+            Assert.True(settings.RejectSameStrategyWhileActive);
+            Assert.Equal(3, settings.MaximumActiveAllocationsPerInstrument);
+            Assert.Equal(120, settings.IntentTimeoutSeconds);
         }
 
         private static string FindRepoFile(params string[] pathParts)

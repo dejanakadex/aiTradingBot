@@ -80,6 +80,13 @@ namespace TradingBot.Infrastructure.Services
                     .ToListAsync(cancellationToken)
                     .ConfigureAwait(false);
 
+                var virtualAllocations = await db.SignalArbitrationRecords
+                    .Where(x => x.AccountId == accountId
+                        && (x.Status == SignalArbitrationStatus.PartiallyFilled || x.Status == SignalArbitrationStatus.Filled)
+                        && x.FilledQuantity > x.ExitedQuantity)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
                 var reasons = ValidateCounts(strategyDecision, currentPositions, openOrders, active);
                 var latestInstrumentReservation = await db.PortfolioRiskReservationRecords
                     .Where(x => x.AccountId == accountId && x.InstrumentId == context.InstrumentId)
@@ -108,6 +115,12 @@ namespace TradingBot.Infrastructure.Services
                 var strategyExposure = active
                     .Where(x => x.StrategyId.Equals(context.StrategyId, StringComparison.OrdinalIgnoreCase))
                     .Sum(x => Math.Abs(x.SignedExposure));
+                var signalsRepresentedByReservations = active.Select(x => x.SignalId).ToHashSet();
+                strategyExposure += virtualAllocations
+                    .Where(x => x.StrategyId.Equals(context.StrategyId, StringComparison.OrdinalIgnoreCase)
+                        && !signalsRepresentedByReservations.Contains(x.SignalId)
+                        && x.ApprovedQuantity > 0m)
+                    .Sum(x => x.PositionValue * ((x.FilledQuantity - x.ExitedQuantity) / x.ApprovedQuantity));
 
                 var capacities = new List<(string Name, decimal Value)>
                 {

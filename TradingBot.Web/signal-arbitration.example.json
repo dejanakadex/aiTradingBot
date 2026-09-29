@@ -1,0 +1,12 @@
+{
+  "SignalArbitration": {
+    "ConflictPolicy": "Reject",
+    "AllowSameDirectionScaleIn": true,
+    "RejectSameStrategyWhileActive": true,
+    "MaximumActiveAllocationsPerInstrument": 3,
+    "IntentTimeoutSeconds": 120,
+    "StrategyPriorities": {
+      "deterministic-patterns": 100
+    }
+  }
+}

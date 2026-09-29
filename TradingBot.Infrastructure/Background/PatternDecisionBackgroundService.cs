@@ -165,7 +165,7 @@ namespace TradingBot.Infrastructure.Background
                 var aiCritic = scope.ServiceProvider.GetRequiredService<IAiTradeCritic>();
                 var strategyEngine = scope.ServiceProvider.GetRequiredService<IStrategyEngine>();
                 var riskEngine = scope.ServiceProvider.GetRequiredService<IRiskEngine>();
-                var portfolioRisk = scope.ServiceProvider.GetService<IPortfolioRiskService>();
+                var signalArbitration = scope.ServiceProvider.GetService<ISignalArbitrationService>();
                 var accountService = scope.ServiceProvider.GetService<IAccountService>();
                 var positionService = scope.ServiceProvider.GetService<IPositionService>();
                 var orderExecutionService = scope.ServiceProvider.GetRequiredService<IOrderExecutionService>();
@@ -307,6 +307,26 @@ namespace TradingBot.Infrastructure.Background
                     return;
                 }
                 var positions = (await positionService.GetPositionsAsync(accountId, cancellationToken).ConfigureAwait(false)).ToList();
+                if (signalArbitration == null)
+                {
+                    const string reason = "Signal arbitration service is unavailable; trading fails closed.";
+                    await MarkBlockedAsync(pattern, "SignalArbitration", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                var arbitration = await signalArbitration.ArbitrateAsync(pattern, accountId, positions, cancellationToken).ConfigureAwait(false);
+                if (!arbitration.Approved || !arbitration.ArbitrationId.HasValue)
+                {
+                    _pipelineStatusService?.Mark(
+                        TradingPipelineStage.StrategyAndRisk,
+                        TradingPipelineActivityState.Rejected,
+                        $"Signal arbitration rejected: {arbitration.Reason}",
+                        pattern.Symbol,
+                        pattern.PatternType.ToString());
+                    await MarkBlockedAsync(pattern, "SignalArbitration", new[] { arbitration.Reason }, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
                 var openOrders = (await orderExecutionService.GetOpenOrdersAsync(cancellationToken).ConfigureAwait(false)).ToList();
                 var completedTrades = await LoadCurrentTradingSessionTradesAsync(cancellationToken).ConfigureAwait(false);
                 var risk = await riskEngine.EvaluateAsync(strategy, account, positions, completedTrades, openOrders, cancellationToken).ConfigureAwait(false);
@@ -321,9 +341,19 @@ namespace TradingBot.Infrastructure.Background
                         pattern.PatternType.ToString());
 
                     _logger.LogInformation("Risk rejected pattern {Pattern} for {Symbol}: {Reason}", pattern.PatternType, pattern.Symbol, risk.Reason);
+                    await signalArbitration.RejectAsync(arbitration.ArbitrationId.Value, $"Risk rejected: {risk.Reason}", cancellationToken).ConfigureAwait(false);
                     await MarkBlockedAsync(pattern, "Risk", new[] { risk.Reason }, cancellationToken).ConfigureAwait(false);
                     return;
                 }
+
+                if (!risk.ReservationId.HasValue)
+                {
+                    const string reason = "Approved risk decision did not create a portfolio reservation.";
+                    await signalArbitration.RejectAsync(arbitration.ArbitrationId.Value, reason, cancellationToken).ConfigureAwait(false);
+                    await MarkBlockedAsync(pattern, "SignalArbitration", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                await signalArbitration.BindReservationAsync(arbitration.ArbitrationId.Value, risk.ReservationId.Value, risk.ApprovedQuantity, risk.PositionValue, cancellationToken).ConfigureAwait(false);
 
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.OrderExecution,
@@ -339,11 +369,12 @@ namespace TradingBot.Infrastructure.Background
                     AiAnalysis = analysis,
                     AiCriticAnalysis = critic,
                     StrategyDecision = strategy,
-                    RiskDecision = risk
+                    RiskDecision = risk,
+                    ArbitrationId = arbitration.ArbitrationId
                 }, cancellationToken).ConfigureAwait(false);
-                if (!published && risk.ReservationId.HasValue && portfolioRisk != null)
+                if (!published)
                 {
-                    await portfolioRisk.ReleaseAsync(risk.ReservationId.Value, "Approved plan could not be queued for execution.", cancellationToken).ConfigureAwait(false);
+                    await signalArbitration.RejectAsync(arbitration.ArbitrationId.Value, "Approved plan could not be queued for execution.", cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

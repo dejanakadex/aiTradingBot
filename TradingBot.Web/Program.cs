@@ -136,6 +136,14 @@ try
         .Validate(settings => settings.MaximumCorrelationGroupExposure > 0m, "RiskSettings:MaximumCorrelationGroupExposure must be greater than zero.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<SignalArbitrationSettings>()
+        .Bind(builder.Configuration.GetSection("SignalArbitration"))
+        .Validate(settings => Enum.IsDefined(settings.ConflictPolicy), "SignalArbitration:ConflictPolicy is unsupported.")
+        .Validate(settings => settings.MaximumActiveAllocationsPerInstrument >= 1, "SignalArbitration:MaximumActiveAllocationsPerInstrument must be at least 1.")
+        .Validate(settings => settings.IntentTimeoutSeconds >= 1, "SignalArbitration:IntentTimeoutSeconds must be at least 1.")
+        .Validate(settings => settings.StrategyPriorities.All(x => !string.IsNullOrWhiteSpace(x.Key)), "SignalArbitration:StrategyPriorities cannot contain an empty strategy ID.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<ExitStrategySettings>()
         .Bind(builder.Configuration.GetSection("ExitStrategy"))
         .Validate(settings => settings.BreakEvenTriggerR >= 0m, "ExitStrategy:BreakEvenTriggerR cannot be negative.")
@@ -227,6 +235,8 @@ try
     app.MapGet("/api/reconciliation/status", (ITradingEngineStatusService statusService) => Results.Ok(statusService.Current));
     app.MapGet("/api/risk/portfolio", async (string? accountId, IPortfolioRiskService portfolioRisk, CancellationToken cancellationToken) =>
         Results.Ok(await portfolioRisk.GetStateAsync(accountId, cancellationToken)));
+    app.MapGet("/api/signals/allocations", async (string? accountId, string? instrumentId, ISignalArbitrationService arbitration, CancellationToken cancellationToken) =>
+        Results.Ok(await arbitration.GetStateAsync(accountId, instrumentId, cancellationToken)));
     app.MapGet("/api/instruments", async (IInstrumentRegistryService registry, CancellationToken cancellationToken) =>
         Results.Ok(await registry.GetAllAsync(cancellationToken)));
     app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>

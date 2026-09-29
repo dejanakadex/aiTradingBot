@@ -85,6 +85,32 @@ namespace TradingBot.Tests
             Assert.Equal(2m, result.Quantity);
         }
 
+        [Fact]
+        public async Task FilledVirtualAllocation_CountsTowardStrategyExposureAfterReservationExpires()
+        {
+            var settings = BuildSettings();
+            settings.MaximumStrategyExposure = 1500m;
+            using var harness = CreateHarness(settings);
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                db.SignalArbitrationRecords.Add(new TradingBot.Persistence.SignalArbitrationRecord
+                {
+                    Id = Guid.NewGuid(), ArbitrationKey = "DU123|OLD", AccountId = "DU123", CorrelationId = Guid.NewGuid(), SignalId = Guid.NewGuid(),
+                    InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", StrategyId = PipelineContractVersions.DefaultStrategyId,
+                    Direction = TradeDirection.Long, Status = SignalArbitrationStatus.Filled, ApprovedQuantity = 20m, FilledQuantity = 10m,
+                    PositionValue = 2000m, CreatedAtUtc = NowUtc.AddMinutes(-10), UpdatedAtUtc = NowUtc, ExpiresAtUtc = NowUtc.AddMinutes(-5), Reason = "test", Version = 1
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var result = await harness.Service.TryReserveAsync(
+                BuildStrategy("strategy-exposure"), BuildAccount(), Array.Empty<PositionDto>(), Array.Empty<OrderStatusDto>(), BuildSizing());
+
+            Assert.True(result.Approved);
+            Assert.Equal(500m, result.PositionValue);
+            Assert.Equal(5m, result.Quantity);
+        }
+
         private static RiskSettings BuildSettings() => new()
         {
             MaximumOpenPositions = 10,

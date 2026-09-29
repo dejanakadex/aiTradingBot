@@ -10,6 +10,7 @@ namespace TradingBot.Domain.Models
         public AiTradeCriticResult AiCriticAnalysis { get; init; } = new();
         public StrategyDecision StrategyDecision { get; init; } = new();
         public RiskDecision RiskDecision { get; init; } = null!;
+        public Guid? ArbitrationId { get; init; }
         public DateTime ApprovedAtUtc { get; init; } = DateTime.UtcNow;
         public PipelineContext Context => Pattern.Context;
     }

@@ -40,6 +40,9 @@ namespace TradingBot.Persistence
         public DbSet<ResearchCalibrationApprovalRecord> ResearchCalibrationApprovalRecords { get; set; }
         public DbSet<PortfolioRiskReservationRecord> PortfolioRiskReservationRecords { get; set; }
         public DbSet<PortfolioRiskReservationAuditRecord> PortfolioRiskReservationAuditRecords { get; set; }
+        public DbSet<SignalArbitrationRecord> SignalArbitrationRecords { get; set; }
+        public DbSet<SignalArbitrationAuditRecord> SignalArbitrationAuditRecords { get; set; }
+        public DbSet<VirtualAllocationOrderRecord> VirtualAllocationOrderRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -83,6 +86,7 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.ProtectiveStopBrokerOrderId);
                 b.HasIndex(x => x.State);
                 b.HasIndex(x => x.UpdatedUtc);
+                b.HasIndex(x => x.SignalId);
             });
 
             modelBuilder.Entity<ExitStopAuditRecord>(b =>
@@ -311,6 +315,34 @@ namespace TradingBot.Persistence
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => x.ReservationId);
                 b.HasIndex(x => x.TimestampUtc);
+            });
+
+            modelBuilder.Entity<SignalArbitrationRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.ArbitrationKey).IsUnique();
+                b.HasIndex(x => x.SignalId).IsUnique();
+                b.HasIndex(x => x.AccountId);
+                b.HasIndex(x => new { x.InstrumentId, x.Status });
+                b.HasIndex(x => new { x.StrategyId, x.Status });
+                b.HasIndex(x => new { x.Status, x.ExpiresAtUtc });
+                b.Property(x => x.InstrumentId).UseCollation("NOCASE");
+                b.Property(x => x.Symbol).UseCollation("NOCASE");
+                b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<SignalArbitrationAuditRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.ArbitrationId);
+                b.HasIndex(x => x.TimestampUtc);
+            });
+
+            modelBuilder.Entity<VirtualAllocationOrderRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.BrokerOrderId).IsUnique();
+                b.HasIndex(x => new { x.ArbitrationId, x.IsEntry });
             });
         }
     }

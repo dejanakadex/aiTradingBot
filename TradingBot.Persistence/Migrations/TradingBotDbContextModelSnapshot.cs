@@ -249,6 +249,10 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<decimal>("InitialStopPrice")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("OpenedUtc")
                         .HasColumnType("TEXT");
 
@@ -268,6 +272,13 @@ namespace TradingBot.Persistence.Migrations
 
                     b.Property<int>("State")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SignalId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StrategyId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Symbol")
                         .IsRequired()
@@ -295,6 +306,8 @@ namespace TradingBot.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProtectiveStopBrokerOrderId");
+
+                    b.HasIndex("SignalId");
 
                     b.HasIndex("State");
 
@@ -1303,6 +1316,72 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("Status", "ExpiresAtUtc");
                     b.HasIndex("StrategyId", "Status");
                     b.ToTable("PortfolioRiskReservationRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.SignalArbitrationAuditRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<Guid>("ArbitrationId").HasColumnType("TEXT");
+                    b.Property<int?>("FromStatus").HasColumnType("INTEGER");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("TimestampUtc").HasColumnType("TEXT");
+                    b.Property<int>("ToStatus").HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("ArbitrationId");
+                    b.HasIndex("TimestampUtc");
+                    b.ToTable("SignalArbitrationAuditRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.SignalArbitrationRecord", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+                    b.Property<string>("AccountId").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("ApprovedQuantity").HasColumnType("TEXT");
+                    b.Property<string>("ArbitrationKey").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("Confidence").HasColumnType("TEXT");
+                    b.Property<Guid>("CorrelationId").HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("Direction").HasColumnType("INTEGER");
+                    b.Property<string>("EntryBrokerOrderId").HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiresAtUtc").HasColumnType("TEXT");
+                    b.Property<decimal>("ExitedQuantity").HasColumnType("TEXT");
+                    b.Property<decimal>("FilledQuantity").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<decimal>("PositionValue").HasColumnType("TEXT");
+                    b.Property<int>("Priority").HasColumnType("INTEGER");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid?>("ReservationId").HasColumnType("TEXT");
+                    b.Property<Guid>("SignalId").HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT").UseCollation("NOCASE");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("AccountId");
+                    b.HasIndex("ArbitrationKey").IsUnique();
+                    b.HasIndex("SignalId").IsUnique();
+                    b.HasIndex("InstrumentId", "Status");
+                    b.HasIndex("Status", "ExpiresAtUtc");
+                    b.HasIndex("StrategyId", "Status");
+                    b.ToTable("SignalArbitrationRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.VirtualAllocationOrderRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<Guid>("ArbitrationId").HasColumnType("TEXT");
+                    b.Property<string>("BrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<decimal>("FilledQuantity").HasColumnType("TEXT");
+                    b.Property<bool>("IsEntry").HasColumnType("INTEGER");
+                    b.Property<decimal>("RequestedQuantity").HasColumnType("TEXT");
+                    b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("BrokerOrderId").IsUnique();
+                    b.HasIndex("ArbitrationId", "IsEntry");
+                    b.ToTable("VirtualAllocationOrderRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.CandidateLabelRecord", b =>

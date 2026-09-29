@@ -7,6 +7,9 @@ namespace TradingBot.Persistence
     {
         public int Id { get; set; }
         public int? TradeId { get; set; }
+        public Guid? SignalId { get; set; }
+        public string InstrumentId { get; set; } = string.Empty;
+        public string StrategyId { get; set; } = string.Empty;
         public string Symbol { get; set; } = string.Empty;
         public string EntryBrokerOrderId { get; set; } = string.Empty;
         public string ProtectiveStopBrokerOrderId { get; set; } = string.Empty;
