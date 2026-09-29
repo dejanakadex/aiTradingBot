@@ -20,7 +20,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 11 — Evaluacija | Završeno | Verziona walk-forward evaluacija s purged vremenskim granicama, netaknutim završnim holdoutom, expectancy/profit-factor/drawdown odabirom, cost stressom i out-of-sample segmentima. CI: 262/262 testova, 0 warninga i 0 grešaka. |
 | 12 — Kalibracija/rangiranje | Završeno | `calibration-v1` izotoničke vjerojatnosti, fold-stabilan prag, baseline usporedba, auditirana ručna potvrda i fail-closed rangiranje prilika. CI: 269/269 testova, 0 warninga i 0 grešaka. |
 | 13 — Portfolio risk | Završeno | R01–R02, session trade history, ispravan paper/live račun, atomske trajne rezervacije, gross/net i globalni/per-instrument/per-strategy/cooldown/korelacijski limiti. CI: 276/276 testova. |
-| 14–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 14 — Signal arbitration | Završeno | Trajna deduplikacija, `Reject`/`Priority` politika bez tihog netiranja, atomski execution claim, virtualna atribucija po strategiji i zaštita izlazne količine. CI: 285/285 testova. |
+| 15–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -327,6 +328,28 @@ Verifikacija: GitHub Actions .NET 10 Release build i 276/276 testova bez warning
 - Korelacijske grupe su eksplicitna konfiguracija simbola/instrument ID-jeva, ne procjena korelacije iz podataka. Statistička matrica može se dodati kasnije tek uz definirani lookback, minimalni uzorak i režim.
 - Zadani način rada ostaje `AnalysisOnly`; ova točka sama ne daje nijednom instrumentu paper/live readiness.
 
-## Sljedeći checkpoint — točka 14
+## Točka 14 — izvedeno
 
-Implementirati signal arbitration za paralelne instrumente i više strategija na istom instrumentu: deduplikaciju, eksplicitnu politiku konflikta (`Reject`/`Priority`, bez tihog netiranja), virtualnu strategijsku atribuciju nasuprot jednoj stvarnoj broker neto poziciji i zaštitu da izlaz jedne strategije ne može prodati količinu druge.
+Verifikacija: [GitHub Actions run 36542382787](https://github.com/dejanakadex/aiTradingBot/actions/runs/36542382787) — .NET 10 Release build i 285/285 testova.
+
+- `SignalArbitrationService` donosi trajnu odluku prije portfolio rezervacije. Jedinstveni account/signal ključ i serijalizirana transakcija sprječavaju da paralelni ili ponovljeni signal proizvede više aktivnih intentova.
+- Zadana politika konflikta je `Reject`. Opcionalni `Priority` smije zamijeniti samo suprotni intent u stanju `Accepted` ili `Reserved`; signal koji se već šalje brokeru ili ima broker exposure nikad se ne netira niti preuzima.
+- Ista strategija ne može imati dupliciranu aktivnu alokaciju za isti instrument i smjer. Različite strategije mogu skalirati isti smjer do konfiguriranog maksimuma, dok postojeća broker neto pozicija blokira suprotni smjer.
+- Arbitration intent veže se uz točnu portfolio rezervaciju i odobrenu količinu. Execution worker ga atomski preuzima prijelazom `Reserved` → `Submitting` prije brokerskog poziva; istekli, superseded ili odbijeni intent otpušta rezervaciju.
+- Trajni virtual allocation ledger povezuje signal, strategiju, ulazni nalog, child/exit naloge te kumulativne entry/exit fillove. Izlaz se odobrava samo unutar otvorene količine vlastitog signala, pa strategija ne može prodati količinu pripisanu drugoj strategiji.
+- `ExitManagementService` sprema `SignalId`, `InstrumentId` i `StrategyId`, ažurira entry fillove te provjerava i registrira zaštitne i vremenske izlaze kroz arbitration servis.
+- Per-strategy portfolio exposure sada zadržava fillanu virtualnu alokaciju i nakon isteka committed rezervacije, bez dvostrukog brojanja dok je rezervacija još aktivna.
+- EF migracija dodaje arbitration intent, audit i allocation-order tablice te atribuciju exit zapisa. Migracija i startup repair pokrivaju poznati legacy schema-drift slučaj u kojem je stara exit migracija evidentirana, ali tablica nedostaje.
+- Read-only `GET /api/signals/allocations?accountId=...&instrumentId=...` prikazuje odobrenu, fillanu, izašlu i otvorenu količinu po signalu/strategiji.
+- Sigurne zadane vrijednosti žive u `SignalArbitrationSettings`; primjer bez brokerskih podataka nalazi se u `TradingBot.Web/signal-arbitration.example.json`, a produkcijske vrijednosti mogu se zadati standardnom konfiguracijom ili environment varijablama.
+
+## Odluke i ograničenja točke 14
+
+- Stvarno short izvršavanje i dalje nije omogućeno; short signal ostaje research-only dok se ne uvedu direction-aware nalozi, borrow provjera i odgovarajući zaštitni izlazi.
+- Broker neto pozicija ostaje konačni izvor istine. Potpuni restart reconciliation virtualnih alokacija, parcijalnih fillova, provizija i nepoznatih broker stanja pripada točki 15.
+- Bracket stop i target mogu oba referencirati istu virtualnu količinu jer su OCO alternative. Zaštita od broker racea, dvostrukog filla te pouzdana cancel/modify potvrda također pripada durable order lifecycleu u točki 15.
+- Zadani način rada ostaje `AnalysisOnly`; signal arbitration ne dodjeljuje paper/live readiness nijednom instrumentu.
+
+## Sljedeći checkpoint — točka 15
+
+Implementirati durable order/position lifecycle za R03–R08 i R12: idempotentni entry/exit intent, partial fill i commission obradu, stop/target/time-exit koordinaciju, potvrđeni cancel/modify, restart recovery i broker reconciliation. Ukupni izlaz ne smije prijeći stvarno fillanu količinu, a nepoznato broker stanje mora blokirati nove ulaze.

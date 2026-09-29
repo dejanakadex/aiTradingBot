@@ -46,6 +46,8 @@ GET /api/health/details
 GET /api/health/ready
 GET /api/health/trading-ready
 GET /api/reconciliation/status
+GET /api/risk/portfolio?accountId=...
+GET /api/signals/allocations?accountId=...&instrumentId=...
 GET /api/instruments
 GET /api/market-data/streams
 GET /api/market-data/incidents
@@ -123,6 +125,7 @@ below to compile and test the real adapter in an environment where the official 
 - Candidate labeling is enabled by default without requiring a shared settings file. Override worker cadence, writer grace, horizons, target/stop and cost assumptions with `CandidateLabeling__WorkerIntervalSeconds`, `CandidateLabeling__DataAvailabilityGraceSeconds`, `CandidateLabeling__HorizonsSeconds__0`, `CandidateLabeling__TargetMoveBps`, `CandidateLabeling__StopMoveBps`, `CandidateLabeling__CommissionPerSideBps`, `CandidateLabeling__SlippagePerSideBps` and `CandidateLabeling__FallbackRoundTripSpreadBps`. Any change produces a new label-version fingerprint.
 - Research evaluation defaults to 60 training days, 14 validation days, a 14-day non-overlapping step and a final untouched 30-day holdout. Configure these with `ResearchEvaluation__TrainingWindowDays`, `ValidationWindowDays`, `StepDays` and `HoldoutDays`; minimum sample sizes, `ConfidenceThresholds`, `CostStressMultipliers` and liquidity bounds are configurable through the same section. Every change produces a new `evaluation-v1` fingerprint, and a run refuses mixed feature/pattern/label versions.
 - Research calibration uses a versioned `calibration-v1` isotonic map and defaults to at least 100 pre-holdout observations, three completed folds and 20 observations per initial calibration bin. `ResearchCalibration__MaximumStableThresholdRange`, `StableThresholdTolerance`, `MinimumFoldAgreementRatio` and baseline-degradation settings control the fail-closed approval gate. Any change creates a different calibration fingerprint; approval requires the exact output SHA-256, reviewer and reason.
+- Signal arbitration defaults to conflict policy `Reject`, permits same-direction scale-in by different strategies, rejects duplicate active allocations from the same strategy and limits active allocations per instrument to three. Override with `SignalArbitration__ConflictPolicy`, `SignalArbitration__AllowSameDirectionScaleIn`, `SignalArbitration__RejectSameStrategyWhileActive`, `SignalArbitration__MaximumActiveAllocationsPerInstrument`, `SignalArbitration__IntentTimeoutSeconds` and `SignalArbitration__StrategyPriorities__<strategy-id>`. A credential-free example is in `TradingBot.Web/signal-arbitration.example.json`.
 
 ### IBKR build prerequisite
 
@@ -171,6 +174,7 @@ the current Git tree and does not erase earlier commits.
 - `OpenAiTradeCritic` reviews proposed AI trade analysis for rejection reasons and persists critic results; AI errors, timeouts or malformed responses default to rejected.
 - `StrategyEngine` applies configurable strategy rules, calculates entry/stop/target/reward-risk and persists every approved or rejected setup; it does not submit orders or calculate final account position size.
 - `RiskEngine`, `PositionSizer` and the durable portfolio reservation service implement deterministic account, daily-loss, gross/net exposure, per-instrument/per-strategy, cooldown and correlation checks. R01–R02 are fixed; every production approval atomically reserves capacity before it reaches order execution.
+- `SignalArbitrationService` deduplicates concurrent signals, applies explicit `Reject`/`Priority` conflict policy without silent netting, atomically claims approved intents before broker submission and maintains durable per-strategy virtual allocations. Exit management validates each exit against that signal's open virtual quantity; `GET /api/signals/allocations` exposes the ledger.
 - `OrderManager` implements approved-order submission, broker status/fill persistence and duplicate checks. Crash recovery, real partial-fill handling and exit coordination have open findings (R03–R07).
 - Broker-state reconciliation gates startup readiness: trading remains disabled until IBKR positions/open orders are compared with SQLite open trades/orders and reconciled.
 - Market data subscription startup subscribes to every enabled `TradingSettings.Instruments` entry using its configured timeframes once the engine is ready. Historical seeding is no longer on this live startup path; a separate resumable worker performs the wide backfill in parallel. The checked-in fail-closed example contains SPY on `1m`, `5m` and `15m`; legacy `Symbols` remains a temporary compatibility fallback.
