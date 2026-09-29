@@ -11,6 +11,37 @@ namespace TradingBot.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Some supported legacy databases have the exit-management migration in
+            // __EFMigrationsHistory while the table itself is missing. Repair that
+            // known drift before adding the attribution columns so the migration is
+            // safe for both clean databases and existing installations.
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "ExitManagementRecords" (
+                    "Id" INTEGER NOT NULL CONSTRAINT "PK_ExitManagementRecords" PRIMARY KEY AUTOINCREMENT,
+                    "TradeId" INTEGER NULL,
+                    "Symbol" TEXT NOT NULL,
+                    "EntryBrokerOrderId" TEXT NOT NULL,
+                    "ProtectiveStopBrokerOrderId" TEXT NOT NULL,
+                    "State" INTEGER NOT NULL,
+                    "InitialEntryPrice" TEXT NOT NULL,
+                    "InitialStopPrice" TEXT NOT NULL,
+                    "InitialRiskPerShare" TEXT NOT NULL,
+                    "FilledQuantity" TEXT NOT NULL,
+                    "ProtectedQuantity" TEXT NOT NULL,
+                    "HighestPriceSinceEntry" TEXT NOT NULL,
+                    "CurrentProtectiveStop" TEXT NOT NULL,
+                    "BreakEvenActivated" INTEGER NOT NULL,
+                    "TrailingActivated" INTEGER NOT NULL,
+                    "TrailingAtrTimeframe" TEXT NOT NULL,
+                    "TrailingAtrMultiplier" TEXT NOT NULL,
+                    "OpenedUtc" TEXT NOT NULL,
+                    "UpdatedUtc" TEXT NOT NULL,
+                    "ClosedUtc" TEXT NULL,
+                    "RawJson" TEXT NOT NULL
+                );
+                """);
+
             migrationBuilder.AddColumn<Guid>(name: "SignalId", table: "ExitManagementRecords", type: "TEXT", nullable: true);
             migrationBuilder.AddColumn<string>(name: "InstrumentId", table: "ExitManagementRecords", type: "TEXT", nullable: false, defaultValue: "");
             migrationBuilder.AddColumn<string>(name: "StrategyId", table: "ExitManagementRecords", type: "TEXT", nullable: false, defaultValue: "");

@@ -156,8 +156,12 @@ namespace TradingBot.Persistence
 
             if (await TableExistsAsync(db, "ExitManagementRecords", cancellationToken).ConfigureAwait(false))
             {
+                await AddNullableTextColumnIfMissingAsync(db, "ExitManagementRecords", "SignalId", cancellationToken).ConfigureAwait(false);
+                await AddTextColumnIfMissingAsync(db, "ExitManagementRecords", "InstrumentId", cancellationToken).ConfigureAwait(false);
+                await AddTextColumnIfMissingAsync(db, "ExitManagementRecords", "StrategyId", cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_ExitManagementRecords_EntryBrokerOrderId ON ExitManagementRecords (EntryBrokerOrderId);", cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_ExitManagementRecords_ProtectiveStopBrokerOrderId ON ExitManagementRecords (ProtectiveStopBrokerOrderId);", cancellationToken).ConfigureAwait(false);
+                await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_ExitManagementRecords_SignalId ON ExitManagementRecords (SignalId);", cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_ExitManagementRecords_State ON ExitManagementRecords (State);", cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_ExitManagementRecords_Symbol ON ExitManagementRecords (Symbol);", cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_ExitManagementRecords_UpdatedUtc ON ExitManagementRecords (UpdatedUtc);", cancellationToken).ConfigureAwait(false);
@@ -206,6 +210,18 @@ namespace TradingBot.Persistence
 #pragma warning disable EF1002 // Identifiers are internal fixed table/column names and are quoted before use.
             await db.Database.ExecuteSqlRawAsync(
                 $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(columnName)} TEXT NOT NULL DEFAULT '';",
+                cancellationToken).ConfigureAwait(false);
+#pragma warning restore EF1002
+        }
+
+        private async Task AddNullableTextColumnIfMissingAsync(TradingBotDbContext db, string tableName, string columnName, CancellationToken cancellationToken)
+        {
+            if (await ColumnExistsAsync(db, tableName, columnName, cancellationToken).ConfigureAwait(false)) return;
+
+            _logger.LogWarning("SQLite schema drift detected: adding missing nullable column {Table}.{Column}", tableName, columnName);
+#pragma warning disable EF1002 // Identifiers are internal fixed table/column names and are quoted before use.
+            await db.Database.ExecuteSqlRawAsync(
+                $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(columnName)} TEXT NULL;",
                 cancellationToken).ConfigureAwait(false);
 #pragma warning restore EF1002
         }
