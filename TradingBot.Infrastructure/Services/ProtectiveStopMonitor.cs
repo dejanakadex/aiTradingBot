@@ -41,10 +41,9 @@ namespace TradingBot.Infrastructure.Services
 
             try
             {
-                var brokerOpenIds = (await _orderExecutionService.GetOpenOrdersAsync(cancellationToken).ConfigureAwait(false))
-                    .Select(o => o.BrokerOrderId ?? o.OrderId)
-                    .Where(id => !string.IsNullOrWhiteSpace(id))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var brokerOpenOrders = (await _orderExecutionService.GetOpenOrdersAsync(cancellationToken).ConfigureAwait(false))
+                    .Where(o => !string.IsNullOrWhiteSpace(o.BrokerOrderId ?? o.OrderId))
+                    .ToDictionary(o => o.BrokerOrderId ?? o.OrderId, StringComparer.OrdinalIgnoreCase);
 
                 await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
                 var openTrades = await db.Trades.AsNoTracking()
@@ -68,9 +67,10 @@ namespace TradingBot.Infrastructure.Services
                 {
                     var stop = openLocalStops.FirstOrDefault(o =>
                         string.Equals(o.Symbol, trade.Symbol, StringComparison.OrdinalIgnoreCase)
-                        && IsProtectiveStop(o.RawJson)
+                        && IsProtectiveStop(o)
                         && !string.IsNullOrWhiteSpace(o.BrokerOrderId)
-                        && brokerOpenIds.Contains(o.BrokerOrderId));
+                        && brokerOpenOrders.TryGetValue(o.BrokerOrderId, out var brokerStop)
+                        && BrokerStopMatches(brokerStop, trade.Size));
 
                     if (stop == null)
                     {
@@ -100,12 +100,33 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        private static bool IsProtectiveStop(string rawJson)
+        private static bool IsProtectiveStop(TradingBot.Persistence.OrderRecord order)
         {
+            if (!string.IsNullOrWhiteSpace(order.Role) || !string.IsNullOrWhiteSpace(order.OrderType))
+            {
+                return order.Role.Contains("ProtectiveStop", StringComparison.OrdinalIgnoreCase)
+                    && order.Side.Equals("SELL", StringComparison.OrdinalIgnoreCase)
+                    && (order.OrderType.Equals("STOP", StringComparison.OrdinalIgnoreCase) || order.OrderType.Equals("Stop", StringComparison.OrdinalIgnoreCase))
+                    && order.RequestedQuantity > 0m
+                    && order.StopPrice > 0m;
+            }
+
+            var rawJson = order.RawJson;
             if (string.IsNullOrWhiteSpace(rawJson)) return false;
             if (rawJson.Contains("ProtectiveStop", StringComparison.OrdinalIgnoreCase)) return true;
             if (rawJson.Contains("\"type\":\"STOP\"", StringComparison.OrdinalIgnoreCase)) return true;
             return rawJson.Contains("\"Type\":\"Stop\"", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool BrokerStopMatches(TradingBot.Application.DTOs.OrderStatusDto brokerOrder, decimal positionSize)
+        {
+            if (!string.IsNullOrWhiteSpace(brokerOrder.Side) && !brokerOrder.Side.Equals("SELL", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrWhiteSpace(brokerOrder.OrderType)
+                && !brokerOrder.OrderType.Equals("STOP", StringComparison.OrdinalIgnoreCase)
+                && !brokerOrder.OrderType.Equals("STP", StringComparison.OrdinalIgnoreCase)) return false;
+            if (brokerOrder.RequestedQuantity.HasValue && brokerOrder.RequestedQuantity.Value < Math.Abs(positionSize)) return false;
+            if (brokerOrder.StopPrice.HasValue && brokerOrder.StopPrice.Value <= 0m) return false;
+            return true;
         }
     }
 }

@@ -6,6 +6,8 @@ namespace TradingBot.Domain.Enums
         InitialProtection,
         BreakEvenProtection,
         Trailing,
+        ExitCancelPending,
+        ExitSubmitted,
         Closed,
         Faulted
     }

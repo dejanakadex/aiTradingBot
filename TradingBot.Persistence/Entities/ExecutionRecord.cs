@@ -10,6 +10,10 @@ namespace TradingBot.Persistence
         public int OrderRecordId { get; set; }
         public ExecutionStatus Status { get; set; }
         public DateTime TimestampUtc { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal Price { get; set; }
+        public decimal? Commission { get; set; }
+        public DateTime? CommissionUpdatedUtc { get; set; }
         public string RawJson { get; set; } = string.Empty;
     }
 }

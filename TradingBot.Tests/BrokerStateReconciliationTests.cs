@@ -98,6 +98,58 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ReconcileAsync_UnresolvedDurableIntentWithoutBrokerId_BlocksTrading()
+        {
+            var factory = CreateInMemoryFactory(out var connection);
+            await using (var db = factory.CreateDbContext())
+            {
+                db.OrderRecords.Add(new TradingBot.Persistence.OrderRecord
+                {
+                    IntentId = Guid.NewGuid(),
+                    ClientOrderKey = "signal-1:entry",
+                    Role = "LimitBuy",
+                    Symbol = "SPY",
+                    CreatedUtc = DateTime.UtcNow,
+                    UpdatedUtc = DateTime.UtcNow,
+                    Status = OrderStatus.PendingBrokerConfirmation,
+                    RawJson = "{}"
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var result = await CreateService(factory, new TradingEngineStatusService(), Array.Empty<PositionDto>(), Array.Empty<OrderStatusDto>()).ReconcileAsync();
+
+            Assert.Equal(TradingEngineState.Degraded, result.State);
+            Assert.Contains(result.Mismatches, x => x.Contains("has no broker order id"));
+            connection.Dispose();
+        }
+
+        [Fact]
+        public async Task ReconcileAsync_DurablePauseSurvivesSuccessfulReconnect()
+        {
+            var factory = CreateInMemoryFactory(out var connection);
+            await using (var db = factory.CreateDbContext())
+            {
+                db.TradingControlStateRecords.Add(new TradingBot.Persistence.TradingControlStateRecord
+                {
+                    Id = 1,
+                    State = TradingPermissionState.Paused,
+                    Reason = "operator pause",
+                    UpdatedUtc = DateTime.UtcNow,
+                    Version = 1
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var result = await CreateService(factory, new TradingEngineStatusService(), Array.Empty<PositionDto>(), Array.Empty<OrderStatusDto>()).ReconcileAsync();
+
+            Assert.Equal(TradingEngineState.Paused, result.State);
+            Assert.False(result.TradingEnabled);
+            Assert.True(result.ReconciliationCompleted);
+            connection.Dispose();
+        }
+
+        [Fact]
         public async Task ReconcileAsync_WhenConnectionDoesNotConnect_RemainsDegraded()
         {
             var factory = CreateInMemoryFactory(out var connection);

@@ -14,5 +14,6 @@ namespace TradingBot.Application.DTOs
         public string? ParentBrokerOrderId { get; init; }
         public bool? Transmit { get; init; }
         public string? Role { get; init; }
+        public string ClientOrderKey { get; init; } = string.Empty;
     }
 }

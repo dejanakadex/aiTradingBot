@@ -8,6 +8,7 @@ namespace TradingBot.Domain.Enums
         Submitted,
         PartiallyFilled,
         Filled,
+        CancelPending,
         Cancelled,
         Rejected
     }

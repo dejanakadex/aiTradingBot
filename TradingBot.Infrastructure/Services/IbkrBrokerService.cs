@@ -31,6 +31,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<int, StreamingSubscription> _subscriptions = new();
         private readonly ConcurrentDictionary<int, LevelOneSubscription> _levelOneSubscriptions = new();
         private readonly ConcurrentDictionary<string, decimal> _commissionsByExecutionId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, OrderStatusDto> _executionsById = new(StringComparer.OrdinalIgnoreCase);
 
         private EReaderSignal? _signal;
         private EClientSocket? _client;
@@ -517,6 +518,10 @@ namespace TradingBot.Infrastructure.Services
                 Status = "Submitted",
                 TimestampUtc = DateTime.UtcNow,
                 RemainingQuantity = order.TotalQuantity,
+                Side = order.Action,
+                OrderType = order.OrderType,
+                RequestedQuantity = order.TotalQuantity,
+                StopPrice = ToNullableDecimal(order.AuxPrice),
                 Message = orderState?.Status
             }, orderId);
         }
@@ -530,6 +535,10 @@ namespace TradingBot.Infrastructure.Services
                 Status = "Submitted",
                 TimestampUtc = DateTime.UtcNow,
                 RemainingQuantity = ToDecimal(openOrderProto.Order?.TotalQuantity),
+                Side = openOrderProto.Order?.Action,
+                OrderType = openOrderProto.Order?.OrderType,
+                RequestedQuantity = ToDecimal(openOrderProto.Order?.TotalQuantity),
+                StopPrice = ToNullableDecimal(openOrderProto.Order?.AuxPrice ?? 0d),
                 Message = openOrderProto.OrderState?.Status
             }, openOrderProto.OrderId);
         }
@@ -643,14 +652,17 @@ namespace TradingBot.Infrastructure.Services
 
         public override void execDetails(int reqId, Contract contract, Execution execution)
         {
+            var orderId = execution.OrderId;
+            var remaining = _openOrders.TryGetValue(orderId, out var current) ? current.RemainingQuantity : 0m;
             var dto = new OrderStatusDto
             {
-                OrderId = execution.OrderId.ToString(CultureInfo.InvariantCulture),
-                BrokerOrderId = execution.OrderId.ToString(CultureInfo.InvariantCulture),
-                Status = "Filled",
+                OrderId = orderId.ToString(CultureInfo.InvariantCulture),
+                BrokerOrderId = orderId.ToString(CultureInfo.InvariantCulture),
+                Status = remaining > 0m ? "PartiallyFilled" : "Unknown",
                 TimestampUtc = ParseIbkrExecutionTime(execution.Time),
                 FilledQuantity = execution.CumQty,
-                RemainingQuantity = 0m,
+                IndividualFillQuantity = execution.Shares,
+                RemainingQuantity = remaining,
                 AverageFillPrice = ToNullableDecimal(execution.AvgPrice),
                 LastFillPrice = ToNullableDecimal(execution.Price),
                 Commission = _commissionsByExecutionId.TryGetValue(execution.ExecId ?? string.Empty, out var commission) ? commission : null,
@@ -658,13 +670,35 @@ namespace TradingBot.Infrastructure.Services
                 Message = execution.Side
             };
 
+            if (!string.IsNullOrWhiteSpace(execution.ExecId)) _executionsById[execution.ExecId] = dto;
             _ = InvokeOrderFilledAsync(dto);
         }
 
         public override void commissionAndFeesReport(CommissionAndFeesReport commissionAndFeesReport)
         {
             if (string.IsNullOrWhiteSpace(commissionAndFeesReport.ExecId)) return;
-            _commissionsByExecutionId[commissionAndFeesReport.ExecId] = ToDecimal(commissionAndFeesReport.CommissionAndFees);
+            var executionId = commissionAndFeesReport.ExecId;
+            var commission = ToDecimal(commissionAndFeesReport.CommissionAndFees);
+            _commissionsByExecutionId[executionId] = commission;
+            if (_executionsById.TryGetValue(executionId, out var execution))
+            {
+                _ = InvokeOrderFilledAsync(new OrderStatusDto
+                {
+                    OrderId = execution.OrderId,
+                    BrokerOrderId = execution.BrokerOrderId,
+                    Status = execution.Status,
+                    TimestampUtc = DateTime.UtcNow,
+                    FilledQuantity = execution.FilledQuantity,
+                    IndividualFillQuantity = execution.IndividualFillQuantity,
+                    RemainingQuantity = execution.RemainingQuantity,
+                    AverageFillPrice = execution.AverageFillPrice,
+                    LastFillPrice = execution.LastFillPrice,
+                    Commission = commission,
+                    BrokerExecutionId = executionId,
+                    IsCommissionUpdate = true,
+                    Message = "Late IBKR commission update."
+                });
+            }
         }
 
         public override void historicalData(int reqId, Bar bar)
@@ -836,6 +870,11 @@ namespace TradingBot.Infrastructure.Services
             if (int.TryParse(request.ParentBrokerOrderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentOrderId))
             {
                 order.ParentId = parentOrderId;
+                if (request.Side.Equals("SELL", StringComparison.OrdinalIgnoreCase))
+                {
+                    order.OcaGroup = $"TradingBot:{parentOrderId}";
+                    order.OcaType = 1;
+                }
             }
 
             if (order.OrderType is "LMT" or "STP LMT")

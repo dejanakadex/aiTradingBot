@@ -218,6 +218,10 @@ namespace TradingBot.Infrastructure.Background
                     if (result.Submitted || result.Status == OrderStatus.PendingBrokerConfirmation)
                     {
                         await CommitReservationAsync(plan, result.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                        if (result.Submitted)
+                        {
+                            await _exitManagementService.RegisterApprovedEntryAsync(plan, result, cancellationToken).ConfigureAwait(false);
+                        }
                     }
                     else
                     {
@@ -351,6 +355,11 @@ namespace TradingBot.Infrastructure.Background
             }
 
             public Task RestoreAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.CompletedTask;
+            }
+
+            public Task RequestCloseAllAsync(string reason, CancellationToken cancellationToken = default)
             {
                 return Task.CompletedTask;
             }

@@ -43,6 +43,7 @@ namespace TradingBot.Persistence
         public DbSet<SignalArbitrationRecord> SignalArbitrationRecords { get; set; }
         public DbSet<SignalArbitrationAuditRecord> SignalArbitrationAuditRecords { get; set; }
         public DbSet<VirtualAllocationOrderRecord> VirtualAllocationOrderRecords { get; set; }
+        public DbSet<TradingControlStateRecord> TradingControlStateRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -84,6 +85,8 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.Symbol);
                 b.HasIndex(x => x.EntryBrokerOrderId).IsUnique();
                 b.HasIndex(x => x.ProtectiveStopBrokerOrderId);
+                b.HasIndex(x => x.TakeProfitBrokerOrderId);
+                b.HasIndex(x => x.ExitBrokerOrderId);
                 b.HasIndex(x => x.State);
                 b.HasIndex(x => x.UpdatedUtc);
                 b.HasIndex(x => x.SignalId);
@@ -102,8 +105,11 @@ namespace TradingBot.Persistence
             modelBuilder.Entity<OrderRecord>(b =>
             {
                 b.HasKey(x => x.Id);
-                b.HasIndex(x => x.BrokerOrderId).IsUnique(false);
+                b.HasIndex(x => x.BrokerOrderId).IsUnique().HasFilter("BrokerOrderId <> ''");
                 b.HasIndex(x => x.ClientOrderKey).IsUnique().HasFilter("ClientOrderKey <> ''");
+                b.HasIndex(x => x.IntentId).IsUnique().HasFilter("IntentId <> '00000000-0000-0000-0000-000000000000'");
+                b.HasIndex(x => x.Status);
+                b.HasIndex(x => x.UpdatedUtc);
             });
 
             modelBuilder.Entity<PatternDetection>(b =>
@@ -145,6 +151,13 @@ namespace TradingBot.Persistence
             {
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => x.BrokerExecutionId).IsUnique();
+                b.HasIndex(x => x.OrderRecordId);
+            });
+
+            modelBuilder.Entity<TradingControlStateRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Version).IsConcurrencyToken();
             });
 
             modelBuilder.Entity<InstrumentRegistryRecord>(b =>

@@ -61,7 +61,8 @@ namespace TradingBot.Infrastructure.Services
                 return RejectedByGuard(guard);
             }
 
-            return await SubmitSingleOrderAsync(orderRequest, "LimitBuy", cancellationToken).ConfigureAwait(false);
+            var idempotencyKey = BuildOrderIdempotencyKey(orderRequest, "LimitBuy", null, riskDecision.Context?.SignalId);
+            return await SubmitSingleOrderAsync(orderRequest, "LimitBuy", idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<ManagedOrderResult> SubmitBracketOrderAsync(
@@ -94,7 +95,7 @@ namespace TradingBot.Infrastructure.Services
                 return RejectedByGuard(guard);
             }
 
-            var idempotencyKey = BuildBracketIdempotencyKey(entryLimitBuy, stopLoss, takeProfit);
+            var idempotencyKey = BuildBracketIdempotencyKey(entryLimitBuy, stopLoss, takeProfit, riskDecision.Context?.SignalId);
             var submissionLock = _submissionLocks.GetOrAdd(idempotencyKey, _ => new SemaphoreSlim(1, 1));
             await submissionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -131,6 +132,8 @@ namespace TradingBot.Infrastructure.Services
                     AverageFillPrice = entry.AverageFillPrice,
                     Commission = entry.Commission,
                     ChildOrderIds = childOrderIds,
+                    ProtectiveStopOrderId = stop.BrokerOrderId,
+                    TakeProfitOrderId = target.BrokerOrderId,
                     Message = childOrderIds.Count == 2
                         ? "Bracket workflow submitted. Fill must be confirmed by broker status updates."
                         : "Bracket entry submitted, but one or more protective child orders were not accepted by the execution adapter."
@@ -146,20 +149,27 @@ namespace TradingBot.Infrastructure.Services
         {
             if (string.IsNullOrWhiteSpace(brokerOrderId)) throw new ArgumentException("brokerOrderId required", nameof(brokerOrderId));
 
-            var cancelled = await _executionService.CancelOrderAsync(brokerOrderId, cancellationToken).ConfigureAwait(false);
-            if (cancelled)
+            await using (var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
             {
-                await UpsertOrderStatusAsync(new OrderStatusDto
+                var order = await db.OrderRecords.SingleOrDefaultAsync(x => x.BrokerOrderId == brokerOrderId, cancellationToken).ConfigureAwait(false);
+                if (order == null || order.Status is OrderStatus.Filled or OrderStatus.Cancelled or OrderStatus.Rejected)
                 {
-                    OrderId = brokerOrderId,
-                    BrokerOrderId = brokerOrderId,
-                    Status = "Cancelled",
-                    TimestampUtc = DateTime.UtcNow,
-                    Message = "Cancel acknowledged by execution adapter."
-                }, cancellationToken).ConfigureAwait(false);
+                    return false;
+                }
+
+                order.CancelRequestedUtc = DateTime.UtcNow;
+                order.Status = OrderStatus.CancelPending;
+                order.UpdatedUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            return cancelled;
+            var accepted = await _executionService.CancelOrderAsync(brokerOrderId, cancellationToken).ConfigureAwait(false);
+            if (!accepted)
+            {
+                await MarkCancelRequestFailedAsync(brokerOrderId, cancellationToken).ConfigureAwait(false);
+            }
+
+            return accepted;
         }
 
         public async Task<ManagedOrderResult?> GetOrderStatusAsync(string brokerOrderId, CancellationToken cancellationToken = default)
@@ -176,9 +186,8 @@ namespace TradingBot.Infrastructure.Services
             return record == null ? null : ToManagedOrderResult(record, submitted: false, duplicate: false);
         }
 
-        private async Task<ManagedOrderResult> SubmitSingleOrderAsync(OrderRequest orderRequest, string role, CancellationToken cancellationToken)
+        private async Task<ManagedOrderResult> SubmitSingleOrderAsync(OrderRequest orderRequest, string role, string idempotencyKey, CancellationToken cancellationToken)
         {
-            var idempotencyKey = BuildOrderIdempotencyKey(orderRequest, role, parentBrokerOrderId: null);
             var submissionLock = _submissionLocks.GetOrAdd(idempotencyKey, _ => new SemaphoreSlim(1, 1));
             await submissionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -204,10 +213,20 @@ namespace TradingBot.Infrastructure.Services
             string? parentBrokerOrderId,
             CancellationToken cancellationToken)
         {
+            var clientOrderKey = $"{idempotencyKey}:{role}";
+            var intentId = await CreateOrderIntentAsync(
+                orderRequest,
+                role,
+                clientOrderKey,
+                parentBrokerOrderId,
+                cancellationToken).ConfigureAwait(false);
+
             OrderStatusDto status;
             try
             {
-                status = await _executionService.SubmitOrderAsync(ToDto(orderRequest, role, parentBrokerOrderId), cancellationToken).ConfigureAwait(false);
+                status = await _executionService.SubmitOrderAsync(
+                    ToDto(orderRequest, role, parentBrokerOrderId, clientOrderKey),
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (BrokerOrderStateUnknownException ex)
             {
@@ -222,7 +241,7 @@ namespace TradingBot.Infrastructure.Services
                     state = "PendingBrokerConfirmation"
                 }, JsonOptions);
 
-                await PersistOrderAsync(string.Empty, idempotencyKey, orderRequest.Symbol, OrderStatus.PendingBrokerConfirmation, rawUnknown, cancellationToken).ConfigureAwait(false);
+                await UpdateIntentAfterSubmissionAsync(intentId, null, OrderStatus.PendingBrokerConfirmation, null, rawUnknown, cancellationToken).ConfigureAwait(false);
 
                 return new ManagedOrderResult
                 {
@@ -247,7 +266,7 @@ namespace TradingBot.Infrastructure.Services
             var brokerOrderId = status.BrokerOrderId ?? status.OrderId;
             var raw = BuildOrderRawJson(orderRequest, status, role, idempotencyKey, parentBrokerOrderId);
 
-            await PersistOrderAsync(brokerOrderId, $"{idempotencyKey}:{role}", orderRequest.Symbol, orderStatus, raw, cancellationToken).ConfigureAwait(false);
+            await UpdateIntentAfterSubmissionAsync(intentId, brokerOrderId, orderStatus, status, raw, cancellationToken).ConfigureAwait(false);
 
             return new ManagedOrderResult
             {
@@ -310,6 +329,7 @@ namespace TradingBot.Infrastructure.Services
 
             var raw = JsonSerializer.Serialize(new
             {
+                lifecycleEvent = status.IsCommissionUpdate ? "Commission" : "BrokerStatus",
                 brokerStatus = status,
                 averageFillPrice = status.AverageFillPrice,
                 filledQuantity = status.FilledQuantity,
@@ -322,16 +342,47 @@ namespace TradingBot.Infrastructure.Services
             {
                 db.OrderRecords.Add(new TradingBot.Persistence.OrderRecord
                 {
+                    IntentId = Guid.NewGuid(),
                     BrokerOrderId = brokerOrderId,
                     Symbol = string.Empty,
                     CreatedUtc = status.TimestampUtc == default ? DateTime.UtcNow : status.TimestampUtc,
+                    UpdatedUtc = DateTime.UtcNow,
                     Status = ParseOrderStatus(status.Status),
+                    Side = status.Side ?? string.Empty,
+                    OrderType = status.OrderType ?? string.Empty,
+                    RequestedQuantity = status.RequestedQuantity ?? 0m,
+                    FilledQuantity = status.FilledQuantity,
+                    RemainingQuantity = status.RemainingQuantity,
+                    StopPrice = status.StopPrice,
+                    AverageFillPrice = status.AverageFillPrice,
+                    TotalCommission = status.Commission ?? 0m,
+                    CancelConfirmedUtc = IsCancelled(status.Status) ? DateTime.UtcNow : null,
                     RawJson = raw
                 });
             }
             else
             {
-                order.Status = ParseOrderStatus(status.Status);
+                var parsed = ParseOrderStatus(status.Status);
+                if (!status.IsCommissionUpdate)
+                {
+                    order.Status = parsed;
+                    order.FilledQuantity = Math.Max(order.FilledQuantity, status.FilledQuantity);
+                    order.RemainingQuantity = status.RemainingQuantity;
+                    order.AverageFillPrice = status.AverageFillPrice ?? order.AverageFillPrice;
+                }
+                if (status.Commission.HasValue && !string.IsNullOrWhiteSpace(status.BrokerExecutionId))
+                {
+                    order.TotalCommission = await db.ExecutionRecords
+                        .Where(x => x.OrderRecordId == order.Id && x.Commission.HasValue)
+                        .SumAsync(x => x.Commission!.Value, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                if (string.IsNullOrWhiteSpace(order.Side)) order.Side = status.Side ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(order.OrderType)) order.OrderType = status.OrderType ?? string.Empty;
+                if (order.RequestedQuantity <= 0m) order.RequestedQuantity = status.RequestedQuantity ?? 0m;
+                order.StopPrice ??= status.StopPrice;
+                if (IsCancelled(status.Status)) order.CancelConfirmedUtc = DateTime.UtcNow;
+                order.UpdatedUtc = DateTime.UtcNow;
                 order.RawJson = raw;
             }
 
@@ -342,7 +393,7 @@ namespace TradingBot.Infrastructure.Services
         {
             var brokerOrderId = status.BrokerOrderId ?? status.OrderId;
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-            var order = await db.OrderRecords.AsNoTracking()
+            var order = await db.OrderRecords
                 .Where(o => o.BrokerOrderId == brokerOrderId)
                 .OrderByDescending(o => o.CreatedUtc)
                 .FirstOrDefaultAsync(cancellationToken)
@@ -351,8 +402,27 @@ namespace TradingBot.Infrastructure.Services
             if (order == null) return;
 
             var executionId = status.BrokerExecutionId ?? $"{brokerOrderId}:{status.TimestampUtc:O}:{status.FilledQuantity}";
-            var exists = await db.ExecutionRecords.AnyAsync(e => e.BrokerExecutionId == executionId, cancellationToken).ConfigureAwait(false);
-            if (exists) return;
+            var existing = await db.ExecutionRecords
+                .SingleOrDefaultAsync(e => e.BrokerExecutionId == executionId, cancellationToken)
+                .ConfigureAwait(false);
+            if (existing != null)
+            {
+                if (status.Commission.HasValue)
+                {
+                    existing.Commission = status.Commission.Value;
+                    existing.CommissionUpdatedUtc = DateTime.UtcNow;
+                    existing.RawJson = BuildExecutionRawJson(status, brokerOrderId, executionId);
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    order.TotalCommission = await db.ExecutionRecords
+                        .Where(x => x.OrderRecordId == order.Id && x.Commission.HasValue)
+                        .SumAsync(x => x.Commission!.Value, cancellationToken)
+                        .ConfigureAwait(false);
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
+                return;
+            }
+
+            if (status.IsCommissionUpdate) return;
 
             db.ExecutionRecords.Add(new TradingBot.Persistence.ExecutionRecord
             {
@@ -360,39 +430,120 @@ namespace TradingBot.Infrastructure.Services
                 OrderRecordId = order.Id,
                 Status = ParseOrderStatus(status.Status) == OrderStatus.Filled ? ExecutionStatus.Completed : ExecutionStatus.Executing,
                 TimestampUtc = status.TimestampUtc == default ? DateTime.UtcNow : status.TimestampUtc,
-                RawJson = JsonSerializer.Serialize(new
-                {
-                    brokerOrderId,
-                    brokerExecutionId = executionId,
-                    fillPrice = status.LastFillPrice,
-                    averageFillPrice = status.AverageFillPrice,
-                    filledQuantity = status.FilledQuantity,
-                    remainingQuantity = status.RemainingQuantity,
-                    commission = status.Commission,
-                    message = status.Message
-                }, JsonOptions)
+                Quantity = status.IndividualFillQuantity ?? status.FilledQuantity,
+                Price = status.LastFillPrice ?? status.AverageFillPrice ?? 0m,
+                Commission = status.Commission,
+                CommissionUpdatedUtc = status.Commission.HasValue ? DateTime.UtcNow : null,
+                RawJson = BuildExecutionRawJson(status, brokerOrderId, executionId)
             });
 
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            order.TotalCommission = await db.ExecutionRecords
+                .Where(x => x.OrderRecordId == order.Id && x.Commission.HasValue)
+                .SumAsync(x => x.Commission!.Value, cancellationToken)
+                .ConfigureAwait(false);
+            order.UpdatedUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        private async Task PersistOrderAsync(string? brokerOrderId, string clientOrderKey, string symbol, OrderStatus status, string rawJson, CancellationToken cancellationToken)
+        private async Task<Guid> CreateOrderIntentAsync(
+            OrderRequest request,
+            string role,
+            string clientOrderKey,
+            string? parentBrokerOrderId,
+            CancellationToken cancellationToken)
         {
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-            db.OrderRecords.Add(new TradingBot.Persistence.OrderRecord
-            {
-                BrokerOrderId = brokerOrderId ?? string.Empty,
-                ClientOrderKey = clientOrderKey,
-                Symbol = symbol,
-                CreatedUtc = DateTime.UtcNow,
-                Status = status,
-                RawJson = rawJson
-            });
+            var existing = await db.OrderRecords.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.ClientOrderKey == clientOrderKey, cancellationToken)
+                .ConfigureAwait(false);
+            if (existing != null) return existing.IntentId;
 
+            var now = DateTime.UtcNow;
+            var intent = new TradingBot.Persistence.OrderRecord
+            {
+                IntentId = Guid.NewGuid(),
+                BrokerOrderId = string.Empty,
+                ClientOrderKey = clientOrderKey,
+                Role = role,
+                ParentBrokerOrderId = parentBrokerOrderId ?? string.Empty,
+                Symbol = request.Symbol,
+                CreatedUtc = now,
+                UpdatedUtc = now,
+                Status = OrderStatus.New,
+                Side = request.Side.ToString(),
+                OrderType = request.Type.ToString(),
+                RequestedQuantity = request.Quantity,
+                RemainingQuantity = request.Quantity,
+                LimitPrice = request.Type is OrderType.Limit or OrderType.StopLimit ? request.Price : null,
+                StopPrice = request.Type is OrderType.Stop or OrderType.StopLimit ? request.Price : null,
+                RawJson = JsonSerializer.Serialize(new { lifecycleEvent = "IntentCreated", role, parentBrokerOrderId, request }, JsonOptions)
+            };
+            db.OrderRecords.Add(intent);
+
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return intent.IntentId;
+        }
+
+        private async Task UpdateIntentAfterSubmissionAsync(
+            Guid intentId,
+            string? brokerOrderId,
+            OrderStatus orderStatus,
+            OrderStatusDto? brokerStatus,
+            string rawJson,
+            CancellationToken cancellationToken)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var intent = await db.OrderRecords.SingleAsync(x => x.IntentId == intentId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(brokerOrderId))
+            {
+                var callbackRecord = await db.OrderRecords
+                    .SingleOrDefaultAsync(x => x.BrokerOrderId == brokerOrderId && x.IntentId != intentId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (callbackRecord != null)
+                {
+                    var callbackExecutions = await db.ExecutionRecords
+                        .Where(x => x.OrderRecordId == callbackRecord.Id)
+                        .ToListAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                    foreach (var execution in callbackExecutions) execution.OrderRecordId = intent.Id;
+                    intent.FilledQuantity = Math.Max(intent.FilledQuantity, callbackRecord.FilledQuantity);
+                    intent.RemainingQuantity = callbackRecord.RemainingQuantity;
+                    intent.AverageFillPrice = callbackRecord.AverageFillPrice ?? intent.AverageFillPrice;
+                    intent.TotalCommission = Math.Max(intent.TotalCommission, callbackRecord.TotalCommission);
+                    intent.Status = MoreAdvancedStatus(intent.Status, callbackRecord.Status);
+                    callbackRecord.BrokerOrderId = string.Empty;
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    db.OrderRecords.Remove(callbackRecord);
+                }
+
+                intent.BrokerOrderId = brokerOrderId;
+            }
+
+            intent.Status = MoreAdvancedStatus(intent.Status, orderStatus);
+            intent.UpdatedUtc = DateTime.UtcNow;
+            if (brokerStatus != null)
+            {
+                intent.FilledQuantity = Math.Max(intent.FilledQuantity, brokerStatus.FilledQuantity);
+                intent.RemainingQuantity = brokerStatus.RemainingQuantity;
+                intent.AverageFillPrice = brokerStatus.AverageFillPrice ?? intent.AverageFillPrice;
+            }
+            intent.RawJson = rawJson;
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        private static OrderRequestDto ToDto(OrderRequest request, string role, string? parentBrokerOrderId)
+        private async Task MarkCancelRequestFailedAsync(string brokerOrderId, CancellationToken cancellationToken)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var order = await db.OrderRecords.SingleOrDefaultAsync(x => x.BrokerOrderId == brokerOrderId, cancellationToken).ConfigureAwait(false);
+            if (order == null || order.Status != OrderStatus.CancelPending) return;
+            order.Status = order.FilledQuantity > 0m ? OrderStatus.PartiallyFilled : OrderStatus.Submitted;
+            order.CancelRequestedUtc = null;
+            order.UpdatedUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private static OrderRequestDto ToDto(OrderRequest request, string role, string? parentBrokerOrderId, string clientOrderKey)
         {
             return new OrderRequestDto
             {
@@ -411,6 +562,7 @@ namespace TradingBot.Infrastructure.Services
                 CreatedAtUtc = request.RequestedAtUtc,
                 ParentBrokerOrderId = parentBrokerOrderId,
                 Role = role,
+                ClientOrderKey = clientOrderKey,
                 Transmit = role switch
                 {
                     "BracketEntry" => false,
@@ -437,14 +589,15 @@ namespace TradingBot.Infrastructure.Services
             }, JsonOptions);
         }
 
-        private static string BuildOrderIdempotencyKey(OrderRequest request, string role, string? parentBrokerOrderId)
+        private static string BuildOrderIdempotencyKey(OrderRequest request, string role, string? parentBrokerOrderId, Guid? signalId)
         {
-            return $"{role}:{parentBrokerOrderId}:{request.Symbol}:{request.Side}:{request.Type}:{request.Quantity}:{request.Price}:{request.RequestedAtUtc:O}";
+            var lifecycleId = signalId?.ToString("N") ?? request.RequestedAtUtc.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $"{lifecycleId}:{role}:{parentBrokerOrderId}:{request.Symbol}:{request.Side}:{request.Type}:{request.Quantity}:{request.Price}";
         }
 
-        private static string BuildBracketIdempotencyKey(OrderRequest entry, OrderRequest stop, OrderRequest target)
+        private static string BuildBracketIdempotencyKey(OrderRequest entry, OrderRequest stop, OrderRequest target, Guid? signalId)
         {
-            return $"Bracket:{BuildOrderIdempotencyKey(entry, "Entry", null)}:{BuildOrderIdempotencyKey(stop, "Stop", null)}:{BuildOrderIdempotencyKey(target, "Target", null)}";
+            return $"Bracket:{BuildOrderIdempotencyKey(entry, "Entry", null, signalId)}:{BuildOrderIdempotencyKey(stop, "Stop", null, signalId)}:{BuildOrderIdempotencyKey(target, "Target", null, signalId)}";
         }
 
         private static ManagedOrderResult ToManagedOrderResult(TradingBot.Persistence.OrderRecord record, bool submitted, bool duplicate)
@@ -456,6 +609,10 @@ namespace TradingBot.Infrastructure.Services
                 Status = record.Status,
                 Submitted = submitted,
                 IsDuplicate = duplicate,
+                FilledQuantity = record.FilledQuantity,
+                RemainingQuantity = record.RemainingQuantity,
+                AverageFillPrice = record.AverageFillPrice,
+                Commission = record.TotalCommission,
                 Message = duplicate ? "Duplicate order submission prevented." : string.Empty
             };
         }
@@ -474,6 +631,8 @@ namespace TradingBot.Infrastructure.Services
                 AverageFillPrice = result.AverageFillPrice,
                 Commission = result.Commission,
                 ChildOrderIds = result.ChildOrderIds,
+                ProtectiveStopOrderId = result.ProtectiveStopOrderId,
+                TakeProfitOrderId = result.TakeProfitOrderId,
                 Message = message
             };
         }
@@ -501,11 +660,45 @@ namespace TradingBot.Infrastructure.Services
                 var s when s.Equals("PartiallyFilled", StringComparison.OrdinalIgnoreCase) => OrderStatus.PartiallyFilled,
                 var s when s.Equals("Partial", StringComparison.OrdinalIgnoreCase) => OrderStatus.PartiallyFilled,
                 var s when s.Equals("Filled", StringComparison.OrdinalIgnoreCase) => OrderStatus.Filled,
+                var s when s.Equals("CancelPending", StringComparison.OrdinalIgnoreCase) => OrderStatus.CancelPending,
+                var s when s.Equals("PendingCancel", StringComparison.OrdinalIgnoreCase) => OrderStatus.CancelPending,
                 var s when s.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) => OrderStatus.Cancelled,
                 var s when s.Equals("Canceled", StringComparison.OrdinalIgnoreCase) => OrderStatus.Cancelled,
                 var s when s.Equals("Rejected", StringComparison.OrdinalIgnoreCase) => OrderStatus.Rejected,
-                _ => OrderStatus.Submitted
+                _ => OrderStatus.Unknown
             };
+        }
+
+        private static OrderStatus MoreAdvancedStatus(OrderStatus current, OrderStatus incoming)
+        {
+            if (current is OrderStatus.Filled or OrderStatus.Cancelled or OrderStatus.Rejected) return current;
+            if (incoming is OrderStatus.Filled or OrderStatus.Cancelled or OrderStatus.Rejected) return incoming;
+            if (current == OrderStatus.PartiallyFilled && incoming == OrderStatus.Submitted) return current;
+            if (current == OrderStatus.CancelPending && incoming is OrderStatus.New or OrderStatus.Submitted) return current;
+            return incoming;
+        }
+
+        private static bool IsCancelled(string status)
+        {
+            return status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Canceled", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildExecutionRawJson(OrderStatusDto status, string? brokerOrderId, string executionId)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                brokerOrderId,
+                brokerExecutionId = executionId,
+                fillPrice = status.LastFillPrice,
+                averageFillPrice = status.AverageFillPrice,
+                individualFillQuantity = status.IndividualFillQuantity,
+                cumulativeFilledQuantity = status.FilledQuantity,
+                remainingQuantity = status.RemainingQuantity,
+                commission = status.Commission,
+                commissionUpdate = status.IsCommissionUpdate,
+                message = status.Message
+            }, JsonOptions);
         }
 
         public void Dispose()

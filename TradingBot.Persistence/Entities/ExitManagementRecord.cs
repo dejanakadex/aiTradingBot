@@ -13,12 +13,20 @@ namespace TradingBot.Persistence
         public string Symbol { get; set; } = string.Empty;
         public string EntryBrokerOrderId { get; set; } = string.Empty;
         public string ProtectiveStopBrokerOrderId { get; set; } = string.Empty;
+        public string TakeProfitBrokerOrderId { get; set; } = string.Empty;
+        public string ExitBrokerOrderId { get; set; } = string.Empty;
+        public string ExitReason { get; set; } = string.Empty;
         public ExitManagementState State { get; set; } = ExitManagementState.WaitingForEntryFill;
         public decimal InitialEntryPrice { get; set; }
         public decimal InitialStopPrice { get; set; }
         public decimal InitialRiskPerShare { get; set; }
         public decimal FilledQuantity { get; set; }
         public decimal ProtectedQuantity { get; set; }
+        public decimal ExitRequestedQuantity { get; set; }
+        public decimal ExitedQuantity { get; set; }
+        public decimal ProtectiveStopFilledQuantity { get; set; }
+        public decimal TakeProfitFilledQuantity { get; set; }
+        public decimal ManagedExitFilledQuantity { get; set; }
         public decimal HighestPriceSinceEntry { get; set; }
         public decimal CurrentProtectiveStop { get; set; }
         public bool BreakEvenActivated { get; set; }

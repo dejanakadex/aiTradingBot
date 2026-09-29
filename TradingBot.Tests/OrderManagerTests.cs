@@ -132,6 +132,7 @@ namespace TradingBot.Tests
                 AverageFillPrice = 100.40m,
                 LastFillPrice = 100.50m,
                 Commission = 1.25m,
+                IndividualFillQuantity = 6m,
                 BrokerExecutionId = "EXEC-1",
                 TimestampUtc = DateTime.UtcNow
             });
@@ -146,6 +147,9 @@ namespace TradingBot.Tests
                 var execution = Assert.Single(await db.ExecutionRecords.ToListAsync());
                 Assert.Equal("EXEC-1", execution.BrokerExecutionId);
                 Assert.Equal(ExecutionStatus.Completed, execution.Status);
+                Assert.Equal(6m, execution.Quantity);
+                Assert.Equal(1.25m, execution.Commission);
+                Assert.Equal(1.25m, order.TotalCommission);
                 Assert.Contains("100.50", execution.RawJson);
                 Assert.Contains("1.25", execution.RawJson);
             }
@@ -155,7 +159,7 @@ namespace TradingBot.Tests
         }
 
         [Fact]
-        public async Task CancelOrderAsync_PersistsCanceledStatus()
+        public async Task CancelOrderAsync_WaitsForBrokerCancellationConfirmation()
         {
             var manager = CreateManager(out var adapter, out var factory, out var connection);
             await manager.SubmitLimitBuyAsync(LimitBuy(), ApprovedRisk());
@@ -167,7 +171,63 @@ namespace TradingBot.Tests
 
             var status = await manager.GetOrderStatusAsync("BRK-1");
             Assert.NotNull(status);
+            Assert.Equal(OrderStatus.CancelPending, status!.Status);
+
+            await adapter.EmitStatusAsync(new OrderStatusDto
+            {
+                OrderId = "BRK-1",
+                BrokerOrderId = "BRK-1",
+                Status = "Cancelled",
+                TimestampUtc = DateTime.UtcNow
+            });
+
+            status = await manager.GetOrderStatusAsync("BRK-1");
             Assert.Equal(OrderStatus.Cancelled, status!.Status);
+
+            connection.Dispose();
+            manager.Dispose();
+        }
+
+        [Fact]
+        public async Task LateCommissionUpdate_UpdatesExistingExecutionWithoutDuplicateFill()
+        {
+            var manager = CreateManager(out var adapter, out var factory, out var connection);
+            await manager.SubmitLimitBuyAsync(LimitBuy(), ApprovedRisk());
+            var fill = new OrderStatusDto
+            {
+                OrderId = "BRK-1",
+                BrokerOrderId = "BRK-1",
+                Status = "Filled",
+                FilledQuantity = 10m,
+                IndividualFillQuantity = 10m,
+                RemainingQuantity = 0m,
+                LastFillPrice = 100.25m,
+                AverageFillPrice = 100.25m,
+                BrokerExecutionId = "EXEC-LATE",
+                TimestampUtc = DateTime.UtcNow
+            };
+            await adapter.EmitFillAsync(fill);
+            await adapter.EmitFillAsync(new OrderStatusDto
+            {
+                OrderId = fill.OrderId,
+                BrokerOrderId = fill.BrokerOrderId,
+                Status = fill.Status,
+                FilledQuantity = fill.FilledQuantity,
+                IndividualFillQuantity = fill.IndividualFillQuantity,
+                RemainingQuantity = fill.RemainingQuantity,
+                LastFillPrice = fill.LastFillPrice,
+                AverageFillPrice = fill.AverageFillPrice,
+                BrokerExecutionId = fill.BrokerExecutionId,
+                Commission = 0.75m,
+                IsCommissionUpdate = true,
+                TimestampUtc = DateTime.UtcNow
+            });
+
+            await using var db = factory.CreateDbContext();
+            var execution = Assert.Single(await db.ExecutionRecords.ToListAsync());
+            Assert.Equal(0.75m, execution.Commission);
+            Assert.NotNull(execution.CommissionUpdatedUtc);
+            Assert.Equal(0.75m, Assert.Single(await db.OrderRecords.ToListAsync()).TotalCommission);
 
             connection.Dispose();
             manager.Dispose();

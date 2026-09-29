@@ -16,6 +16,8 @@ namespace TradingBot.Domain.Models
         public decimal? AverageFillPrice { get; init; }
         public decimal? Commission { get; init; }
         public IReadOnlyList<string> ChildOrderIds { get; init; } = Array.Empty<string>();
+        public string? ProtectiveStopOrderId { get; init; }
+        public string? TakeProfitOrderId { get; init; }
         public string Message { get; init; } = string.Empty;
     }
 }

@@ -86,7 +86,8 @@ namespace TradingBot.Infrastructure.Services
                         || o.Status == OrderStatus.PendingBrokerConfirmation
                         || o.Status == OrderStatus.Unknown
                         || o.Status == OrderStatus.Submitted
-                        || o.Status == OrderStatus.PartiallyFilled)
+                        || o.Status == OrderStatus.PartiallyFilled
+                        || o.Status == OrderStatus.CancelPending)
                     .ToListAsync(cancellationToken)
                     .ConfigureAwait(false);
 
@@ -102,6 +103,18 @@ namespace TradingBot.Infrastructure.Services
                     }
 
                     return SetFinal(TradingEngineState.Degraded, "Broker state does not match SQLite. Trading remains disabled.", mismatches);
+                }
+
+                var permission = await db.TradingControlStateRecords.AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.Id == 1, cancellationToken)
+                    .ConfigureAwait(false);
+                if (permission?.State == TradingPermissionState.KillSwitch)
+                {
+                    return SetFinal(TradingEngineState.Faulted, $"Broker state reconciled, but the durable kill switch remains active: {permission.Reason}", Array.Empty<string>(), environment, account.AccountId, reconciliationCompleted: true);
+                }
+                if (permission?.State == TradingPermissionState.Paused)
+                {
+                    return SetFinal(TradingEngineState.Paused, $"Broker state reconciled, but trading remains paused: {permission.Reason}", Array.Empty<string>(), environment, account.AccountId, reconciliationCompleted: true);
                 }
 
                 return SetFinal(TradingEngineState.Ready, "Broker state reconciled. Trading engine ready.", Array.Empty<string>(), environment, account.AccountId);
@@ -123,7 +136,8 @@ namespace TradingBot.Infrastructure.Services
             string message,
             IReadOnlyList<string> mismatches,
             BrokerEnvironmentVerificationStatus environment = BrokerEnvironmentVerificationStatus.Unknown,
-            string? connectedAccountId = null)
+            string? connectedAccountId = null,
+            bool? reconciliationCompleted = null)
         {
             _statusService.SetState(
                 state,
@@ -132,7 +146,7 @@ namespace TradingBot.Infrastructure.Services
                 mismatches,
                 environment,
                 connectedAccountId,
-                reconciliationCompleted: state == TradingEngineState.Ready);
+                reconciliationCompleted: reconciliationCompleted ?? (state == TradingEngineState.Ready));
             return _statusService.Current;
         }
 
@@ -245,6 +259,11 @@ namespace TradingBot.Infrastructure.Services
                 .Select(o => o.BrokerOrderId ?? o.OrderId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var unresolved in localOpenOrders.Where(o => string.IsNullOrWhiteSpace(o.BrokerOrderId)))
+            {
+                mismatches.Add($"Unresolved local order intent {unresolved.IntentId} ({unresolved.Role}) has no broker order id; manual reconciliation is required.");
+            }
 
             foreach (var localOrder in localOpenOrders.Where(o => !string.IsNullOrWhiteSpace(o.BrokerOrderId)))
             {

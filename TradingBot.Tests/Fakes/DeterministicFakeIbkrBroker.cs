@@ -287,7 +287,8 @@ namespace TradingBot.Tests.Fakes
                     weightedValue / totalFilled,
                     fillPrice,
                     executionId,
-                    "Fake broker fill.");
+                    "Fake broker fill.",
+                    fillQty);
 
                 ReplaceOpenOrder(last, keepOpen: remaining > 0m);
                 lock (_sync)
@@ -338,7 +339,7 @@ namespace TradingBot.Tests.Fakes
             });
         }
 
-        private OrderStatusDto BuildStatus(string orderId, OrderRequestDto request, string status, decimal filled, decimal remaining, decimal? averagePrice, decimal? lastPrice, string? executionId, string? message)
+        private OrderStatusDto BuildStatus(string orderId, OrderRequestDto request, string status, decimal filled, decimal remaining, decimal? averagePrice, decimal? lastPrice, string? executionId, string? message, decimal? individualFillQuantity = null)
         {
             return new OrderStatusDto
             {
@@ -346,6 +347,7 @@ namespace TradingBot.Tests.Fakes
                 BrokerOrderId = orderId,
                 Status = status,
                 FilledQuantity = filled,
+                IndividualFillQuantity = individualFillQuantity,
                 RemainingQuantity = remaining,
                 AverageFillPrice = averagePrice,
                 LastFillPrice = lastPrice,

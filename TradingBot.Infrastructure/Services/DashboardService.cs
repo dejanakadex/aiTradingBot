@@ -240,8 +240,10 @@ namespace TradingBot.Infrastructure.Services
                 LatestStrategyDecisionUtc = latestStrategy?.TimestampUtc,
                 LatestRiskDecision = DescribeRiskDecision(latestRisk?.DecisionJson),
                 LatestRiskDecisionUtc = latestRisk?.TimestampUtc,
-                LatestOrderStatus = latestOrder == null ? "None" : $"{latestOrder.Status} {latestOrder.Symbol}",
-                LatestOrderStatusUtc = latestOrder?.CreatedUtc,
+                LatestOrderStatus = latestOrder == null
+                    ? "None"
+                    : $"{latestOrder.Status} {latestOrder.Symbol} {latestOrder.Role} {latestOrder.FilledQuantity}/{latestOrder.RequestedQuantity}",
+                LatestOrderStatusUtc = latestOrder?.UpdatedUtc == default ? latestOrder?.CreatedUtc : latestOrder?.UpdatedUtc,
                 AnalyzerInputTokensToday = analyzerUsage.InputTokens,
                 AnalyzerOutputTokensToday = analyzerUsage.OutputTokens,
                 CriticInputTokensToday = criticUsage.InputTokens,
@@ -435,7 +437,7 @@ namespace TradingBot.Infrastructure.Services
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            return executions.Sum(e => ExtractJsonDecimal(e.RawJson, "commission") ?? 0m);
+            return executions.Sum(e => e.Commission ?? ExtractJsonDecimal(e.RawJson, "commission") ?? 0m);
         }
 
         private static async Task<string> GetTrendLabelAsync(TradingBot.Persistence.TradingBotDbContext db, string symbol, Domain.Enums.Timeframe timeframe, CancellationToken cancellationToken)

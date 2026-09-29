@@ -128,7 +128,84 @@ namespace TradingBot.Tests
             Assert.Equal(ExitManagementState.Faulted, state.State);
         }
 
-        private static Harness CreateHarness(TradingOperatingMode mode, decimal atr = 0.50m)
+        [Fact]
+        public async Task MaximumHoldingExit_WaitsForConfirmedStopCancellationAndSubmitsOnlyOnce()
+        {
+            var harness = CreateHarness(TradingOperatingMode.PaperTrading, maximumHoldingMinutes: 1);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), EntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m));
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+                record.OpenedUtc = DateTime.UtcNow.AddMinutes(-2);
+                await db.SaveChangesAsync();
+            }
+
+            await harness.Service.ProcessMarketCandleAsync(CandleAt(100.25m));
+
+            Assert.Contains("STOP-1", harness.Execution.Cancelled);
+            Assert.Single(harness.Execution.Submitted, x => x.Role == "ProtectiveStop");
+            await using (var db = harness.Factory.CreateDbContext())
+                Assert.Equal(ExitManagementState.ExitCancelPending, Assert.Single(await db.ExitManagementRecords.ToListAsync()).State);
+
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                OrderId = "STOP-1",
+                BrokerOrderId = "STOP-1",
+                Status = "Cancelled",
+                TimestampUtc = DateTime.UtcNow
+            });
+
+            var exit = Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+            Assert.Equal(10m, exit.Quantity);
+            await harness.Service.ProcessMarketCandleAsync(CandleAt(100.30m, timestampUtc: DateTime.UtcNow.AddMinutes(1)));
+            Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+        }
+
+        [Fact]
+        public async Task CompetingExitCallbacks_NeverRecordMoreThanFilledPosition()
+        {
+            var harness = CreateHarness(TradingOperatingMode.PaperTrading);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), new ManagedOrderResult
+            {
+                OrderId = "ENTRY-1",
+                BrokerOrderId = "ENTRY-1",
+                ProtectiveStopOrderId = "BRACKET-STOP",
+                TakeProfitOrderId = "BRACKET-TARGET",
+                Status = OrderStatus.Submitted,
+                Submitted = true
+            });
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m));
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                OrderId = "BRACKET-TARGET",
+                BrokerOrderId = "BRACKET-TARGET",
+                Status = "PartiallyFilled",
+                FilledQuantity = 6m,
+                RemainingQuantity = 4m,
+                AverageFillPrice = 103m,
+                TimestampUtc = DateTime.UtcNow
+            });
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                OrderId = "BRACKET-STOP",
+                BrokerOrderId = "BRACKET-STOP",
+                Status = "Filled",
+                FilledQuantity = 6m,
+                RemainingQuantity = 0m,
+                AverageFillPrice = 99m,
+                TimestampUtc = DateTime.UtcNow
+            });
+
+            await using var db = harness.Factory.CreateDbContext();
+            var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+            Assert.Equal(10m, record.FilledQuantity);
+            Assert.Equal(10m, record.ExitedQuantity);
+            Assert.Equal(ExitManagementState.Closed, record.State);
+            Assert.Equal(0m, Assert.Single(await db.Trades.ToListAsync()).Size);
+        }
+
+        private static Harness CreateHarness(TradingOperatingMode mode, decimal atr = 0.50m, int? maximumHoldingMinutes = null)
         {
             var execution = new FakeExecutionService();
             var root = new ServiceCollection();
@@ -157,7 +234,7 @@ namespace TradingBot.Tests
                     TrailingActivationR = 1.2m,
                     TrailingAtrMultiplier = 1.0m,
                     TrailingAtrTimeframe = "1m",
-                    MaximumHoldingMinutes = null
+                    MaximumHoldingMinutes = maximumHoldingMinutes
                 }),
                 Options.Create(new TradingSettings { Enabled = true, OperatingMode = mode }),
                 NullLogger<ExitManagementService>.Instance);
@@ -271,6 +348,7 @@ namespace TradingBot.Tests
 
             public List<OrderRequestDto> Submitted { get; } = new();
             public List<(string BrokerOrderId, OrderRequestDto Request)> Modified { get; } = new();
+            public List<string> Cancelled { get; } = new();
             public bool RejectStops { get; set; }
 
             public event Func<OrderStatusDto, Task>? OrderStatusUpdated;
@@ -306,6 +384,7 @@ namespace TradingBot.Tests
 
             public Task<bool> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
             {
+                Cancelled.Add(orderId);
                 return Task.FromResult(true);
             }
 

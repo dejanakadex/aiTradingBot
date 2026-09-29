@@ -14,5 +14,7 @@ namespace TradingBot.Application.Interfaces
         Task ProcessMarketCandleAsync(Candle candle, CancellationToken cancellationToken = default);
 
         Task RestoreAsync(CancellationToken cancellationToken = default);
+
+        Task RequestCloseAllAsync(string reason, CancellationToken cancellationToken = default);
     }
 }

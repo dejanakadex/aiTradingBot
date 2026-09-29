@@ -64,7 +64,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IPortfolioRiskService, PortfolioRiskService>();
             services.AddSingleton<ISignalArbitrationService, SignalArbitrationService>();
             services.AddTransient<IRiskEngine, RiskEngine>();
-            services.AddTransient<IOrderManager, OrderManager>();
+            services.AddSingleton<IOrderManager, OrderManager>();
             services.AddSingleton<IExitManagementService, ExitManagementService>();
             services.AddTransient<IFeatureEngine>(sp => new FeatureEngine(
                 sp.GetRequiredService<IOptions<CanonicalFeatureSettings>>().Value));

@@ -234,6 +234,11 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExitBrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ExitReason").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("ExitRequestedQuantity").HasColumnType("TEXT");
+                    b.Property<decimal>("ExitedQuantity").HasColumnType("TEXT");
+
                     b.Property<decimal>("FilledQuantity")
                         .HasColumnType("TEXT");
 
@@ -262,6 +267,8 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<decimal>("ProtectedQuantity")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("ProtectiveStopFilledQuantity").HasColumnType("TEXT");
+
                     b.Property<string>("ProtectiveStopBrokerOrderId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -279,6 +286,10 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<string>("StrategyId")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("TakeProfitBrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("TakeProfitFilledQuantity").HasColumnType("TEXT");
+                    b.Property<decimal>("ManagedExitFilledQuantity").HasColumnType("TEXT");
 
                     b.Property<string>("Symbol")
                         .IsRequired()
@@ -305,6 +316,8 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("EntryBrokerOrderId")
                         .IsUnique();
 
+                    b.HasIndex("ExitBrokerOrderId");
+
                     b.HasIndex("ProtectiveStopBrokerOrderId");
 
                     b.HasIndex("SignalId");
@@ -312,6 +325,8 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("State");
 
                     b.HasIndex("Symbol");
+
+                    b.HasIndex("TakeProfitBrokerOrderId");
 
                     b.HasIndex("UpdatedUtc");
 
@@ -393,8 +408,14 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("Commission").HasColumnType("TEXT");
+                    b.Property<DateTime?>("CommissionUpdatedUtc").HasColumnType("TEXT");
+
                     b.Property<int>("OrderRecordId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Price").HasColumnType("TEXT");
+                    b.Property<decimal>("Quantity").HasColumnType("TEXT");
 
                     b.Property<string>("RawJson")
                         .IsRequired()
@@ -410,6 +431,8 @@ namespace TradingBot.Persistence.Migrations
 
                     b.HasIndex("BrokerExecutionId")
                         .IsUnique();
+
+                    b.HasIndex("OrderRecordId");
 
                     b.ToTable("ExecutionRecords");
                 });
@@ -794,6 +817,8 @@ namespace TradingBot.Persistence.Migrations
 
             modelBuilder.Entity("TradingBot.Persistence.OrderRecord", b =>
                 {
+                    b.Property<decimal?>("AverageFillPrice").HasColumnType("TEXT");
+
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
@@ -806,8 +831,23 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CancelConfirmedUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("CancelRequestedUtc").HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<decimal>("FilledQuantity").HasColumnType("TEXT");
+                    b.Property<Guid>("IntentId").HasColumnType("TEXT");
+                    b.Property<decimal?>("LimitPrice").HasColumnType("TEXT");
+                    b.Property<string>("OrderType").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ParentBrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("RemainingQuantity").HasColumnType("TEXT");
+                    b.Property<decimal>("RequestedQuantity").HasColumnType("TEXT");
+                    b.Property<string>("Role").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Side").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal?>("StopPrice").HasColumnType("TEXT");
+                    b.Property<decimal>("TotalCommission").HasColumnType("TEXT");
 
                     b.Property<string>("RawJson")
                         .IsRequired()
@@ -820,13 +860,19 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime>("UpdatedUtc").HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("BrokerOrderId");
+                    b.HasIndex("BrokerOrderId").IsUnique().HasFilter("BrokerOrderId <> ''");
 
                     b.HasIndex("ClientOrderKey")
                         .IsUnique()
                         .HasFilter("ClientOrderKey <> ''");
+
+                    b.HasIndex("IntentId").IsUnique().HasFilter("IntentId <> '00000000-0000-0000-0000-000000000000'");
+                    b.HasIndex("Status");
+                    b.HasIndex("UpdatedUtc");
 
                     b.ToTable("OrderRecords");
                 });
@@ -1550,6 +1596,17 @@ namespace TradingBot.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StrategyDecisionRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.TradingControlStateRecord", b =>
+                {
+                    b.Property<int>("Id").HasColumnType("INTEGER");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("State").HasColumnType("INTEGER");
+                    b.Property<DateTime>("UpdatedUtc").HasColumnType("TEXT");
+                    b.Property<long>("Version").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.ToTable("TradingControlStateRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.Trade", b =>
