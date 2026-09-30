@@ -115,8 +115,8 @@ namespace TradingBot.Infrastructure.Services
                     latencies.Add(Math.Max(0d, (fills.Min(x => x.TimestampUtc) - decision.EvaluatedAtUtc).TotalMilliseconds));
                 }
             }
-            var averageSlippage = slippages.Count == 0 ? null : slippages.Average();
-            var averageLatency = latencies.Count == 0 ? null : latencies.Average();
+            decimal? averageSlippage = slippages.Count == 0 ? null : slippages.Average();
+            double? averageLatency = latencies.Count == 0 ? null : latencies.Average();
             var paperPassed = orders.Count >= _settings.MinimumPaperOrders
                 && unfilledRatio <= _settings.MaximumPaperUnfilledRatio
                 && averageSlippage.HasValue && averageSlippage.Value <= _settings.MaximumAverageEntrySlippageBps
