@@ -851,6 +851,43 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("MarketSnapshots");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.NumericalModelRecord", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("TEXT");
+                    b.Property<string>("Algorithm").IsRequired().HasColumnType("TEXT");
+                    b.Property<bool>("ApprovalReady").HasColumnType("INTEGER");
+                    b.Property<string>("ApprovalReasonsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("BaselineHoldoutJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("BaselineWalkForwardJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("CandidateHoldoutJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("CandidateWalkForwardJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("DecidedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("DecisionReason").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("EvaluationRunId").HasColumnType("TEXT");
+                    b.Property<string>("FeatureVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("HorizonSeconds").HasColumnType("INTEGER");
+                    b.Property<string>("InputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<byte[]>("ModelArtifact").IsRequired().HasColumnType("BLOB");
+                    b.Property<int>("ModelVersion").HasColumnType("INTEGER");
+                    b.Property<string>("ModelVersionTag").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("OutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("PatternVersion").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("ProbabilityThreshold").HasColumnType("TEXT");
+                    b.Property<string>("Reviewer").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Status").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedAtUtc");
+                    b.HasIndex("EvaluationRunId").IsUnique();
+                    b.HasIndex("Status");
+                    b.HasIndex("InstrumentId", "StrategyId", "ModelVersion").IsUnique();
+                    b.ToTable("NumericalModelRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.OrderRecord", b =>
                 {
                     b.Property<decimal?>("AverageFillPrice").HasColumnType("TEXT");

@@ -146,6 +146,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "InstrumentRollout configuration is invalid. Check sample, latency, slippage and monitoring thresholds.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<NumericalModelSettings>()
+        .Bind(builder.Configuration.GetSection("NumericalModel"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "NumericalModel configuration is invalid. Check LightGBM, sample and approval thresholds.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<SignalArbitrationSettings>()
         .Bind(builder.Configuration.GetSection("SignalArbitration"))
         .Validate(settings => Enum.IsDefined(settings.ConflictPolicy), "SignalArbitration:ConflictPolicy is unsupported.")
@@ -310,6 +315,13 @@ try
         Results.Ok(await calibration.DecideAsync(calibrationId, request, cancellationToken)));
     app.MapPost("/api/research/calibrations/{calibrationId:guid}/rank", async (Guid calibrationId, TradingBot.Application.DTOs.OpportunityRankingRequest request, IResearchCalibrationService calibration, CancellationToken cancellationToken) =>
         Results.Ok(await calibration.RankAsync(calibrationId, request, cancellationToken)));
+    app.MapGet("/api/models/numerical", async (int? count, INumericalModelService models, CancellationToken cancellationToken) =>
+        Results.Ok(await models.GetAllAsync(count ?? 50, cancellationToken)));
+    app.MapGet("/api/models/numerical/{modelId:guid}", async (Guid modelId, INumericalModelService models, CancellationToken cancellationToken) =>
+    {
+        var result = await models.GetAsync(modelId, cancellationToken);
+        return result == null ? Results.NotFound() : Results.Ok(result);
+    });
     app.MapPost("/api/replays", async (TradingBot.Application.DTOs.ReplayStartRequest request, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
     {
         var result = await replay.StartAsync(request, cancellationToken);
