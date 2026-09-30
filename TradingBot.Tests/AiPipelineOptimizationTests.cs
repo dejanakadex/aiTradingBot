@@ -140,6 +140,30 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ApprovedLocalNumericalModel_BypassesNetworkAnalyzersInEntryPath()
+        {
+            var prediction = new NumericalModelPrediction(
+                Guid.NewGuid(), 3, 0.82m, 0.65m, 3m, 60, true,
+                "Approved local model probability passed the threshold.");
+            var harness = CreateHarness(
+                minimumPatternQualityForAiAnalysis: 0.60m,
+                analyzerResult: Analysis(AiMarketActions.Buy, 0.90m),
+                numericalPrediction: prediction);
+
+            await harness.Service.ProcessPatternAsync(Pattern(0.80m), CancellationToken.None);
+            await WaitForAsync(() => harness.Strategy.CallCount == 1
+                && HasRecord(harness.Factory, "TradeSetupScoredByNumericalModel"));
+
+            var numericalModel = Assert.IsType<FakeNumericalModel>(harness.NumericalModel);
+            Assert.Equal(1, numericalModel.CallCount);
+            Assert.Equal(PipelineContractVersions.Features, numericalModel.LastRequest?.FeatureVersion);
+            Assert.Equal(0, harness.Analyzer.CallCount);
+            Assert.Equal(0, harness.Critic.CallCount);
+
+            harness.Dispose();
+        }
+
+        [Fact]
         public async Task RiskHistory_LoadsOnlyTradesClosedInCurrentNewYorkSession()
         {
             var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Wait, 0.90m));
@@ -178,7 +202,8 @@ namespace TradingBot.Tests
             decimal minimumAiConfidence = 0.60m,
             DateTime? nowUtc = null,
             TradingOperatingMode operatingMode = TradingOperatingMode.AnalysisOnly,
-            string? paperAccountId = null)
+            string? paperAccountId = null,
+            NumericalModelPrediction? numericalPrediction = null)
         {
             var factory = CreateInMemoryFactory(out var connection);
             var eventBus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
@@ -191,6 +216,7 @@ namespace TradingBot.Tests
             var critic = new FakeCritic();
             var strategy = new FakeStrategy();
             var risk = new FakeRisk();
+            var numericalModel = numericalPrediction == null ? null : new FakeNumericalModel(numericalPrediction);
 
             var services = new ServiceCollection();
             services.AddSingleton<IMarketSnapshotService>(snapshot);
@@ -201,6 +227,10 @@ namespace TradingBot.Tests
             services.AddSingleton<IAccountService>(new FakeAccountService());
             services.AddSingleton<IPositionService>(new FakePositionService());
             services.AddSingleton<IOrderExecutionService>(new FakeOrderExecutionService());
+            if (numericalModel != null)
+            {
+                services.AddSingleton<INumericalModelService>(numericalModel);
+            }
             var provider = services.BuildServiceProvider();
 
             var service = new PatternDecisionBackgroundService(
@@ -230,9 +260,12 @@ namespace TradingBot.Tests
                 Options.Create(new IbkrSettings { AccountId = "DU123", PaperAccountId = paperAccountId }),
                 factory,
                 new FixedClock(nowUtc ?? MarketOpenUtc),
-                NullLogger<PatternDecisionBackgroundService>.Instance);
+                NullLogger<PatternDecisionBackgroundService>.Instance,
+                numericalModelSettings: numericalModel == null
+                    ? null
+                    : Options.Create(new NumericalModelSettings { UseApprovedModelForEntry = true }));
 
-            return new Harness(service, eventBus, factory, connection, analyzer, critic, strategy);
+            return new Harness(service, eventBus, factory, connection, analyzer, critic, strategy, numericalModel);
         }
 
         private static bool HasRecord(IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> factory, string recordType)
@@ -298,7 +331,8 @@ namespace TradingBot.Tests
             SqliteConnection Connection,
             FakeAnalyzer Analyzer,
             FakeCritic Critic,
-            FakeStrategy Strategy) : IDisposable
+            FakeStrategy Strategy,
+            FakeNumericalModel? NumericalModel) : IDisposable
         {
             public void Dispose()
             {
@@ -333,6 +367,20 @@ namespace TradingBot.Tests
                     Timeframe = timeframe,
                     Interpretation = timeframe.ToString(),
                     RecentCandles = candles,
+                    Features = new MarketFeatures
+                    {
+                        FeatureVersion = PipelineContractVersions.Features,
+                        InstrumentId = "SPY",
+                        Symbol = "SPY",
+                        TimestampUtc = MarketOpenUtc,
+                        AsOfUtc = MarketOpenUtc,
+                        Timeframe = timeframe,
+                        SampleCount = candles.Length,
+                        NormalizedLiquidity = 0.8m,
+                        NormalizedVolatility = 0.2m,
+                        SpreadBps = 1m,
+                        Regime = MarketRegime.Trending
+                    },
                     Trend = new TrendInformation { Direction = 1, Label = "Up" },
                     Volatility = new VolatilityContext { Volatility = 0.01m }
                 };
@@ -365,6 +413,31 @@ namespace TradingBot.Tests
                 CallCount++;
                 return Task.FromResult(new AiTradeCriticResult { Approved = true, Confidence = 0.9m, Reason = "approved" });
             }
+        }
+
+        private sealed class FakeNumericalModel : INumericalModelService
+        {
+            private readonly NumericalModelPrediction _prediction;
+
+            public FakeNumericalModel(NumericalModelPrediction prediction)
+            {
+                _prediction = prediction;
+            }
+
+            public int CallCount { get; private set; }
+            public NumericalModelPredictionRequest? LastRequest { get; private set; }
+
+            public Task<NumericalModelPrediction> PredictAsync(NumericalModelPredictionRequest request, CancellationToken cancellationToken = default)
+            {
+                CallCount++;
+                LastRequest = request;
+                return Task.FromResult(_prediction);
+            }
+
+            public Task<NumericalModelSnapshot> TrainAsync(NumericalModelTrainingRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<NumericalModelSnapshot> DecideAsync(Guid id, NumericalModelDecisionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<NumericalModelSnapshot?> GetAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<IReadOnlyList<NumericalModelSnapshot>> GetAllAsync(int count = 50, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         }
 
         private sealed class FakeStrategy : IStrategyEngine
