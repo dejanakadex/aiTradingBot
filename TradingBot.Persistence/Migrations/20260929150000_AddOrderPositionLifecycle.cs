@@ -11,6 +11,10 @@ namespace TradingBot.Persistence.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Preserve the meaning of values stored by the previous enum layouts.
+            migrationBuilder.Sql("UPDATE OrderRecords SET Status = Status + 1 WHERE Status >= 6;");
+            migrationBuilder.Sql("UPDATE ExitManagementRecords SET State = State + 2 WHERE State >= 4;");
+
             migrationBuilder.AddColumn<Guid>("IntentId", "OrderRecords", "TEXT", nullable: false, defaultValue: Guid.Empty);
             migrationBuilder.AddColumn<string>("Role", "OrderRecords", "TEXT", nullable: false, defaultValue: "");
             migrationBuilder.AddColumn<string>("ParentBrokerOrderId", "OrderRecords", "TEXT", nullable: false, defaultValue: "");
@@ -111,6 +115,9 @@ namespace TradingBot.Persistence.Migrations
                 migrationBuilder.DropColumn(column, "ExecutionRecords");
             foreach (var column in new[] { "TakeProfitBrokerOrderId", "ExitBrokerOrderId", "ExitReason", "ExitRequestedQuantity", "ExitedQuantity", "ProtectiveStopFilledQuantity", "TakeProfitFilledQuantity", "ManagedExitFilledQuantity" })
                 migrationBuilder.DropColumn(column, "ExitManagementRecords");
+
+            migrationBuilder.Sql("UPDATE OrderRecords SET Status = Status - 1 WHERE Status >= 7;");
+            migrationBuilder.Sql("UPDATE ExitManagementRecords SET State = State - 2 WHERE State >= 6;");
         }
     }
 }
