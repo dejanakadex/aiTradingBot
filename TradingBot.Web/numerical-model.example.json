@@ -1,0 +1,16 @@
+{
+  "NumericalModel": {
+    "UseApprovedModelForEntry": true,
+    "RandomSeed": 1701,
+    "NumberOfLeaves": 16,
+    "NumberOfIterations": 100,
+    "LearningRate": 0.05,
+    "MinimumExampleCountPerLeaf": 20,
+    "MinimumTrainingSamples": 100,
+    "MinimumValidationSelections": 20,
+    "MinimumHoldoutSelections": 20,
+    "MinimumWalkForwardExpectancyImprovementBps": 0.25,
+    "MinimumHoldoutExpectancyImprovementBps": 0.0,
+    "ProbabilityThresholds": [0.50, 0.55, 0.60, 0.65, 0.70, 0.75]
+  }
+}
