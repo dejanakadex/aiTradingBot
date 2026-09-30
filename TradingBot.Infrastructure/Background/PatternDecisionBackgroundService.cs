@@ -31,6 +31,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly IClock _clock;
         private readonly ILogger<PatternDecisionBackgroundService> _logger;
         private readonly ICandidateResearchService? _candidateResearchService;
+        private readonly NumericalModelSettings? _numericalModelSettings;
         private readonly ConcurrentDictionary<string, byte> _processedPatterns = new();
 
         public PatternDecisionBackgroundService(
@@ -45,7 +46,8 @@ namespace TradingBot.Infrastructure.Background
             IClock clock,
             ILogger<PatternDecisionBackgroundService> logger,
             ITradingPipelineStatusService? pipelineStatusService = null,
-            ICandidateResearchService? candidateResearchService = null)
+            ICandidateResearchService? candidateResearchService = null,
+            IOptions<NumericalModelSettings>? numericalModelSettings = null)
         {
             _eventBus = eventBus;
             _pipelineChannel = pipelineChannel;
@@ -59,6 +61,7 @@ namespace TradingBot.Infrastructure.Background
             _clock = clock;
             _logger = logger;
             _candidateResearchService = candidateResearchService;
+            _numericalModelSettings = numericalModelSettings?.Value;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -161,8 +164,6 @@ namespace TradingBot.Infrastructure.Background
             {
                 using var scope = _serviceProvider.CreateScope();
                 var snapshotService = scope.ServiceProvider.GetRequiredService<IMarketSnapshotService>();
-                var aiAnalyzer = scope.ServiceProvider.GetRequiredService<IAiMarketAnalyzer>();
-                var aiCritic = scope.ServiceProvider.GetRequiredService<IAiTradeCritic>();
                 var strategyEngine = scope.ServiceProvider.GetRequiredService<IStrategyEngine>();
                 var riskEngine = scope.ServiceProvider.GetRequiredService<IRiskEngine>();
                 var signalArbitration = scope.ServiceProvider.GetService<ISignalArbitrationService>();
@@ -221,44 +222,72 @@ namespace TradingBot.Infrastructure.Background
                     return;
                 }
 
-                await PersistPipelineDecisionAsync("TradeSetupCandidateSentToAi", pattern, "TradeSetupCandidate passed deterministic pattern quality gate.", cancellationToken, setupCandidate: setupCandidate).ConfigureAwait(false);
-
-                _pipelineStatusService?.Mark(
-                    TradingPipelineStage.AiAnalyzer,
-                    TradingPipelineActivityState.Active,
-                    $"AI analyzer reviewing {setupCandidate.Pattern.PatternType}.",
-                    pattern.Symbol,
-                    pattern.PatternType.ToString());
-
-                var analysis = await aiAnalyzer.AnalyzeAsync(snapshot, setupCandidate.Pattern, cancellationToken).ConfigureAwait(false);
-
-                if (!ShouldCallCritic(analysis, out var criticSkipReason))
+                AiMarketAnalysisResult analysis;
+                AiTradeCriticResult critic;
+                if (_numericalModelSettings?.UseApprovedModelForEntry == true)
                 {
                     _pipelineStatusService?.Mark(
                         TradingPipelineStage.AiAnalyzer,
-                        TradingPipelineActivityState.Rejected,
-                        criticSkipReason,
+                        TradingPipelineActivityState.Active,
+                        "Scoring canonical features with the approved local numerical model.",
                         pattern.Symbol,
                         pattern.PatternType.ToString());
 
-                    _logger.LogInformation(
-                        "Skipping AI critic for {Pattern} {Symbol}: {Reason}",
-                        pattern.PatternType,
-                        pattern.Symbol,
-                        criticSkipReason);
-                    await PersistPipelineDecisionAsync("CriticSkipped", pattern, criticSkipReason, cancellationToken, analysis, setupCandidate).ConfigureAwait(false);
-                    await MarkBlockedAsync(pattern, "AiAnalyzer", new[] { criticSkipReason }, cancellationToken).ConfigureAwait(false);
-                    return;
+                    var models = scope.ServiceProvider.GetRequiredService<INumericalModelService>();
+                    var features = SelectFeatures(snapshot, pattern.Timeframe);
+                    if (features == null || snapshot.CurrentPrice is not > 0m || string.IsNullOrWhiteSpace(features.FeatureVersion))
+                    {
+                        const string reason = "Canonical runtime features required by the numerical model are unavailable.";
+                        await MarkBlockedAsync(pattern, "NumericalModel", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                    NumericalModelPrediction prediction;
+                    try
+                    {
+                        prediction = await models.PredictAsync(new NumericalModelPredictionRequest(
+                            pattern.InstrumentId, pattern.StrategyId, features.FeatureVersion, pattern.Confidence,
+                            (int)pattern.PatternType, (int)pattern.Direction, (int)pattern.Timeframe,
+                            features.NormalizedLiquidity ?? 0m, features.NormalizedVolatility ?? 0m,
+                            features.SpreadBps ?? 0m, _clock.UtcNow), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        await MarkBlockedAsync(pattern, "NumericalModel", new[] { ex.Message }, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                    if (!prediction.Eligible)
+                    {
+                        _pipelineStatusService?.Mark(
+                            TradingPipelineStage.AiAnalyzer,
+                            TradingPipelineActivityState.Rejected,
+                            prediction.Reason,
+                            pattern.Symbol,
+                            pattern.PatternType.ToString());
+                        await MarkBlockedAsync(pattern, "NumericalModel", new[] { prediction.Reason }, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                    (analysis, critic) = BuildNumericalDecision(snapshot, setupCandidate.Pattern, features, prediction);
+                    await PersistPipelineDecisionAsync("TradeSetupScoredByNumericalModel", pattern, prediction.Reason, cancellationToken, analysis, setupCandidate).ConfigureAwait(false);
                 }
-
-                _pipelineStatusService?.Mark(
-                    TradingPipelineStage.AiCritic,
-                    TradingPipelineActivityState.Active,
-                    $"AI critic reviewing BUY setup for {pattern.Symbol}.",
-                    pattern.Symbol,
-                    pattern.PatternType.ToString());
-
-                var critic = await aiCritic.CritiqueAsync(snapshot, pattern, analysis, cancellationToken).ConfigureAwait(false);
+                else
+                {
+                    var aiAnalyzer = scope.ServiceProvider.GetRequiredService<IAiMarketAnalyzer>();
+                    var aiCritic = scope.ServiceProvider.GetRequiredService<IAiTradeCritic>();
+                    await PersistPipelineDecisionAsync("TradeSetupCandidateSentToAi", pattern, "TradeSetupCandidate passed deterministic pattern quality gate.", cancellationToken, setupCandidate: setupCandidate).ConfigureAwait(false);
+                    _pipelineStatusService?.Mark(TradingPipelineStage.AiAnalyzer, TradingPipelineActivityState.Active,
+                        $"AI analyzer reviewing {setupCandidate.Pattern.PatternType}.", pattern.Symbol, pattern.PatternType.ToString());
+                    analysis = await aiAnalyzer.AnalyzeAsync(snapshot, setupCandidate.Pattern, cancellationToken).ConfigureAwait(false);
+                    if (!ShouldCallCritic(analysis, out var criticSkipReason))
+                    {
+                        _pipelineStatusService?.Mark(TradingPipelineStage.AiAnalyzer, TradingPipelineActivityState.Rejected, criticSkipReason, pattern.Symbol, pattern.PatternType.ToString());
+                        await PersistPipelineDecisionAsync("CriticSkipped", pattern, criticSkipReason, cancellationToken, analysis, setupCandidate).ConfigureAwait(false);
+                        await MarkBlockedAsync(pattern, "AiAnalyzer", new[] { criticSkipReason }, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                    _pipelineStatusService?.Mark(TradingPipelineStage.AiCritic, TradingPipelineActivityState.Active,
+                        $"AI critic reviewing BUY setup for {pattern.Symbol}.", pattern.Symbol, pattern.PatternType.ToString());
+                    critic = await aiCritic.CritiqueAsync(snapshot, pattern, analysis, cancellationToken).ConfigureAwait(false);
+                }
 
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.StrategyAndRisk,
@@ -394,6 +423,60 @@ namespace TradingBot.Infrastructure.Background
                 _logger.LogError(ex, "Failed to process pattern {Pattern} for {Symbol}", pattern.PatternType, pattern.Symbol);
                 await MarkBlockedAsync(pattern, "PipelineError", new[] { ex.Message }, cancellationToken).ConfigureAwait(false);
             }
+        }
+
+        private static MarketFeatures? SelectFeatures(MarketSnapshot snapshot, Timeframe timeframe)
+        {
+            return timeframe switch
+            {
+                Timeframe.OneMinute => snapshot.OneMinute.Features,
+                Timeframe.FiveMinutes => snapshot.FiveMinutes.Features,
+                Timeframe.FifteenMinutes => snapshot.FifteenMinutes.Features,
+                _ => null
+            };
+        }
+
+        private static (AiMarketAnalysisResult Analysis, AiTradeCriticResult Critic) BuildNumericalDecision(
+            MarketSnapshot snapshot,
+            PatternCandidate pattern,
+            MarketFeatures features,
+            NumericalModelPrediction prediction)
+        {
+            var currentPrice = snapshot.CurrentPrice!.Value;
+            var estimatedCostBps = Math.Max(0m, features.SpreadBps ?? 0m);
+            var expectedGrossMovePercent = Math.Max(0.01m, (prediction.ExpectedNetReturnBps + estimatedCostBps) / 100m);
+            var riskPercent = Math.Max(0.005m, expectedGrossMovePercent / 2m);
+            var entryWidthBps = Math.Max(0.1m, estimatedCostBps);
+            var confidence = Math.Clamp(prediction.Probability, 0m, 1m);
+            var horizonMinutes = Math.Max(1, (int)Math.Ceiling(prediction.HorizonSeconds / 60d));
+            var model = $"numerical-model-v1:{prediction.ModelId}:v{prediction.ModelVersion}";
+
+            // StrategyEngine still consumes the legacy analysis contracts. These values are a
+            // deterministic compatibility projection from local model output, not an LLM result.
+            var analysis = new AiMarketAnalysisResult
+            {
+                Action = AiMarketActions.Buy,
+                Confidence = confidence,
+                PatternQuality = pattern.Confidence,
+                MarketRegime = features.Regime.ToString(),
+                ExpectedMovePercent = expectedGrossMovePercent,
+                ExpectedHorizonMinutes = horizonMinutes,
+                EntryMin = currentPrice,
+                EntryMax = currentPrice * (1m + entryWidthBps / 10_000m),
+                InvalidationPrice = currentPrice * (1m - riskPercent / 100m),
+                Reason = $"Approved local model probability {prediction.Probability:0.####} passed threshold {prediction.Threshold:0.####}.",
+                Model = model,
+                IsSafeFallback = false
+            };
+            var critic = new AiTradeCriticResult
+            {
+                Approved = true,
+                Confidence = confidence,
+                Reason = "Approved local numerical model passed its versioned probability threshold.",
+                Model = model,
+                IsSafeFallback = false
+            };
+            return (analysis, critic);
         }
 
         private async Task MarkBlockedAsync(
