@@ -519,6 +519,39 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("HistoricalDataGapRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.InstrumentRolloutEvaluationRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<decimal?>("AverageEntrySlippageBps").HasColumnType("TEXT");
+                    b.Property<double?>("AverageFillLatencyMilliseconds").HasColumnType("REAL");
+                    b.Property<int>("ApprovedShadowDecisionCount").HasColumnType("INTEGER");
+                    b.Property<bool>("EligibleForManualLiveApproval").HasColumnType("INTEGER");
+                    b.Property<DateTime>("EvaluatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("FilledPaperOrderCount").HasColumnType("INTEGER");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("PaperOrderCount").HasColumnType("INTEGER");
+                    b.Property<bool>("PaperCriteriaPassed").HasColumnType("INTEGER");
+                    b.Property<decimal>("PaperUnfilledRatio").HasColumnType("TEXT");
+                    b.Property<int>("QualityIncidentCount").HasColumnType("INTEGER");
+                    b.Property<string>("ReasonsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("ShadowDecisionCount").HasColumnType("INTEGER");
+                    b.Property<bool>("ShadowCriteriaPassed").HasColumnType("INTEGER");
+                    b.Property<int>("StatusAfter").HasColumnType("INTEGER");
+                    b.Property<int>("StatusBefore").HasColumnType("INTEGER");
+                    b.Property<bool>("Suspended").HasColumnType("INTEGER");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("UnhealthyStreamCount").HasColumnType("INTEGER");
+                    b.Property<int>("UnknownOrderCount").HasColumnType("INTEGER");
+                    b.Property<DateTime>("WindowStartUtc").HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+                    b.HasIndex("EvaluatedAtUtc");
+                    b.HasIndex("InstrumentId");
+                    b.HasIndex("StatusAfter");
+                    b.HasIndex("Suspended");
+                    b.ToTable("InstrumentRolloutEvaluationRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.InstrumentRegistryRecord", b =>
                 {
                     b.Property<int>("Id")

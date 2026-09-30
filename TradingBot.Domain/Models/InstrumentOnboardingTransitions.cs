@@ -42,6 +42,7 @@ namespace TradingBot.Domain.Models
                 [InstrumentOnboardingStatus.PaperReady] = Set(
                     InstrumentOnboardingStatus.LiveEnabled,
                     InstrumentOnboardingStatus.ShadowReady,
+                    InstrumentOnboardingStatus.Suspended,
                     InstrumentOnboardingStatus.BackfillPending,
                     InstrumentOnboardingStatus.Disabled,
                     InstrumentOnboardingStatus.Faulted),

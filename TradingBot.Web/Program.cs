@@ -141,6 +141,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "ScalpingExecution configuration is invalid. Check latency, quote, spread and cost assumptions.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<InstrumentRolloutSettings>()
+        .Bind(builder.Configuration.GetSection("InstrumentRollout"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "InstrumentRollout configuration is invalid. Check sample, latency, slippage and monitoring thresholds.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<SignalArbitrationSettings>()
         .Bind(builder.Configuration.GetSection("SignalArbitration"))
         .Validate(settings => Enum.IsDefined(settings.ConflictPolicy), "SignalArbitration:ConflictPolicy is unsupported.")
@@ -244,6 +249,12 @@ try
         Results.Ok(await arbitration.GetStateAsync(accountId, instrumentId, cancellationToken)));
     app.MapGet("/api/instruments", async (IInstrumentRegistryService registry, CancellationToken cancellationToken) =>
         Results.Ok(await registry.GetAllAsync(cancellationToken)));
+    app.MapGet("/api/rollout", async (string? instrumentId, int? count, IInstrumentRolloutService rollout, CancellationToken cancellationToken) =>
+        Results.Ok(await rollout.GetRecentAsync(instrumentId, count ?? 100, cancellationToken)));
+    app.MapPost("/api/rollout/{instrumentId}/evaluate", async (string instrumentId, bool? applyTransitions, IInstrumentRolloutService rollout, CancellationToken cancellationToken) =>
+        Results.Ok(await rollout.EvaluateAsync(instrumentId, applyTransitions ?? false, cancellationToken)));
+    app.MapPost("/api/rollout/{instrumentId}/approve-live", async (string instrumentId, TradingBot.Application.DTOs.ManualLiveApprovalRequest request, IInstrumentRolloutService rollout, CancellationToken cancellationToken) =>
+        Results.Ok(await rollout.ApproveLiveAsync(instrumentId, request, cancellationToken)));
     app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetStreamsAsync(cancellationToken)));
     app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>

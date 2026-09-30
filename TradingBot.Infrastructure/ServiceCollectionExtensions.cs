@@ -58,6 +58,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IBrokerStateReconciliationService, BrokerStateReconciliationService>();
             services.AddSingleton<ITradingExecutionGuard, TradingExecutionGuard>();
             services.AddSingleton<IScalpingExecutionGate, ScalpingExecutionGate>();
+            services.AddSingleton<IInstrumentRolloutService, InstrumentRolloutService>();
             services.AddSingleton<IPatternDetectionService, PatternDetectionService>();
             services.AddTransient<IStrategyEngine, StrategyEngine>();
             services.AddSingleton<IRiskManagementService, RiskManagementService>();
@@ -94,6 +95,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<IAiTradeCritic, OpenAiTradeCritic>();
 
             services.AddHostedService<InstrumentRegistryHostedService>();
+            services.AddHostedService<InstrumentRolloutHostedService>();
             services.AddHostedService(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddHostedService<HistoricalBackfillHostedService>();
             services.AddHostedService<DeterministicReplayHostedService>();
