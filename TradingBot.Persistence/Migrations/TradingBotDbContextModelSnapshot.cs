@@ -1600,7 +1600,9 @@ namespace TradingBot.Persistence.Migrations
 
             modelBuilder.Entity("TradingBot.Persistence.TradingControlStateRecord", b =>
                 {
-                    b.Property<int>("Id").HasColumnType("INTEGER");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
                     b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
                     b.Property<int>("State").HasColumnType("INTEGER");
                     b.Property<DateTime>("UpdatedUtc").HasColumnType("TEXT");
