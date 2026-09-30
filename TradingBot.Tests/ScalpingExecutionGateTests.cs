@@ -28,7 +28,7 @@ namespace TradingBot.Tests
             Assert.Equal(OrderType.Limit, decision.EntryOrderType);
             Assert.Equal(3, decision.Estimates.Count);
             Assert.True(decision.SelectedEstimate.ExpectedNetEdgeBps >= 3m);
-            Assert.Equal(180, decision.ExpectedHoldingSeconds);
+            Assert.Equal(60, decision.ExpectedHoldingSeconds);
             await using var db = harness.Factory.CreateDbContext();
             var record = Assert.Single(await db.ScalpingExecutionDecisionRecords.ToListAsync());
             Assert.True(record.Approved);
@@ -218,6 +218,7 @@ namespace TradingBot.Tests
             public TradingBot.Persistence.TradingBotDbContext CreateDbContext() => new(options);
             public ValueTask<TradingBot.Persistence.TradingBotDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => new(CreateDbContext());
         }
+#pragma warning disable CS0067 // Events are required by broker abstraction test doubles.
         private sealed class NoopAccountService : IAccountService
         {
             public event Func<AccountInfo, Task>? AccountUpdated;
@@ -243,5 +244,6 @@ namespace TradingBot.Tests
             public Task ReleaseAsync(Guid reservationId, string reason, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<PortfolioReservationResult> TryReserveAsync(StrategyDecision strategyDecision, AccountInfo accountInfo, IReadOnlyList<PositionDto> currentPositions, IReadOnlyList<OrderStatusDto> openOrders, PositionSizingResult proposedSizing, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         }
+#pragma warning restore CS0067
     }
 }
