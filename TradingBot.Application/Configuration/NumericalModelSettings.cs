@@ -2,6 +2,7 @@ namespace TradingBot.Application.Configuration
 {
     public sealed class NumericalModelSettings
     {
+        public bool UseApprovedModelForEntry { get; set; } = true;
         public int RandomSeed { get; set; } = 1701;
         public int NumberOfLeaves { get; set; } = 16;
         public int NumberOfIterations { get; set; } = 100;
