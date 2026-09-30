@@ -28,6 +28,7 @@ namespace TradingBot.Persistence
                 var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>();
                 await using var db = await factory.CreateDbContextAsync(cancellationToken);
                 _logger.LogInformation("Applying database migrations if any...");
+                await RepairPreMigrationOrderLifecycleDriftAsync(db, cancellationToken).ConfigureAwait(false);
                 await db.Database.MigrateAsync(cancellationToken);
                 await RepairKnownSchemaDriftAsync(db, cancellationToken).ConfigureAwait(false);
                 await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
@@ -42,6 +43,70 @@ namespace TradingBot.Persistence
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        private async Task RepairPreMigrationOrderLifecycleDriftAsync(
+            TradingBotDbContext db,
+            CancellationToken cancellationToken)
+        {
+            if (!await TableExistsAsync(db, "OrderRecords", cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogWarning("SQLite schema drift detected: creating missing prerequisite table OrderRecords.");
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    CREATE TABLE "OrderRecords" (
+                        "Id" INTEGER NOT NULL CONSTRAINT "PK_OrderRecords" PRIMARY KEY AUTOINCREMENT,
+                        "BrokerOrderId" TEXT NOT NULL,
+                        "ClientOrderKey" TEXT NOT NULL DEFAULT '',
+                        "Symbol" TEXT NOT NULL,
+                        "CreatedUtc" TEXT NOT NULL,
+                        "Status" INTEGER NOT NULL,
+                        "RawJson" TEXT NOT NULL
+                    );
+                    CREATE INDEX "IX_OrderRecords_BrokerOrderId" ON "OrderRecords" ("BrokerOrderId");
+                    CREATE UNIQUE INDEX "IX_OrderRecords_ClientOrderKey" ON "OrderRecords" ("ClientOrderKey") WHERE "ClientOrderKey" <> '';
+                    """,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                if (!await ColumnExistsAsync(db, "OrderRecords", "CreatedUtc", cancellationToken).ConfigureAwait(false))
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "ALTER TABLE \"OrderRecords\" ADD COLUMN \"CreatedUtc\" TEXT NOT NULL DEFAULT '1970-01-01 00:00:00';",
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                // A short-lived legacy schema used Side before the durable lifecycle
+                // migration introduced the current Side column. Preserve that data
+                // under a temporary name so the migration can run idempotently.
+                if (await ColumnExistsAsync(db, "OrderRecords", "Side", cancellationToken).ConfigureAwait(false)
+                    && await ColumnExistsAsync(db, "OrderRecords", "SubmittedUtc", cancellationToken).ConfigureAwait(false)
+                    && !await ColumnExistsAsync(db, "OrderRecords", "LegacySide", cancellationToken).ConfigureAwait(false))
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "ALTER TABLE \"OrderRecords\" RENAME COLUMN \"Side\" TO \"LegacySide\";",
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (!await TableExistsAsync(db, "ExecutionRecords", cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogWarning("SQLite schema drift detected: creating missing prerequisite table ExecutionRecords.");
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    CREATE TABLE "ExecutionRecords" (
+                        "Id" INTEGER NOT NULL CONSTRAINT "PK_ExecutionRecords" PRIMARY KEY AUTOINCREMENT,
+                        "BrokerExecutionId" TEXT NOT NULL,
+                        "OrderRecordId" INTEGER NOT NULL,
+                        "Status" INTEGER NOT NULL,
+                        "TimestampUtc" TEXT NOT NULL,
+                        "RawJson" TEXT NOT NULL
+                    );
+                    CREATE UNIQUE INDEX "IX_ExecutionRecords_BrokerExecutionId" ON "ExecutionRecords" ("BrokerExecutionId");
+                    """,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         private async Task RepairKnownSchemaDriftAsync(TradingBotDbContext db, CancellationToken cancellationToken)
         {
@@ -117,6 +182,13 @@ namespace TradingBot.Persistence
             if (await TableExistsAsync(db, "OrderRecords", cancellationToken).ConfigureAwait(false))
             {
                 await AddTextColumnIfMissingAsync(db, "OrderRecords", "ClientOrderKey", cancellationToken).ConfigureAwait(false);
+                if (await ColumnExistsAsync(db, "OrderRecords", "LegacySide", cancellationToken).ConfigureAwait(false)
+                    && await ColumnExistsAsync(db, "OrderRecords", "Side", cancellationToken).ConfigureAwait(false))
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"OrderRecords\" SET \"Side\" = \"LegacySide\" WHERE \"Side\" = '';",
+                        cancellationToken).ConfigureAwait(false);
+                }
                 await db.Database.ExecuteSqlRawAsync(
                     "CREATE UNIQUE INDEX IF NOT EXISTS IX_OrderRecords_ClientOrderKey ON OrderRecords (ClientOrderKey) WHERE ClientOrderKey <> '';",
                     cancellationToken).ConfigureAwait(false);
