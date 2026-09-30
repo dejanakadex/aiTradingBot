@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
@@ -32,7 +33,10 @@ namespace TradingBot.Tests
             await using var db = harness.Factory.CreateDbContext();
             var record = Assert.Single(await db.ScalpingExecutionDecisionRecords.ToListAsync());
             Assert.True(record.Approved);
-            Assert.Contains("marketableLimit", record.DecisionJson, StringComparison.OrdinalIgnoreCase);
+            using var audit = JsonDocument.Parse(record.DecisionJson);
+            var persistedDecision = audit.RootElement.GetProperty("decision");
+            Assert.Equal((int)ScalpingOrderPolicy.MarketableLimit, persistedDecision.GetProperty("selectedPolicy").GetInt32());
+            Assert.Equal(3, persistedDecision.GetProperty("estimates").GetArrayLength());
         }
 
         [Fact]
