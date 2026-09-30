@@ -121,7 +121,8 @@ namespace TradingBot.Infrastructure.Services
 
         public async Task<NumericalModelSnapshot> DecideAsync(Guid id, NumericalModelDecisionRequest request, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(request.Reviewer) || request.Reason?.Trim().Length < 10) throw new ArgumentException("Reviewer and a decision reason of at least 10 characters are required.");
+            var reason = request.Reason?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(request.Reviewer) || reason.Length < 10) throw new ArgumentException("Reviewer and a decision reason of at least 10 characters are required.");
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             var record = await db.NumericalModelRecords.SingleOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false)
@@ -136,7 +137,7 @@ namespace TradingBot.Infrastructure.Services
                 foreach (var item in previous) item.Status = NumericalModelStatus.Superseded;
             }
             record.Status = request.Approve ? NumericalModelStatus.Approved : NumericalModelStatus.Rejected;
-            record.Reviewer = request.Reviewer.Trim(); record.DecisionReason = request.Reason.Trim(); record.DecidedAtUtc = ToUtc(_clock.UtcNow);
+            record.Reviewer = request.Reviewer.Trim(); record.DecisionReason = reason; record.DecidedAtUtc = ToUtc(_clock.UtcNow);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return ToSnapshot(record);
@@ -153,7 +154,7 @@ namespace TradingBot.Infrastructure.Services
             var ml = new MLContext(seed: _settings.RandomSeed);
             using var stream = new MemoryStream(record.ModelArtifact, writable: false);
             var model = ml.Model.Load(stream, out _);
-            var engine = ml.Model.CreatePredictionEngine<ModelObservation, ModelPrediction>(model);
+            var engine = ml.Model.CreatePredictionEngine<ModelRow, ModelPrediction>(model);
             var row = FromRequest(request);
             var probability = (decimal)engine.Predict(row).Probability;
             var eligible = probability >= record.ProbabilityThreshold;
@@ -178,7 +179,7 @@ namespace TradingBot.Infrastructure.Services
         private (ITransformer Model, DataViewSchema Schema) Train(ModelObservation[] rows)
         {
             var ml = new MLContext(seed: _settings.RandomSeed);
-            var data = ml.Data.LoadFromEnumerable(rows);
+            var data = ml.Data.LoadFromEnumerable(rows.Select(ToModelRow));
             var pipeline = ml.Transforms.Concatenate("Features", nameof(ModelObservation.PatternConfidence), nameof(ModelObservation.PatternType), nameof(ModelObservation.Direction), nameof(ModelObservation.Timeframe), nameof(ModelObservation.NormalizedLiquidity), nameof(ModelObservation.NormalizedVolatility), nameof(ModelObservation.HourSin), nameof(ModelObservation.HourCos))
                 .Append(ml.BinaryClassification.Trainers.LightGbm(new LightGbmBinaryTrainer.Options
                 {
@@ -192,7 +193,7 @@ namespace TradingBot.Infrastructure.Services
         private ScoredObservation[] Score(ITransformer model, ModelObservation[] rows)
         {
             var ml = new MLContext(seed: _settings.RandomSeed);
-            var data = ml.Data.LoadFromEnumerable(rows);
+            var data = ml.Data.LoadFromEnumerable(rows.Select(ToModelRow));
             var predictions = ml.Data.CreateEnumerable<ModelPrediction>(model.Transform(data), reuseRowObject: false).ToArray();
             return rows.Zip(predictions, (observation, prediction) => new ScoredObservation(observation, (decimal)prediction.Probability)).ToArray();
         }
@@ -227,11 +228,16 @@ namespace TradingBot.Infrastructure.Services
             return new NumericalModelMetrics(rows.Length, rows.Length, rows.Count(x => x.NetReturnBps > 0m) / (decimal)rows.Length, rows.Average(x => x.NetReturnBps), cumulative, drawdown);
         }
 
-        private static ModelObservation FromRequest(NumericalModelPredictionRequest x) => new()
+        private static ModelRow FromRequest(NumericalModelPredictionRequest x) => new()
         {
             PatternConfidence = (float)x.PatternConfidence, PatternType = x.PatternType, Direction = x.Direction, Timeframe = x.Timeframe,
             NormalizedLiquidity = (float)x.NormalizedLiquidity, NormalizedVolatility = (float)x.NormalizedVolatility,
             HourSin = (float)Math.Sin(2d * Math.PI * x.ObservedAtUtc.Hour / 24d), HourCos = (float)Math.Cos(2d * Math.PI * x.ObservedAtUtc.Hour / 24d)
+        };
+        private static ModelRow ToModelRow(ModelObservation x) => new()
+        {
+            PatternConfidence = x.PatternConfidence, PatternType = x.PatternType, Direction = x.Direction, Timeframe = x.Timeframe,
+            NormalizedLiquidity = x.NormalizedLiquidity, NormalizedVolatility = x.NormalizedVolatility, HourSin = x.HourSin, HourCos = x.HourCos, Label = x.Label
         };
 
         private static NumericalModelSnapshot ToSnapshot(NumericalModelRecord x) => new(x.Id, x.ModelVersion, x.Status, x.EvaluationRunId, x.InstrumentId, x.StrategyId,
@@ -261,6 +267,18 @@ namespace TradingBot.Infrastructure.Services
             public float HourSin { get; set; }
             public float HourCos { get; set; }
             public decimal NetReturnBps { get; set; }
+            public bool Label { get; set; }
+        }
+        private sealed class ModelRow
+        {
+            public float PatternConfidence { get; set; }
+            public float PatternType { get; set; }
+            public float Direction { get; set; }
+            public float Timeframe { get; set; }
+            public float NormalizedLiquidity { get; set; }
+            public float NormalizedVolatility { get; set; }
+            public float HourSin { get; set; }
+            public float HourCos { get; set; }
             public bool Label { get; set; }
         }
         private sealed class ModelPrediction
