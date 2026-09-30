@@ -48,6 +48,12 @@ namespace TradingBot.Persistence
             TradingBotDbContext db,
             CancellationToken cancellationToken)
         {
+            if (!await TableExistsAsync(db, "__EFMigrationsHistory", cancellationToken).ConfigureAwait(false)
+                || !await MigrationExistsAsync(db, "20260824125426_InitialCreate", cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             if (!await TableExistsAsync(db, "OrderRecords", cancellationToken).ConfigureAwait(false))
             {
                 _logger.LogWarning("SQLite schema drift detected: creating missing prerequisite table OrderRecords.");
@@ -323,6 +329,18 @@ namespace TradingBot.Persistence
             }
 
             return false;
+        }
+
+        private static async Task<bool> MigrationExistsAsync(
+            TradingBotDbContext db,
+            string migrationId,
+            CancellationToken cancellationToken)
+        {
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = $migrationId LIMIT 1;";
+            AddParameter(command, "$migrationId", migrationId);
+            await EnsureOpenAsync(db, cancellationToken).ConfigureAwait(false);
+            return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) != null;
         }
 
         private static async Task EnsureOpenAsync(TradingBotDbContext db, CancellationToken cancellationToken)
