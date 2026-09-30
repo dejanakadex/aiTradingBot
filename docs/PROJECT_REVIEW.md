@@ -9,7 +9,7 @@ Projekt već ima povezanu aplikacijsku arhitekturu: prikupljanje barova, feature
 
 Glavni problem su prijelazi između tih komponenti. Postoje provjere u pojedinačnim servisima koje produkcijski tok ne hrani potrebnim podacima ili koje ne pokrivaju stvarni redoslijed broker callbackova. Prioritet su ispravno izvršavanje, pouzdana evidencija i ponovljiv replay prije dodavanja modela.
 
-Ovo je statički pregled izvornog koda, konfiguracije, migracija i testova. Nalazi ispod opisuju ono što kod radi i posljedice mogućih slijedova događaja; nisu rezultat izvršavanja aplikacije na TWS-u. U ovoj promjeni nisu popravljeni opisani funkcionalni propusti.
+Ovo je izvorno bio statički pregled izvornog koda, konfiguracije, migracija i testova. Nalazi ispod čuvaju početno obrazloženje, a naknadno dodani status uz pojedini nalaz bilježi što je implementirano. Provjera sa službenim IBKR DLL-om i stvarnom TWS paper sesijom i dalje nije zamijenjena unit/integration testovima.
 
 ## Obuhvat i arhitektura
 
@@ -20,7 +20,7 @@ Pregledani su README, solution i svih šest projekata, DI registracije, konfigur
 | `TradingBot.Domain` | Modeli, enumovi i osnovne invarijante cijena, pozicija i naloga. |
 | `TradingBot.Application` | Ugovori servisa, konfiguracija i DTO modeli. |
 | `TradingBot.Infrastructure` | Glavna logika, kanali, background servisi, OpenAI i uvjetno kompilirani IBKR adapter. |
-| `TradingBot.Persistence` | EF Core 9, SQLite, migracije, audit tablice i popravak poznatih odstupanja sheme. |
+| `TradingBot.Persistence` | EF Core 10, SQLite, migracije, audit tablice i popravak poznatih odstupanja sheme. |
 | `TradingBot.Web` | Blazor Server dashboard, analytics, health endpointi i razvojna dijagnostika. |
 | `TradingBot.Tests` | xUnit, in-memory SQLite i fake broker; postoje testovi mnogih zaštita, ali nedostaju ključni scenariji između servisa. |
 
@@ -73,6 +73,8 @@ Popravak: nula u bilo kojem obveznom kapacitetu mora odbiti ulaz. U istom koraku
 
 ### R03 — P1: maximum-holding izlaz može više puta prodati istu poziciju
 
+Status: **riješeno u točki 15** — time/operator izlaz ima trajni intent i stanje, čeka potvrdu otkaza zaštite, serijalizira konkurentne događaje i ograničava ukupni izlaz na preostalu fillanu količinu.
+
 Izvor: [ExitManagementService.cs](../TradingBot.Infrastructure/Services/ExitManagementService.cs#L371), `SubmitMaximumHoldingExitAsync` i `HandleOrderUpdateAsync`.
 
 Nakon isteka vremena šalje se market SELL za cijeli `FilledQuantity`. Ne sprema se identitet tog izlaza u lifecycle zapis, ne prelazi se u `ExitPending` i nema koordinacije sa starim zaštitnim stopom. Obrada callbackova traži samo entry ID ili stop ID, pa fill tog market izlaza ne zatvara lifecycle zapis. Sljedeći candle može poslati još jedan SELL; postojeći stop također može ostati aktivan.
@@ -80,6 +82,8 @@ Nakon isteka vremena šalje se market SELL za cijeli `FilledQuantity`. Ne sprema
 Popravak: idempotentan izlaz s trajnim ID-em i stanjem, usklađivanje preostale neto količine i koordinacija izlaznih naloga uz broker potvrde. Test: više candle događaja nakon timeouta, dupli callbackovi, djelomični fill i utrka market izlaza sa stopom; ukupno prodana količina ne smije prijeći kupljenu.
 
 ### R04 — P1: stvarni execution callback svako izvršenje označava kao potpuno
+
+Status: **riješeno u točki 15** — pojedinačna execution količina odvojena je od kumulativnog order statusa; ponovljeni i različito poredani callbackovi obrađuju se idempotentno. Stvarni TWS adapter još treba zaseban build/test sa službenim DLL-om.
 
 Izvor: [IbkrBrokerService.cs](../TradingBot.Infrastructure/Services/IbkrBrokerService.cs#L620), `execDetails`; [ExitManagementService.cs](../TradingBot.Infrastructure/Services/ExitManagementService.cs#L232).
 
@@ -89,6 +93,8 @@ Popravak: odvojiti pojedinačni execution od kumulativnog order statusa i usklad
 
 ### R05 — P1: fill može stići prije registracije zaštite ulaza
 
+Status: **riješeno u točki 15** — intent se sprema prije submitanja, callback-first zapis se spaja s intentom, a exit registracija učitava već spremljeni rani fill.
+
 Izvor: [ApprovedOrderExecutionBackgroundService.cs](../TradingBot.Infrastructure/Background/ApprovedOrderExecutionBackgroundService.cs), `ExecuteAsync`; [ExitManagementService.cs](../TradingBot.Infrastructure/Services/ExitManagementService.cs#L91), `RegisterApprovedEntryAsync` i `HandleOrderUpdateAsync`.
 
 Prvo se šalje entry, a tek nakon rezultata upisuje exit-management zapis. Callback koji stigne u tom intervalu nema zapis i ne čeka njegov nastanak. Registracija ponavlja samo fill količinu iz prvotnog rezultata submit poziva, koji je mogao biti samo potvrda slanja. Taj mogući redoslijed može ostaviti poziciju bez registriranog tradea i zaštite; monitor koji kreće od lokalnih tradeova ne može otkriti trade koji nije upisan.
@@ -96,6 +102,8 @@ Prvo se šalje entry, a tek nakon rezultata upisuje exit-management zapis. Callb
 Popravak: trajni intent prije slanja i obrada ranih fillova/reconciliation nad broker stanjem. Test: fill tijekom submit poziva, prije DB upisa, zatim restart između svakog koraka.
 
 ### R06 — P1: stop stanje i provjera zaštite nisu dovoljno pouzdani
+
+Status: **riješeno u točki 15** — order metadata su strukturirana, stop tranzicija se potvrđuje broker callbackom, monitor provjerava stranu/tip/količinu/cijenu, a svi događaji iste pozicije koriste isti lock.
 
 Izvor: [ExitManagementService.cs](../TradingBot.Infrastructure/Services/ExitManagementService.cs#L388), `TryRaiseStopAsync`; [OrderManager.cs](../TradingBot.Infrastructure/Services/OrderManager.cs#L311), `UpsertOrderStatusAsync`; [ProtectiveStopMonitor.cs](../TradingBot.Infrastructure/Services/ProtectiveStopMonitor.cs).
 
@@ -108,6 +116,8 @@ Popravak: strukturirana order polja, potvrđene state tranzicije i jedna serijal
 
 ### R07 — P1: cancel, nepoznati submit i idempotencija traže trajniji lifecycle
 
+Status: **riješeno u točki 15** — uvedeni su trajni business intent, stabilni ključevi, potvrđeni cancel, jedinstveni broker/intent indeksi i fail-closed reconciliation svakog nerazriješenog intenta.
+
 Izvor: [IbkrBrokerService.cs](../TradingBot.Infrastructure/Services/IbkrBrokerService.cs), `CancelOrderAsync`; [OrderManager.cs](../TradingBot.Infrastructure/Services/OrderManager.cs), `SubmitOrderToBrokerAsync`, `PersistOrderAsync`, `BuildOrderIdempotencyKey`; [BrokerStateReconciliationService.cs](../TradingBot.Infrastructure/Services/BrokerStateReconciliationService.cs); [ServiceCollectionExtensions.cs](../TradingBot.Infrastructure/ServiceCollectionExtensions.cs).
 
 Adapter nakon `cancelOrder` odmah vraća `true`; manager to sprema kao `Cancelled` bez čekanja broker potvrde. Submit se šalje prije trajnog zapisa intenta. Callback može upisati order s praznim simbolom, nakon čega submit dodaje drugi zapis za isti broker ID. Indeks broker ID-a nije jedinstven; `ClientOrderKey` jest jedinstven samo za neprazne vrijednosti. Lockovi su po instanci, a manager je transient. Ključ uključuje vrijeme zahtjeva, pa novi zahtjev nakon restarta može imati drugi ključ za istu poslovnu namjeru.
@@ -117,6 +127,8 @@ Zapis `PendingBrokerConfirmation` s praznim broker ID-em izostavlja se iz uspore
 Popravak: trajni business ID, pending intent, potvrđeni cancellation, deduplikacija događaja i obvezno razrješenje svih nepoznatih stanja prije readinessa. Bracket već koristi parent/transmit polja; dodatno treba provjeriti dosljednost djece i oporavak nakon odbijenog child naloga.
 
 ### R08 — P1: UI zatvaranje ne šalje izlaz, a reconnect može poništiti pauzu
+
+Status: **riješeno u sigurnosnom opsegu točke 15** — Pause/Kill su trajna korisnička dozvola odvojena od readinessa, Close šalje koordinirani izlaz, Kill otkazuje otvorene naloge, a reconnect ne vraća trgovanje mimo te dozvole. Potpuna runtime promjena broker account contexta nije time automatski odobrena.
 
 Izvor: [TradingControlService.cs](../TradingBot.Infrastructure/Services/TradingControlService.cs#L63), [RuntimeBrokerReconciliationHostedService.cs](../TradingBot.Infrastructure/Background/RuntimeBrokerReconciliationHostedService.cs), [Index.razor](../TradingBot.Web/Pages/Index.razor).
 
@@ -149,6 +161,8 @@ Pretraga poziva `StoreCompletedTradeAnalysisAsync` nalazi implementaciju, ugovor
 Popravak: zajednički correlation ID od candle/snapshota do executiona i zatvorenog tradea; automatski idempotentan post-trade zapis za sve exit načine; audit koji je obvezan mora moći blokirati odobrenje. Test: cijeli ciklus entry → partial fills → exit → točno jedan post-trade zapis te kvar DB-a prije odobrenja.
 
 ### R12 — P2: provizije i execution količine nisu potpuna knjiga izvršenja
+
+Status: **riješeno u točki 15** — svaki broker execution ima vlastitu količinu/cijenu i jedinstveni ID, kumulativni status ostaje odvojen, a kasna provizija ažurira isti execution i total naloga bez dupliciranja filla.
 
 Izvor: [IbkrBrokerService.cs](../TradingBot.Infrastructure/Services/IbkrBrokerService.cs#L620), `commissionAndFeesReport`; [OrderManager.cs](../TradingBot.Infrastructure/Services/OrderManager.cs#L341).
 
@@ -212,7 +226,7 @@ Minimalni redoslijed:
 
 - Pregled izvornog koda i call-site pretrage; provjera da uklonjeni sadržaj pripada generiranim mapama ili runtime bazi.
 - `dotnet test TradingBot.sln --no-restore` nije pokrenuo testove: `dotnet: command not found` (exit 127). SDK nije dostupan; pokušaj dohvata službenog instalacijskog programa istekao je na proxy vezi. Build, test prolaznost i runtime ponašanje nisu potvrđeni.
-- Naknadno je solution prebačen na .NET 10 LTS i provjeren kroz GitHub Actions: Release build završio je bez upozorenja i grešaka, a prošlo je svih 195 testova bez preskočenih testova. Ta provjera koristi fallback kompilaciju bez službenog IBKR DLL-a.
+- Naknadno je solution prebačen na .NET 10 LTS i provjeren kroz GitHub Actions. Nakon točke 15 Release build prolazi svih 290 testova bez preskočenih testova. Ta provjera koristi fallback kompilaciju bez službenog IBKR DLL-a.
 - Nisu slani OpenAI zahtjevi niti broker nalozi; nisu mijenjani trading kod, postavke ili migracije.
 - Ograničena pretraga credential obrazaca u izvornim tekstualnim datotekama nije našla podudaranja. To nije potpuni pregled Git povijesti, baze ili binarnih datoteka.
 - Prošli su `git diff --check` i `git diff --cached --check`, XML/JSON provjera praćenih project/config datoteka, provjera lokalnih dokumentacijskih poveznica i ignore pravila. Sve prethodno praćene datoteke izvan dogovorenog čišćenja, README-a i `.gitignore` uspoređene su s osnovnim commitom i ostale su identične bajt po bajt. Nakon dodavanja dvaju dokumenata branch ima 273 praćene datoteke.
