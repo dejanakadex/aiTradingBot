@@ -16,7 +16,8 @@ Ongoing work uses one branch: `trading-bot-v2`.
 
 The review tracks both original findings and their implementation status. Daily-risk inputs,
 signal arbitration, the durable broker/exit lifecycle, the final execution-grade scalping gate
-and measured per-instrument shadow/paper rollout are now addressed. Orders are blocked on stale
+and measured per-instrument shadow/paper rollout are now addressed. An approved versioned
+LightGBM model now scores entry candidates locally without an LLM/network call. Orders are blocked on stale
 quotes, expired plans/risk decisions or insufficient expected edge after configured costs;
 critical feed/order/reconciliation mismatches suspend the affected instrument. The current .NET
 10 CI build is verified on GitHub Actions; see the workflow badge and Continuous integration
@@ -71,6 +72,8 @@ GET /api/research/evaluations/{evaluationId}
 POST /api/research/evaluations
 GET /api/research/calibrations?count=50
 GET /api/research/calibrations/{calibrationId}
+GET /api/models/numerical?count=50
+GET /api/models/numerical/{modelId}
 POST /api/rollout/{instrumentId}/evaluate?applyTransitions=false
 POST /api/rollout/{instrumentId}/approve-live
 POST /api/research/calibrations
@@ -89,6 +92,7 @@ The dataset endpoints expose the deterministic Parquet manifest and verify the m
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 The replay endpoints create and control isolated research runs over verified Parquet bar data. Replay results never enter the live event bus or order pipeline. Protect mutating replay endpoints with authentication, authorization and rate limiting before exposing the application publicly.
 The research candidate endpoints expose accepted, rejected and blocked pattern evaluations plus their versioned as-of MFE/MAE, target/stop-first and after-cost labels. Evaluation runs perform version-locked walk-forward/holdout analysis with cost stress and segmented metrics. Calibration profiles fit monotonic probabilities only on pre-holdout data, verify threshold stability across walk-forward folds, compare once against the deterministic holdout baseline, and require an audited manual decision before they may rank opportunities. None of these endpoints enables trading. Protect all mutating research endpoints with authentication, authorization and rate limiting before public exposure.
+The numerical-model endpoints are read-only. Training and manual promotion are internal service operations until authenticated operator controls exist. The production entry path defaults to an approved local ML.NET LightGBM artifact and fails closed when the model or exact feature version is unavailable; it does not call the LLM analyzer or critic.
 
 Run unit tests:
 
@@ -132,6 +136,7 @@ below to compile and test the real adapter in an environment where the official 
 - Research evaluation defaults to 60 training days, 14 validation days, a 14-day non-overlapping step and a final untouched 30-day holdout. Configure these with `ResearchEvaluation__TrainingWindowDays`, `ValidationWindowDays`, `StepDays` and `HoldoutDays`; minimum sample sizes, `ConfidenceThresholds`, `CostStressMultipliers` and liquidity bounds are configurable through the same section. Every change produces a new `evaluation-v1` fingerprint, and a run refuses mixed feature/pattern/label versions.
 - Research calibration uses a versioned `calibration-v1` isotonic map and defaults to at least 100 pre-holdout observations, three completed folds and 20 observations per initial calibration bin. `ResearchCalibration__MaximumStableThresholdRange`, `StableThresholdTolerance`, `MinimumFoldAgreementRatio` and baseline-degradation settings control the fail-closed approval gate. Any change creates a different calibration fingerprint; approval requires the exact output SHA-256, reviewer and reason.
 - Signal arbitration defaults to conflict policy `Reject`, permits same-direction scale-in by different strategies, rejects duplicate active allocations from the same strategy and limits active allocations per instrument to three. Override with `SignalArbitration__ConflictPolicy`, `SignalArbitration__AllowSameDirectionScaleIn`, `SignalArbitration__RejectSameStrategyWhileActive`, `SignalArbitration__MaximumActiveAllocationsPerInstrument`, `SignalArbitration__IntentTimeoutSeconds` and `SignalArbitration__StrategyPriorities__<strategy-id>`. A credential-free example is in `TradingBot.Web/signal-arbitration.example.json`.
+- Numerical modeling defaults to local approved-model scoring in the entry path. `NumericalModel__UseApprovedModelForEntry`, LightGBM hyperparameters, minimum sample/selection counts, required baseline improvements and candidate probability thresholds are configurable. A credential-free example is in `TradingBot.Web/numerical-model.example.json`. Keep the default enabled for production; disabling it restores the legacy network LLM path.
 
 ### IBKR build prerequisite
 
@@ -190,6 +195,7 @@ the current Git tree and does not erase earlier commits.
 - Historical backfill persists jobs, segment attempts and gap reports per instrument/timeframe. Restart resumes the saved boundary, duplicate candles are ignored by the database unique key, and onboarding advances only through `Backfilling` to `Collecting` after every configured timeframe finishes.
 - Deterministic replay verifies and hashes its exact Parquet bar input, processes events in event/receive/ID order with as-of-only candle windows, and persists run checkpoints plus isolated signals. Pause/resume survives a new service instance; replay has no event-bus, broker or order dependency.
 - Research calibration converts raw pattern confidence into monotonic empirical probabilities, measures Brier/log-loss/ECE out of sample, derives a fold-stable confidence threshold and stores immutable model artifacts. Only a manually approved version may rank competing opportunities, and exact pipeline versions plus profile hash are checked on every ranking call. The ranker is research-only and is not connected to risk or order submission.
+- Numerical model training compares ML.NET LightGBM with the deterministic confidence baseline using purged walk-forward folds and one untouched holdout after costs. Versioned artifacts require reviewed-hash manual approval; production inference is local, version-locked and fail-closed, while LLM services remain outside the default entry hot path.
 - Only final `Healthy` candles reach pattern analysis. Gap candles may be retained for research but are blocked from trading; a second guard in the pattern worker rejects any unhealthy candle.
 - Healthy level-one events maintain latest bid/ask/trade, spread and rolling 5s/15s aggregates; `MarketSnapshotService` combines them with its 1m/5m/15m candle context.
 - Channel-based background services connect the pipeline without a giant trading loop: candle pattern detection, pattern decisioning and approved order execution run as focused async consumers.
