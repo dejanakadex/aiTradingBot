@@ -24,7 +24,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 15 — Order/position lifecycle | Završeno | R03–R08 i R12: trajni intenti, partial fillovi i provizije, koordinirani izlazi, potvrđeni cancel/modify, trajne kontrole te fail-closed restart reconciliation. CI: 290/290 testova. |
 | 16 — Scalping execution | Završeno | Finalni bid/ask, latency i risk refresh; usporedba market/limit/marketable-limit troška, edge-after-cost gate i holding u sekundama. CI: 295/295 testova. |
 | 17 — Shadow i paper rollout | Završeno | Trajni per-instrument rollout scorecard, automatski research/shadow/paper prijelazi, stvarni fill/slippage/latency kriteriji, fail-closed suspenzija i ručno live odobrenje. CI: 298/298 testova. |
-| 18 | Na čekanju | Numerički model i offline LLM uloga opisani su u `V2_PLAN.md`. |
+| 18 — Numerički model i LLM | Završeno | Verzijski ML.NET LightGBM kandidat, purged walk-forward i netaknuti holdout nakon troškova, ručno odobrenje te lokalna fail-closed inferencija bez LLM poziva u entry putu. CI: 302/302 testova. |
 
 ## Točka 1 — izvedeno
 
@@ -414,6 +414,22 @@ Verifikacija: [GitHub Actions run 36761349366](https://github.com/dejanakadex/ai
 - CI potvrđuje deterministički rollout, persistenciju i prijelaze s fake/persistiranim executionima. Ne potvrđuje stvarni IBKR routing, fill kvalitetu ni callback latency bez službenog `CSharpAPI.dll`-a i nadziranog TWS paper rada.
 - Projekt još nema ugrađenu autentikaciju za operativne HTTP endpointove. Do dodavanja autentikacije web aplikaciju i posebno live-approval endpoint treba držati na lokalnom ili strogo ograničenom mrežnom pristupu.
 
-## Sljedeći checkpoint — točka 18
+## Točka 18 — izvedeno
 
-Uvesti numerički baseline i kandidat model koji se evaluiraju walk-forward nakon troškova, s lokalnom .NET inferencijom u latency-critical putu. LLM ostaje izvan entry hot patha i koristi se za offline kontekst ili objašnjenja.
+- Dodan je `Microsoft.ML.LightGbm` kandidat nad verzioniranim research labelama. Ulaz koristi pattern confidence/type/direction/timeframe, normaliziranu likvidnost i volatilnost te cikličko vrijeme dana; cijena/spread nisu slučajno korišteni kao label leakage.
+- Svaki fold ponovno trenira model samo na svojem purged training prozoru. Probability threshold bira se isključivo na training dijelu, walk-forward validacija koristi postojeće vremenske foldove, a završni model samo jednom prolazi netaknuti holdout.
+- Deterministički confidence threshold ostaje baseline. Kandidat mora imati dovoljan broj selekcija, pozitivan out-of-sample expectancy i nadmašiti baseline nakon spremljenih troškova za konfigurirani broj baznih bodova.
+- Model artifact, threshold, metrike, verzije feature/pattern/label ugovora te ulazni i izlazni SHA-256 spremaju se u SQLite. Odobrenje zahtijeva točan reviewed hash, reviewer i razlog; novo odobrenje supersedea staru verziju za isti instrument i strategiju.
+- Entry pipeline zadano koristi samo odobreni model s točnim instrumentom, strategijom i feature verzijom. Inferencija se učitava i izvršava lokalno kroz ML.NET; nedostajući model, verzijski mismatch ili probability ispod praga blokira signal.
+- U numerical načinu `IAiMarketAnalyzer` i `IAiTradeCritic` se ne razrješavaju niti pozivaju. Njihovi postojeći DTO-i služe samo kao deterministički compatibility adapter prema još uvijek zajedničkom strategy/risk sloju.
+- Read-only pregled modela dostupan je kroz `GET /api/models/numerical` i `GET /api/models/numerical/{modelId}`. Trening i ručna odluka namjerno nisu izloženi kao neautenticirani HTTP mutation endpointi.
+- Sigurna konfiguracija nalazi se u `TradingBot.Web/numerical-model.example.json`; `UseApprovedModelForEntry=true` je zadano fail-closed ponašanje.
+- Testovi pokrivaju LightGBM pobjedu nad baselineom na sintetičkom walk-forward/holdout skupu, ručno odobrenje, lokalnu predikciju, nedostajući odobreni model, konfiguracijsku validaciju i dokaz da production entry put zaobilazi oba mrežna LLM servisa.
+
+## Odluke i ograničenja točke 18
+
+- Pozitivan sintetički test dokazuje mehaniku, a ne produkcijski edge. Svaki instrument/strategija mora prikupiti dovoljan stvarni labeled uzorak i zasebno proći isti walk-forward, holdout, shadow i paper protokol.
+- Research labele već sadrže procijenjeni trošak, dok finalni execution gate neposredno prije naloga ponovno provjerava aktualni spread, proviziju, slippage, latency i neto edge.
+- Model promotion ostaje interna operacija dok se ne uvedu autentikacija i autorizacija za operativne mutation endpointove. Read-only model API ne može trenirati, odobriti niti poslati nalog.
+- LLM implementacije ostaju dostupne za eksplicitno isključen `UseApprovedModelForEntry` legacy/offline tok, ali nisu dio zadane produkcijske entry latencije.
+- Stvarno short izvršavanje i dalje nije omogućeno; numerički model može učiti direction feature, ali execution sigurnost i borrow provjera ostaju zaseban preduvjet.
