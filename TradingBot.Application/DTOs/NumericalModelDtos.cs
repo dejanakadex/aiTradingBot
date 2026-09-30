@@ -14,5 +14,5 @@ namespace TradingBot.Application.DTOs
     public sealed record NumericalModelPredictionRequest(
         string InstrumentId, string StrategyId, string FeatureVersion, decimal PatternConfidence, int PatternType, int Direction,
         int Timeframe, decimal NormalizedLiquidity, decimal NormalizedVolatility, decimal EstimatedCostBps, DateTime ObservedAtUtc);
-    public sealed record NumericalModelPrediction(Guid ModelId, int ModelVersion, decimal Probability, decimal Threshold, bool Eligible, string Reason);
+    public sealed record NumericalModelPrediction(Guid ModelId, int ModelVersion, decimal Probability, decimal Threshold, decimal ExpectedNetReturnBps, int HorizonSeconds, bool Eligible, string Reason);
 }
