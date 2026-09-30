@@ -158,7 +158,8 @@ namespace TradingBot.Infrastructure.Services
             var row = FromRequest(request);
             var probability = (decimal)engine.Predict(row).Probability;
             var eligible = probability >= record.ProbabilityThreshold;
-            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold, eligible,
+            var expectedNetReturn = Deserialize<NumericalModelMetrics>(record.CandidateHoldoutJson).ExpectancyBps;
+            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold, expectedNetReturn, record.HorizonSeconds, eligible,
                 eligible ? "Approved local model probability passed the threshold." : "Local model probability is below the approved threshold.");
         }
 
