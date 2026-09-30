@@ -21,7 +21,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 12 — Kalibracija/rangiranje | Završeno | `calibration-v1` izotoničke vjerojatnosti, fold-stabilan prag, baseline usporedba, auditirana ručna potvrda i fail-closed rangiranje prilika. CI: 269/269 testova, 0 warninga i 0 grešaka. |
 | 13 — Portfolio risk | Završeno | R01–R02, session trade history, ispravan paper/live račun, atomske trajne rezervacije, gross/net i globalni/per-instrument/per-strategy/cooldown/korelacijski limiti. CI: 276/276 testova. |
 | 14 — Signal arbitration | Završeno | Trajna deduplikacija, `Reject`/`Priority` politika bez tihog netiranja, atomski execution claim, virtualna atribucija po strategiji i zaštita izlazne količine. CI: 285/285 testova. |
-| 15–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 15 — Order/position lifecycle | Završeno | R03–R08 i R12: trajni intenti, partial fillovi i provizije, koordinirani izlazi, potvrđeni cancel/modify, trajne kontrole te fail-closed restart reconciliation. CI: 290/290 testova. |
+| 16–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -303,7 +304,7 @@ Verifikacija: [GitHub Actions run 36484379002](https://github.com/dejanakadex/ai
 - Kalibracijski ishod je binarna vjerojatnost `NetReturnBps > 0` za jedan label horizon. Ne predstavlja vjerojatnost target-first ishoda niti veličinu povrata; očekivani neto povrat rankera zato zasebno koristi pre-holdout prosječni dobitak i gubitak.
 - Holdout usporedba smije biti završna accept/reject provjera unaprijed definiranih pravila. Mijenjanje kalibracijskih postavki nakon gledanja rezultata istog holdouta i ponovno odobravanje bilo bi leakage; takva promjena zahtijeva novi vremenski holdout/evaluation ciklus.
 - `Reviewer` je zasad auditno polje koje dostavlja API pozivatelj, ne potvrđen identitet. Prije javnog ili višekorisničkog rada mutacijski endpointi moraju dobiti autentikaciju, autorizaciju, stvarni user identity i rate limiting.
-- Odobreni profil nije spojen na live strategy/risk/order pipeline. To je namjerno: portfolio rezervacije i limiti dolaze u točki 13, konflikti signala u točki 14, lifecycle u točki 15 i execution-grade edge provjera u točki 16.
+- Odobreni profil nije spojen na live strategy/risk/order pipeline. Portfolio rezervacije, signal arbitration i lifecycle izvedeni su u točkama 13–15; execution-grade edge provjera ostaje u točki 16.
 - Scope bez instrumenta/strategije može rangirati više instrumenata samo ako svi koriste iste zaključane pipeline verzije. Za različite podatkovne režime treba izraditi i zasebno odobriti uže profile umjesto ručnog prepisivanja rezultata.
 
 ## Točka 13 — izvedeno
@@ -323,7 +324,7 @@ Verifikacija: GitHub Actions .NET 10 Release build i 276/276 testova bez warning
 ## Odluke i ograničenja točke 13
 
 - Trenutni izvršni put je i dalje long-only; short patterni ostaju research-only dok borrow/direction-aware izvršenje ne bude eksplicitno uvedeno.
-- Broker `OrderStatusDto` još nema puni symbol/quantity/price intent. Zato committed rezervacija konzervativno ostaje aktivna do timeouta, dok broker pozicije i broj otvorenih naloga ostaju dodatne granice. Potpuno event-driven oslobađanje i reconciliation dolaze s durable order/position lifecycleom u točki 15.
+- Ovo ograničenje točke 13 riješeno je u točki 15: `OrderStatusDto` i trajni order zapis nose strukturirani intent/fill, a reconciliation uključuje nepoznate i cancel-pending naloge.
 - Per-strategy izloženost zasad se može točno atribuirati aktivnim rezervacijama. Atribucija već fillanih neto broker pozicija pojedinoj strategiji pripada virtualnoj atribuciji u točki 14.
 - Korelacijske grupe su eksplicitna konfiguracija simbola/instrument ID-jeva, ne procjena korelacije iz podataka. Statistička matrica može se dodati kasnije tek uz definirani lookback, minimalni uzorak i režim.
 - Zadani način rada ostaje `AnalysisOnly`; ova točka sama ne daje nijednom instrumentu paper/live readiness.
@@ -346,10 +347,33 @@ Verifikacija: [GitHub Actions run 36542382787](https://github.com/dejanakadex/ai
 ## Odluke i ograničenja točke 14
 
 - Stvarno short izvršavanje i dalje nije omogućeno; short signal ostaje research-only dok se ne uvedu direction-aware nalozi, borrow provjera i odgovarajući zaštitni izlazi.
-- Broker neto pozicija ostaje konačni izvor istine. Potpuni restart reconciliation virtualnih alokacija, parcijalnih fillova, provizija i nepoznatih broker stanja pripada točki 15.
-- Bracket stop i target mogu oba referencirati istu virtualnu količinu jer su OCO alternative. Zaštita od broker racea, dvostrukog filla te pouzdana cancel/modify potvrda također pripada durable order lifecycleu u točki 15.
+- Broker neto pozicija ostaje konačni izvor istine. Točka 15 dodala je restart reconciliation virtualnih alokacija, parcijalnih fillova, provizija i nepoznatih broker stanja.
+- Bracket stop i target mogu oba referencirati istu virtualnu količinu jer su OCO alternative. Točka 15 dodala je OCA koordinaciju, zaštitu od dvostrukog filla te potvrđeni cancel/modify lifecycle.
 - Zadani način rada ostaje `AnalysisOnly`; signal arbitration ne dodjeljuje paper/live readiness nijednom instrumentu.
 
-## Sljedeći checkpoint — točka 15
+## Točka 15 — izvedeno
 
-Implementirati durable order/position lifecycle za R03–R08 i R12: idempotentni entry/exit intent, partial fill i commission obradu, stop/target/time-exit koordinaciju, potvrđeni cancel/modify, restart recovery i broker reconciliation. Ukupni izlaz ne smije prijeći stvarno fillanu količinu, a nepoznato broker stanje mora blokirati nove ulaze.
+Verifikacija: [GitHub Actions run 36687496236](https://github.com/dejanakadex/aiTradingBot/actions/runs/36687496236) — .NET 10 Release build i 290/290 testova.
+
+- `OrderManager` trajno sprema business intent prije brokerskog submit poziva. Stabilni `ClientOrderKey`, jedinstveni `IntentId`/broker ID indeksi, singleton serijalizacija i callback-first merge sprječavaju drugi entry za istu namjeru tijekom ponavljanja ili restarta.
+- Order zapis sada strukturirano čuva ulogu, parent ID, stranu, tip, traženu/fillanu/preostalu količinu, cijene, proviziju te vrijeme zahtjeva i potvrde otkaza. Brokerovo nepoznato stanje ostaje eksplicitno i ne pretvara se optimistično u uspjeh.
+- Pojedinačni execution ima nepromjenjivi broker execution ID, vlastitu količinu i cijenu. Kumulativni order status obrađuje se odvojeno, dupli fill se ignorira, a naknadni commission callback dopunjava isti execution i ukupnu proviziju naloga.
+- Entry registracija oporavlja fill koji je stigao tijekom submit poziva. Fixed bracket vraća i trajno povezuje stop/target child ID-jeve; child nalozi koriste OCA grupu u stvarnom IBKR adapteru.
+- Stop, target, maximum-holding i operator-close prolaze isti exit lifecycle. Managed izlaz se šalje tek nakon broker potvrde otkaza zaštitnog stopa, a BE/trailing stanje mijenja se tek nakon potvrđene modifikacije.
+- Svaki izlaz koristi preostalu stvarno fillanu količinu. Per-order kumulativni fillovi pretvaraju se u delte, konkurentni izlazi se serijaliziraju po poziciji, sibling nalozi se otkazuju i ukupni izlaz ne može prijeći entry fill.
+- Pause, kill i dopuštenje trgovanja imaju trajno stanje odvojeno od broker readinessa. Reconnect/reconciliation ih ne može poništiti; Close šalje koordinirani izlaz, a Kill traži otkazivanje otvorenih naloga.
+- Startup reconciliation uključuje `CancelPending`, nerazriješene intente bez broker ID-a i exit zapise bez potpune zaštite. Svako takvo stanje drži engine degradiranim i blokira nove ulaze dok se ne razriješi.
+- Protective-stop monitor više ne ovisi samo o promjenjivom JSON-u: provjerava strukturirani role/side/type/quantity/stop zapis, uz legacy fallback. Dashboard prikazuje ulogu naloga, stvarni fill i zbroj strukturiranih provizija.
+- EF migracija dodaje lifecycle i control-state stupce/tablicu, čuva značenje ranije spremljenih enum vrijednosti i sigurno sanira poznate stare SQLite sheme prije migracije.
+- Testovi pokrivaju rani fill, ponovljeni intent, potvrđeni cancel, kasnu proviziju, partial fillove, idempotentni time-exit, konkurentne izlaze, očuvanje pauze nakon reconnecta, unresolved intent reconciliation i migraciju starih shema.
+
+## Odluke i ograničenja točke 15
+
+- Zadani način rada ostaje `AnalysisOnly`; završetak lifecyclea sam ne daje nijednom instrumentu paper/live readiness.
+- Stvarno short izvršavanje još nije omogućeno. Direction-aware nalozi, borrow provjera i zaštitni short izlazi ostaju zaseban sigurnosni zahtjev prije uključivanja short tradeova.
+- CI kompajlira fallback bez službenog IBKR `CSharpAPI.dll`-a. Produkcijski adapter je ažuriran, ali zaseban build sa službenim DLL-om i nadzirani TWS paper callback scenariji i dalje su obvezni prije live rada.
+- R11, automatski idempotentni post-trade zapis cijelog zatvorenog ciklusa, nije dio ove točke i ostaje otvoren.
+
+## Sljedeći checkpoint — točka 16
+
+Implementirati execution-grade scalping provjeru neposredno prije submitanja: svježi bid/ask quote, ponovna risk/pozicijska provjera, latency budget i `edge after cost` gate za market, limit i marketable-limit politiku. Nalog se ne smije poslati na stale quote niti kada očekivani pomak ne pokriva spread, proviziju, slippage i sigurnosni buffer.
