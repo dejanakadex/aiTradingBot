@@ -377,7 +377,7 @@ namespace TradingBot.Tests
                         Timeframe = timeframe,
                         SampleCount = candles.Length,
                         NormalizedLiquidity = 0.8m,
-                        NormalizedVolatility = 0.2m,
+                        AtrToPriceRatio = 0.2m,
                         SpreadBps = 1m,
                         Regime = MarketRegime.Trending
                     },
