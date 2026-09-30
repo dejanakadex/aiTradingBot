@@ -247,7 +247,7 @@ namespace TradingBot.Infrastructure.Background
                         prediction = await models.PredictAsync(new NumericalModelPredictionRequest(
                             pattern.InstrumentId, pattern.StrategyId, features.FeatureVersion, pattern.Confidence,
                             (int)pattern.PatternType, (int)pattern.Direction, (int)pattern.Timeframe,
-                            features.NormalizedLiquidity ?? 0m, features.NormalizedVolatility ?? 0m,
+                            features.NormalizedLiquidity ?? 0m, features.AtrToPriceRatio ?? 0m,
                             features.SpreadBps ?? 0m, _clock.UtcNow), cancellationToken).ConfigureAwait(false);
                     }
                     catch (InvalidOperationException ex)
