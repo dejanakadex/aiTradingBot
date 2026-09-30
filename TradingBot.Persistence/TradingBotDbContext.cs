@@ -44,6 +44,7 @@ namespace TradingBot.Persistence
         public DbSet<SignalArbitrationAuditRecord> SignalArbitrationAuditRecords { get; set; }
         public DbSet<VirtualAllocationOrderRecord> VirtualAllocationOrderRecords { get; set; }
         public DbSet<TradingControlStateRecord> TradingControlStateRecords { get; set; }
+        public DbSet<ScalpingExecutionDecisionRecord> ScalpingExecutionDecisionRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -158,6 +159,16 @@ namespace TradingBot.Persistence
             {
                 b.HasKey(x => x.Id);
                 b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<ScalpingExecutionDecisionRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.SignalId);
+                b.HasIndex(x => x.InstrumentId);
+                b.HasIndex(x => x.Symbol);
+                b.HasIndex(x => x.EvaluatedAtUtc);
+                b.HasIndex(x => x.Approved);
             });
 
             modelBuilder.Entity<InstrumentRegistryRecord>(b =>

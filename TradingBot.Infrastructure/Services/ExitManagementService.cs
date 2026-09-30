@@ -117,6 +117,7 @@ namespace TradingBot.Infrastructure.Services
                     CurrentProtectiveStop = initialStop,
                     TrailingAtrTimeframe = NormalizeTimeframe(_settings.TrailingAtrTimeframe),
                     TrailingAtrMultiplier = _settings.TrailingAtrMultiplier,
+                    MaximumHoldingSeconds = ResolveMaximumHoldingSeconds(plan),
                     OpenedUtc = DateTime.UtcNow,
                     UpdatedUtc = DateTime.UtcNow,
                     RawJson = JsonSerializer.Serialize(new
@@ -457,9 +458,14 @@ namespace TradingBot.Infrastructure.Services
             var marketPrice = candle.Close;
             record.HighestPriceSinceEntry = Math.Max(record.HighestPriceSinceEntry, candle.High);
 
-            if (_settings.MaximumHoldingMinutes.HasValue
-                && _settings.MaximumHoldingMinutes.Value > 0
-                && DateTime.UtcNow - record.OpenedUtc >= TimeSpan.FromMinutes(_settings.MaximumHoldingMinutes.Value))
+            var maximumHolding = record.MaximumHoldingSeconds is > 0
+                ? TimeSpan.FromSeconds(record.MaximumHoldingSeconds.Value)
+                : _settings.MaximumHoldingSeconds is > 0
+                    ? TimeSpan.FromSeconds(_settings.MaximumHoldingSeconds.Value)
+                    : _settings.MaximumHoldingMinutes is > 0
+                        ? TimeSpan.FromMinutes(_settings.MaximumHoldingMinutes.Value)
+                        : (TimeSpan?)null;
+            if (maximumHolding.HasValue && DateTime.UtcNow - record.OpenedUtc >= maximumHolding.Value)
             {
                 await RequestManagedExitAsync(db, record, "MaximumHoldingTimeExit", marketPrice, cancellationToken).ConfigureAwait(false);
                 return;
@@ -1080,6 +1086,18 @@ namespace TradingBot.Infrastructure.Services
                 "15m" or "15 mins" or "15 minutes" => "15m",
                 _ => "1m"
             };
+        }
+
+        private int? ResolveMaximumHoldingSeconds(ApprovedTradePlan plan)
+        {
+            var instrument = _tradingSettings.GetConfiguredInstruments().FirstOrDefault(x =>
+                x.InstrumentId.Equals(plan.Context.InstrumentId, StringComparison.OrdinalIgnoreCase)
+                || x.Symbol.Equals(plan.StrategyDecision.Symbol, StringComparison.OrdinalIgnoreCase));
+            var configured = instrument?.MaximumHoldingSeconds
+                ?? _settings.MaximumHoldingSeconds
+                ?? (_settings.MaximumHoldingMinutes is > 0 ? _settings.MaximumHoldingMinutes.Value * 60 : null);
+            var aiSeconds = plan.AiAnalysis.ExpectedHorizonMinutes > 0 ? plan.AiAnalysis.ExpectedHorizonMinutes * 60 : (int?)null;
+            return configured.HasValue && aiSeconds.HasValue ? Math.Min(configured.Value, aiSeconds.Value) : configured ?? aiSeconds;
         }
 
         private static string ToConfigTimeframe(Timeframe timeframe)

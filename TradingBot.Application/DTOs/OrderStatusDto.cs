@@ -16,6 +16,7 @@ namespace TradingBot.Application.DTOs
         public decimal? Commission { get; init; }
         public string? BrokerExecutionId { get; init; }
         public bool IsCommissionUpdate { get; init; }
+        public string? Symbol { get; init; }
         public string? Side { get; init; }
         public string? OrderType { get; init; }
         public decimal? RequestedQuantity { get; init; }

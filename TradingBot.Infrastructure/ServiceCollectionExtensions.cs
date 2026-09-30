@@ -57,6 +57,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<ITradePipelineChannel, TradePipelineChannel>();
             services.AddTransient<IBrokerStateReconciliationService, BrokerStateReconciliationService>();
             services.AddSingleton<ITradingExecutionGuard, TradingExecutionGuard>();
+            services.AddSingleton<IScalpingExecutionGate, ScalpingExecutionGate>();
             services.AddSingleton<IPatternDetectionService, PatternDetectionService>();
             services.AddTransient<IStrategyEngine, StrategyEngine>();
             services.AddSingleton<IRiskManagementService, RiskManagementService>();

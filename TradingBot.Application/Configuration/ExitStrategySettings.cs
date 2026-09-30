@@ -11,5 +11,6 @@ namespace TradingBot.Application.Configuration
         public decimal TrailingAtrMultiplier { get; set; } = 1.0m;
         public string TrailingAtrTimeframe { get; set; } = "1m";
         public int? MaximumHoldingMinutes { get; set; } = 30;
+        public int? MaximumHoldingSeconds { get; set; }
     }
 }

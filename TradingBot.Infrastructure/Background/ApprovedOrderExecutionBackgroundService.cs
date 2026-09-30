@@ -28,6 +28,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ILogger<ApprovedOrderExecutionBackgroundService> _logger;
         private readonly IPortfolioRiskService? _portfolioRiskService;
         private readonly ISignalArbitrationService? _signalArbitrationService;
+        private readonly IScalpingExecutionGate? _scalpingExecutionGate;
         private readonly ConcurrentDictionary<string, byte> _submittedPlans = new();
 
         public ApprovedOrderExecutionBackgroundService(
@@ -64,7 +65,8 @@ namespace TradingBot.Infrastructure.Background
             IOptions<TradingSettings> tradingSettings,
             ILogger<ApprovedOrderExecutionBackgroundService> logger,
             IPortfolioRiskService? portfolioRiskService = null,
-            ISignalArbitrationService? signalArbitrationService = null)
+            ISignalArbitrationService? signalArbitrationService = null,
+            IScalpingExecutionGate? scalpingExecutionGate = null)
         {
             _pipelineChannel = pipelineChannel;
             _orderManager = orderManager;
@@ -78,6 +80,7 @@ namespace TradingBot.Infrastructure.Background
             _logger = logger;
             _portfolioRiskService = portfolioRiskService;
             _signalArbitrationService = signalArbitrationService;
+            _scalpingExecutionGate = scalpingExecutionGate;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -172,6 +175,21 @@ namespace TradingBot.Infrastructure.Background
                     }
                 }
 
+                var executionDecision = _scalpingExecutionGate == null
+                    ? null
+                    : await _scalpingExecutionGate.EvaluateAsync(plan, cancellationToken).ConfigureAwait(false);
+                if (executionDecision is { Approved: false })
+                {
+                    _pipelineStatusService?.Mark(
+                        TradingPipelineStage.OrderExecution,
+                        TradingPipelineActivityState.Rejected,
+                        $"Final scalping execution gate rejected the plan: {executionDecision.Reason}",
+                        plan.StrategyDecision.Symbol,
+                        plan.Pattern.PatternType.ToString());
+                    await RejectPlanAsync(plan, executionDecision.Reason, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.OrderExecution,
                     TradingPipelineActivityState.Active,
@@ -180,7 +198,9 @@ namespace TradingBot.Infrastructure.Background
                     plan.Pattern.PatternType.ToString());
 
                 var now = DateTime.UtcNow;
-                var entry = new OrderRequest(plan.StrategyDecision.Symbol, OrderSide.Buy, OrderType.Limit, plan.RiskDecision.ApprovedQuantity, plan.StrategyDecision.EntryMin.Value, now);
+                var entryType = executionDecision?.EntryOrderType ?? OrderType.Limit;
+                var entryPrice = executionDecision?.EntryPrice ?? plan.StrategyDecision.EntryMin.Value;
+                var entry = new OrderRequest(plan.StrategyDecision.Symbol, OrderSide.Buy, entryType, plan.RiskDecision.ApprovedQuantity, entryPrice, now);
                 var stop = new OrderRequest(plan.StrategyDecision.Symbol, OrderSide.Sell, OrderType.Stop, plan.RiskDecision.ApprovedQuantity, plan.StrategyDecision.StopPrice.Value, now);
                 var target = new OrderRequest(plan.StrategyDecision.Symbol, OrderSide.Sell, OrderType.Limit, plan.RiskDecision.ApprovedQuantity, plan.StrategyDecision.TakeProfitPrice.Value, now);
 
@@ -230,7 +250,7 @@ namespace TradingBot.Infrastructure.Background
                     return;
                 }
 
-                var entryResult = await _orderManager.SubmitLimitBuyAsync(entry, plan.RiskDecision, cancellationToken).ConfigureAwait(false);
+                var entryResult = await _orderManager.SubmitEntryBuyAsync(entry, plan.RiskDecision, cancellationToken).ConfigureAwait(false);
                 if (_signalArbitrationService != null && plan.ArbitrationId.HasValue)
                     await _signalArbitrationService.RecordSubmissionAsync(plan.ArbitrationId.Value, entryResult, cancellationToken).ConfigureAwait(false);
                 if (!entryResult.Submitted)

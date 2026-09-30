@@ -230,6 +230,7 @@ namespace TradingBot.Tests.Fakes
                         OrderId = existing.OrderId,
                         BrokerOrderId = existing.BrokerOrderId,
                         Status = "Cancelled",
+                        Symbol = existing.Symbol,
                         FilledQuantity = existing.FilledQuantity,
                         RemainingQuantity = existing.RemainingQuantity,
                         AverageFillPrice = existing.AverageFillPrice,
@@ -354,6 +355,11 @@ namespace TradingBot.Tests.Fakes
                 Commission = executionId == null ? null : Scenario.CommissionPerFill,
                 BrokerExecutionId = executionId,
                 TimestampUtc = DateTime.UtcNow,
+                Symbol = request.Symbol,
+                Side = request.Side,
+                OrderType = request.Type,
+                RequestedQuantity = request.Quantity,
+                StopPrice = request.StopPrice,
                 Message = message ?? request.Symbol
             };
         }

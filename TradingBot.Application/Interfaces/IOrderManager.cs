@@ -11,6 +11,12 @@ namespace TradingBot.Application.Interfaces
             RiskDecision riskDecision,
             CancellationToken cancellationToken = default);
 
+        Task<ManagedOrderResult> SubmitEntryBuyAsync(
+            OrderRequest orderRequest,
+            RiskDecision riskDecision,
+            CancellationToken cancellationToken = default) =>
+            SubmitLimitBuyAsync(orderRequest, riskDecision, cancellationToken);
+
         Task<ManagedOrderResult> SubmitBracketOrderAsync(
             OrderRequest entryLimitBuy,
             OrderRequest stopLoss,

@@ -136,6 +136,11 @@ try
         .Validate(settings => settings.MaximumCorrelationGroupExposure > 0m, "RiskSettings:MaximumCorrelationGroupExposure must be greater than zero.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<ScalpingExecutionSettings>()
+        .Bind(builder.Configuration.GetSection("ScalpingExecution"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ScalpingExecution configuration is invalid. Check latency, quote, spread and cost assumptions.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<SignalArbitrationSettings>()
         .Bind(builder.Configuration.GetSection("SignalArbitration"))
         .Validate(settings => Enum.IsDefined(settings.ConflictPolicy), "SignalArbitration:ConflictPolicy is unsupported.")

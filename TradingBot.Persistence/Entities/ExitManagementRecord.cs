@@ -33,6 +33,7 @@ namespace TradingBot.Persistence
         public bool TrailingActivated { get; set; }
         public string TrailingAtrTimeframe { get; set; } = string.Empty;
         public decimal TrailingAtrMultiplier { get; set; }
+        public int? MaximumHoldingSeconds { get; set; }
         public DateTime OpenedUtc { get; set; }
         public DateTime UpdatedUtc { get; set; }
         public DateTime? ClosedUtc { get; set; }

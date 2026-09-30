@@ -258,6 +258,9 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("MaximumHoldingSeconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("OpenedUtc")
                         .HasColumnType("TEXT");
 
@@ -1362,6 +1365,37 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("Status", "ExpiresAtUtc");
                     b.HasIndex("StrategyId", "Status");
                     b.ToTable("PortfolioRiskReservationRecords");
+                });
+
+            modelBuilder.Entity("TradingBot.Persistence.ScalpingExecutionDecisionRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+                    b.Property<bool>("Approved").HasColumnType("INTEGER");
+                    b.Property<decimal>("Ask").HasColumnType("TEXT");
+                    b.Property<decimal>("Bid").HasColumnType("TEXT");
+                    b.Property<string>("DecisionJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("EstimatedCostBps").HasColumnType("TEXT");
+                    b.Property<DateTime>("EvaluatedAtUtc").HasColumnType("TEXT");
+                    b.Property<decimal>("ExpectedGrossEdgeBps").HasColumnType("TEXT");
+                    b.Property<int>("ExpectedHoldingSeconds").HasColumnType("INTEGER");
+                    b.Property<decimal>("ExpectedNetEdgeBps").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("Quantity").HasColumnType("TEXT");
+                    b.Property<DateTime?>("QuoteAsOfUtc").HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("SelectedPolicy").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("SignalId").HasColumnType("TEXT");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Symbol").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("Approved");
+                    b.HasIndex("EvaluatedAtUtc");
+                    b.HasIndex("InstrumentId");
+                    b.HasIndex("SignalId");
+                    b.HasIndex("Symbol");
+                    b.ToTable("ScalpingExecutionDecisionRecords");
                 });
 
             modelBuilder.Entity("TradingBot.Persistence.SignalArbitrationAuditRecord", b =>

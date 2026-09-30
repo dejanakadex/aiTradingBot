@@ -65,6 +65,24 @@ namespace TradingBot.Infrastructure.Services
             return await SubmitSingleOrderAsync(orderRequest, "LimitBuy", idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task<ManagedOrderResult> SubmitEntryBuyAsync(
+            OrderRequest orderRequest,
+            RiskDecision riskDecision,
+            CancellationToken cancellationToken = default)
+        {
+            if (orderRequest == null) throw new ArgumentNullException(nameof(orderRequest));
+            if (orderRequest.Side != OrderSide.Buy || orderRequest.Type is not (OrderType.Limit or OrderType.Market))
+            {
+                throw new ArgumentException("Entry buy must be a limit or market order.", nameof(orderRequest));
+            }
+
+            var guard = await _executionGuard.CanSubmitBrokerOrderAsync(riskDecision, cancellationToken).ConfigureAwait(false);
+            if (!guard.Approved) return RejectedByGuard(guard);
+            var role = orderRequest.Type == OrderType.Market ? "MarketBuy" : "LimitBuy";
+            var idempotencyKey = BuildOrderIdempotencyKey(orderRequest, role, null, riskDecision.Context?.SignalId);
+            return await SubmitSingleOrderAsync(orderRequest, role, idempotencyKey, cancellationToken).ConfigureAwait(false);
+        }
+
         public async Task<ManagedOrderResult> SubmitBracketOrderAsync(
             OrderRequest entryLimitBuy,
             OrderRequest stopLoss,
@@ -75,9 +93,9 @@ namespace TradingBot.Infrastructure.Services
             if (entryLimitBuy == null) throw new ArgumentNullException(nameof(entryLimitBuy));
             if (stopLoss == null) throw new ArgumentNullException(nameof(stopLoss));
             if (takeProfit == null) throw new ArgumentNullException(nameof(takeProfit));
-            if (entryLimitBuy.Side != OrderSide.Buy || entryLimitBuy.Type != OrderType.Limit)
+            if (entryLimitBuy.Side != OrderSide.Buy || entryLimitBuy.Type is not (OrderType.Limit or OrderType.Market))
             {
-                throw new ArgumentException("Bracket entry must be a limit buy.", nameof(entryLimitBuy));
+                throw new ArgumentException("Bracket entry must be a limit or market buy.", nameof(entryLimitBuy));
             }
             if (stopLoss.Side != OrderSide.Sell || stopLoss.Type != OrderType.Stop)
             {
