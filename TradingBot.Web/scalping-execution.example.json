@@ -1,0 +1,18 @@
+{
+  "ScalpingExecution": {
+    "Enabled": true,
+    "EntryPolicy": "MarketableLimit",
+    "MaximumQuoteAgeMilliseconds": 1500,
+    "MaximumBidAskSkewMilliseconds": 500,
+    "MaximumApprovedPlanAgeMilliseconds": 3000,
+    "MaximumRiskDecisionAgeMilliseconds": 5000,
+    "MaximumSpreadBps": 8.0,
+    "MarketableLimitOffsetBps": 1.0,
+    "CommissionPerSideBps": 0.5,
+    "PassiveLimitSlippagePerSideBps": 0.25,
+    "MarketableLimitSlippagePerSideBps": 0.75,
+    "MarketSlippagePerSideBps": 1.5,
+    "SafetyBufferBps": 2.0,
+    "MinimumNetEdgeBps": 3.0
+  }
+}

@@ -146,11 +146,13 @@ Popravak: eksplicitni početak/kraj bara, vrijeme primitka i freshness u odnosu 
 
 ### R10 — P1: spread i quote freshness nisu povezani s feedom
 
+Status: **riješeno u točki 16 za execution put** — finalni gate neposredno prije submitanja zahtijeva potpuni svježi bid/ask, ograničava timestamp skew i spread, provjerava dob plana/risk odluke te ponovno čita aktualno broker risk stanje u paper/live načinu. Stvarnu kvalitetu i latenciju IBKR paper fillova još treba izmjeriti u točki 17.
+
 Izvor: [MarketSnapshotService.cs](../TradingBot.Infrastructure/Services/MarketSnapshotService.cs#L33), [StrategyEngine.cs](../TradingBot.Infrastructure/Services/StrategyEngine.cs#L147), `PatternDecisionBackgroundService` i `ApprovedOrderExecutionBackgroundService`.
 
-Glavni poziv snapshot buildera ne šalje `currentPrice` ni `spread`. Cijena zato dolazi iz zadnjeg 1m closea, spread ostaje `null`, a spread provjera ga preskače. `CreatedAtUtc` je vrijeme izrade snapshota, ne vrijeme kotacije; njegov limit od 12 sekundi može isteći tijekom dva AI poziva. Odobreni plan se prije submitanja ne provjerava ponovno prema svježoj kotaciji i aktualnoj izloženosti. Red i risk odobrenje nemaju trajnu rezervaciju pozicije.
+Izvorni snapshot put i dalje može koristiti candle close kao analitičku referencu, ali više nije autoritet za submit: nalog ne prolazi bez zasebnog canonical bid/ask događaja i finalne provjere. Trajna portfolio rezervacija uvedena je u točki 13, a execution claim i konfliktna koordinacija u točki 14.
 
-Popravak: bid/ask feed, timestamp izvora, obvezna svježina, rok odobrenja i provjera/reservation neposredno prije entryja. Test: nedostajući/stari quote, spor AI, dva odobrena plana prije prvog fill-a i promjena pozicije u međuvremenu.
+Verifikacija uključuje nedostajući/stari quote, istekli plan, edge koji ne pokriva troškove te audit svih order-policy procjena. Paper rollout treba još potvrditi promjenu stvarne pozicije/naloga i broker latenciju na TWS-u.
 
 ### R11 — P2: audit i post-trade tok nisu zatvorena cjelina
 

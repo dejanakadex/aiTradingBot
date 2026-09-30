@@ -15,10 +15,10 @@ Ongoing work uses one branch: `trading-bot-v2`.
 - [Proposed v2 plan](docs/V2_PLAN.md) — implementation phases and acceptance criteria, pending confirmation (Croatian).
 
 The review tracks both original findings and their implementation status. Daily-risk inputs,
-signal arbitration and the durable broker/exit lifecycle findings R01–R08 and R12 are now
-addressed; data freshness, execution-grade scalping checks and other explicitly open findings
-remain fail-closed work. The current .NET 10 CI build is verified on GitHub Actions; see the
-workflow badge and Continuous integration section below.
+signal arbitration, the durable broker/exit lifecycle and the final execution-grade scalping
+gate are now addressed. Orders are blocked on stale quotes, expired plans/risk decisions or
+insufficient expected edge after configured costs. The current .NET 10 CI build is verified on
+GitHub Actions; see the workflow badge and Continuous integration section below.
 
 ## Quick start
 

@@ -22,7 +22,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 13 — Portfolio risk | Završeno | R01–R02, session trade history, ispravan paper/live račun, atomske trajne rezervacije, gross/net i globalni/per-instrument/per-strategy/cooldown/korelacijski limiti. CI: 276/276 testova. |
 | 14 — Signal arbitration | Završeno | Trajna deduplikacija, `Reject`/`Priority` politika bez tihog netiranja, atomski execution claim, virtualna atribucija po strategiji i zaštita izlazne količine. CI: 285/285 testova. |
 | 15 — Order/position lifecycle | Završeno | R03–R08 i R12: trajni intenti, partial fillovi i provizije, koordinirani izlazi, potvrđeni cancel/modify, trajne kontrole te fail-closed restart reconciliation. CI: 290/290 testova. |
-| 16–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 16 — Scalping execution | Završeno | Finalni bid/ask, latency i risk refresh; usporedba market/limit/marketable-limit troška, edge-after-cost gate i holding u sekundama. CI: 295/295 testova. |
+| 17–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -374,6 +375,25 @@ Verifikacija: [GitHub Actions run 36687496236](https://github.com/dejanakadex/ai
 - CI kompajlira fallback bez službenog IBKR `CSharpAPI.dll`-a. Produkcijski adapter je ažuriran, ali zaseban build sa službenim DLL-om i nadzirani TWS paper callback scenariji i dalje su obvezni prije live rada.
 - R11, automatski idempotentni post-trade zapis cijelog zatvorenog ciklusa, nije dio ove točke i ostaje otvoren.
 
-## Sljedeći checkpoint — točka 16
+## Točka 16 — izvedeno
 
-Implementirati execution-grade scalping provjeru neposredno prije submitanja: svježi bid/ask quote, ponovna risk/pozicijska provjera, latency budget i `edge after cost` gate za market, limit i marketable-limit politiku. Nalog se ne smije poslati na stale quote niti kada očekivani pomak ne pokriva spread, proviziju, slippage i sigurnosni buffer.
+Verifikacija: [GitHub Actions run 36692989748](https://github.com/dejanakadex/aiTradingBot/actions/runs/36692989748) — .NET 10 Release build i 295/295 testova, bez warninga i grešaka.
+
+- `ScalpingExecutionGate` radi nakon atomskog execution claima i neposredno prije brokerskog submitanja. Svaki plan ponovno provjerava dob risk odluke i odobrenja, potpuni bid/ask, starost i vremenski skew kotacije, spread te odobreni entry raspon.
+- Gate računa usporedive procjene za passive limit, marketable limit i market: konzervativni bruto edge je minimum AI očekivanog pomaka i target edgea, a neto edge oduzima spread, round-trip proviziju, round-trip slippage i sigurnosni buffer.
+- Odabrana politika određuje stvarni tip i cijenu entry naloga. `OrderManager` i bracket put sada prihvaćaju market ili limit entry, dok su zaštitni stop/target i trajni lifecycle ostali koordinirani kao u točki 15.
+- U paper/live načinu neposredno se ponovno čitaju broker račun, pozicije, otvoreni nalozi i portfolio rezervacija. Promjena računa, novi BUY za isti simbol, nestala rezervacija ili prekoračenje exposure/buying-power/leverage limita odbija nalog; kvar refresha je fail-closed.
+- Svaka odluka, uključujući odbijanje, sprema quote vrijeme, cijene, količinu, odabranu politiku, sve tri cost procjene, neto edge, očekivani holding u sekundama, razloge i trajanje evaluacije.
+- Maximum holding koristi kraću vrijednost između AI horizonta i per-instrument limita u sekundama. Exit zapis taj limit nosi trajno, bez zaokruživanja kratkih tradeova na minute.
+- Sigurne zadane vrijednosti postoje u kodu, a primjer bez brokerskih podataka nalazi se u `TradingBot.Web/scalping-execution.example.json`. Produkcijske pretpostavke troška moraju se kalibrirati iz stvarnih paper fillova.
+
+## Odluke i ograničenja točke 16
+
+- Zadana politika je `MarketableLimit`; `PassiveLimit` i `Market` mogu se odabrati konfiguracijom, ali gate uvijek mjeri sve tri politike radi audita i kasnije kalibracije.
+- `AnalysisOnly` provodi quote/latency/edge provjere, ali ne zove broker risk refresh. Paper/live uvijek zahtijeva valjan račun, svježe broker stanje i aktivnu trajnu rezervaciju.
+- CI koristi determinističke fake servise i fallback bez službenog IBKR DLL-a. Stvarni TWS paper latency, fill/slippage i callback ponašanje moraju se izmjeriti u točki 17 prije bilo kakvog live dopuštenja.
+- Short execution i dalje nije omogućen; borrow i direction-aware order/exit sigurnost ostaju obvezni prije paper/live short trgovanja.
+
+## Sljedeći checkpoint — točka 17
+
+Uvesti mjerljivi shadow/paper rollout po instrumentu: readiness pragove, usporedbu očekivanih i stvarnih quote/fill/latency vrijednosti te automatsku suspenziju na feed, order ili reconciliation mismatch. Live dopuštenje ostaje zasebna ručna odluka.
