@@ -2,7 +2,7 @@
 
 Status: **odobreno za implementaciju jednu točku po jednu**. Zajednički radni branch je `trading-bot-v2`. Nakon svake točke kod, testovi, dokumentacija i CI moraju biti završeni prije nastavka.
 
-Napredak 2026-09-30: završene su točke 1–16, uključujući portfolio risk, signal arbitration, trajni order/position lifecycle i finalni execution-grade scalping gate. Projekt koristi .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. Conditional IBKR adapter i dalje treba zasebno provjeriti sa službenim `CSharpAPI.dll`.
+Napredak 2026-09-30: završene su točke 1–17, uključujući portfolio risk, signal arbitration, trajni order/position lifecycle, finalni execution-grade scalping gate te mjerljivi shadow/paper rollout po instrumentu. Projekt koristi .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. Conditional IBKR adapter i dalje treba zasebno provjeriti sa službenim `CSharpAPI.dll`.
 
 Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Operativni checkpointi vode se u [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 

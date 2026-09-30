@@ -15,10 +15,12 @@ Ongoing work uses one branch: `trading-bot-v2`.
 - [Proposed v2 plan](docs/V2_PLAN.md) — implementation phases and acceptance criteria, pending confirmation (Croatian).
 
 The review tracks both original findings and their implementation status. Daily-risk inputs,
-signal arbitration, the durable broker/exit lifecycle and the final execution-grade scalping
-gate are now addressed. Orders are blocked on stale quotes, expired plans/risk decisions or
-insufficient expected edge after configured costs. The current .NET 10 CI build is verified on
-GitHub Actions; see the workflow badge and Continuous integration section below.
+signal arbitration, the durable broker/exit lifecycle, the final execution-grade scalping gate
+and measured per-instrument shadow/paper rollout are now addressed. Orders are blocked on stale
+quotes, expired plans/risk decisions or insufficient expected edge after configured costs;
+critical feed/order/reconciliation mismatches suspend the affected instrument. The current .NET
+10 CI build is verified on GitHub Actions; see the workflow badge and Continuous integration
+section below.
 
 ## Quick start
 
@@ -50,6 +52,7 @@ GET /api/reconciliation/status
 GET /api/risk/portfolio?accountId=...
 GET /api/signals/allocations?accountId=...&instrumentId=...
 GET /api/instruments
+GET /api/rollout?instrumentId=...&count=...
 GET /api/market-data/streams
 GET /api/market-data/incidents
 GET /api/market-data/latest
@@ -68,6 +71,8 @@ GET /api/research/evaluations/{evaluationId}
 POST /api/research/evaluations
 GET /api/research/calibrations?count=50
 GET /api/research/calibrations/{calibrationId}
+POST /api/rollout/{instrumentId}/evaluate?applyTransitions=false
+POST /api/rollout/{instrumentId}/approve-live
 POST /api/research/calibrations
 POST /api/research/calibrations/{calibrationId}/decision
 POST /api/research/calibrations/{calibrationId}/rank

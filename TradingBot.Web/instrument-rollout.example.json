@@ -1,0 +1,17 @@
+{
+  "InstrumentRollout": {
+    "Enabled": true,
+    "EvaluationIntervalSeconds": 30,
+    "LookbackHours": 24,
+    "MinimumShadowDecisions": 25,
+    "MinimumApprovedShadowDecisions": 5,
+    "MinimumPaperOrders": 20,
+    "MaximumPaperUnfilledRatio": 0.20,
+    "MaximumAverageEntrySlippageBps": 3.0,
+    "MaximumAverageFillLatencyMilliseconds": 2500,
+    "MaximumRecentQualityIncidents": 0,
+    "AutoAdvanceToShadow": true,
+    "AutoAdvanceToPaper": true,
+    "AutoSuspend": true
+  }
+}

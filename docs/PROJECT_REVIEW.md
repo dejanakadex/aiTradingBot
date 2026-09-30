@@ -201,6 +201,8 @@ Popravak: dijeljen HTTP klijent/policy, odvojene metrike poslovnog poziva i poje
 
 ### R16 — P2: operativna pouzdanost i deploy nisu završeni
 
+Status: **djelomično riješeno kroz točke 6, 15 i 17** — collection ima per-stream health/reconnect, broker lifecycle i reconciliation su trajni, a rollout monitor automatski suspendira instrument na feed/order/reconciliation mismatchu. Autentikacija operativnih endpointova, market calendar, službeni IBKR DLL build i produkcijski backup/restore postupak ostaju otvoreni.
+
 Izvor: [MarketDataSubscriptionHostedService.cs](../TradingBot.Infrastructure/Background/MarketDataSubscriptionHostedService.cs), [Program.cs](../TradingBot.Web/Program.cs), [MigrationHostedService.cs](../TradingBot.Persistence/MigrationHostedService.cs), [TradingBot.Infrastructure.csproj](../TradingBot.Infrastructure/TradingBot.Infrastructure.csproj).
 
 - Jedan neuspjeli market stream može ostati neprimijećen dok `Task.WhenAll` čeka ostale aktivne streamove; prikupljanje je vezano uz trading readiness. Za dataset treba samostalna collection readiness i heartbeat po streamu.

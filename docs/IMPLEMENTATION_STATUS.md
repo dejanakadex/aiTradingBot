@@ -23,7 +23,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 14 — Signal arbitration | Završeno | Trajna deduplikacija, `Reject`/`Priority` politika bez tihog netiranja, atomski execution claim, virtualna atribucija po strategiji i zaštita izlazne količine. CI: 285/285 testova. |
 | 15 — Order/position lifecycle | Završeno | R03–R08 i R12: trajni intenti, partial fillovi i provizije, koordinirani izlazi, potvrđeni cancel/modify, trajne kontrole te fail-closed restart reconciliation. CI: 290/290 testova. |
 | 16 — Scalping execution | Završeno | Finalni bid/ask, latency i risk refresh; usporedba market/limit/marketable-limit troška, edge-after-cost gate i holding u sekundama. CI: 295/295 testova. |
-| 17–18 | Na čekanju | Redoslijed i kriteriji nalaze se u `V2_PLAN.md`. |
+| 17 — Shadow i paper rollout | Završeno | Trajni per-instrument rollout scorecard, automatski research/shadow/paper prijelazi, stvarni fill/slippage/latency kriteriji, fail-closed suspenzija i ručno live odobrenje. CI: 298/298 testova. |
+| 18 | Na čekanju | Numerički model i offline LLM uloga opisani su u `V2_PLAN.md`. |
 
 ## Točka 1 — izvedeno
 
@@ -394,6 +395,25 @@ Verifikacija: [GitHub Actions run 36692989748](https://github.com/dejanakadex/ai
 - CI koristi determinističke fake servise i fallback bez službenog IBKR DLL-a. Stvarni TWS paper latency, fill/slippage i callback ponašanje moraju se izmjeriti u točki 17 prije bilo kakvog live dopuštenja.
 - Short execution i dalje nije omogućen; borrow i direction-aware order/exit sigurnost ostaju obvezni prije paper/live short trgovanja.
 
-## Sljedeći checkpoint — točka 17
+## Točka 17 — izvedeno
 
-Uvesti mjerljivi shadow/paper rollout po instrumentu: readiness pragove, usporedbu očekivanih i stvarnih quote/fill/latency vrijednosti te automatsku suspenziju na feed, order ili reconciliation mismatch. Live dopuštenje ostaje zasebna ručna odluka.
+Verifikacija: [GitHub Actions run 36761349366](https://github.com/dejanakadex/aiTradingBot/actions/runs/36761349366) — .NET 10 Release build i 298/298 testova, bez warninga i grešaka.
+
+- `InstrumentRolloutService` za svaki konfigurirani instrument gradi trajni scorecard unutar podesivog vremenskog prozora. Bilježi broj shadow odluka i odobrenja, paper naloge/fillove, unfilled omjer, prosječni entry slippage prema završnom asku, decision-to-fill latency, quality incidente, nezdrave streamove i nerazriješene naloge.
+- Background monitor periodički evaluira svaki instrument. Zdrav `ResearchReady` instrument prelazi u `ShadowReady`, a `ShadowReady` prelazi u `PaperReady` tek nakon minimalnog broja ukupnih i odobrenih shadow odluka.
+- `PaperReady` ili `LiveEnabled` instrument automatski prelazi u `Suspended` ako nema market-data stream, stream je nezdrav, quality incidenti prelaze prag, nalog ostane u unknown/pending stanju ili broker reconciliation nije zdrav. Suspenzija odmah uklanja paper/live order dopuštenje iz postojećeg execution guarda.
+- Paper score koristi stvarne trajne broker executione povezane preko signal arbitration zapisa. Live eligibility traži dovoljan uzorak paper naloga, prihvatljiv unfilled ratio, slippage i latency te odsutnost kritičnih razloga.
+- Live status nikad se ne dodjeljuje automatski. Endpoint za ručno odobrenje zahtijeva `ConfirmLiveTrading=true`, razlog, očekivanu registry verziju, `LiveTradingExplicitlyEnabled=true`, `TradingRequested=true`, aktualni `PaperReady` status i ponovno uspješno mjerenje paper kriterija.
+- Read-only povijest dostupna je kroz `GET /api/rollout`; ručna evaluacija kroz `POST /api/rollout/{instrumentId}/evaluate`. Sve evaluacije i razlozi ostaju u SQLiteu kroz novu migraciju.
+- Sigurne zadane vrijednosti i primjer bez tajni nalaze se u `TradingBot.Web/instrument-rollout.example.json`.
+
+## Odluke i ograničenja točke 17
+
+- Zadani pragovi (25 shadow odluka, 20 paper naloga, 3 bps prosječnog slippagea i 2500 ms prosječnog fill latencyja) početne su sigurnosne vrijednosti, ne potvrđene produkcijske konstante. Treba ih kalibrirati iz stvarnog TWS paper uzorka po instrumentu.
+- Quality incident prag je zadano nula, pa je sustav namjerno osjetljiv. Ako feed normalno proizvodi bezopasne incidente, prag se mijenja tek nakon pregleda njihove distribucije; suspenzija se ne vraća automatski u trading-ready status.
+- CI potvrđuje deterministički rollout, persistenciju i prijelaze s fake/persistiranim executionima. Ne potvrđuje stvarni IBKR routing, fill kvalitetu ni callback latency bez službenog `CSharpAPI.dll`-a i nadziranog TWS paper rada.
+- Projekt još nema ugrađenu autentikaciju za operativne HTTP endpointove. Do dodavanja autentikacije web aplikaciju i posebno live-approval endpoint treba držati na lokalnom ili strogo ograničenom mrežnom pristupu.
+
+## Sljedeći checkpoint — točka 18
+
+Uvesti numerički baseline i kandidat model koji se evaluiraju walk-forward nakon troškova, s lokalnom .NET inferencijom u latency-critical putu. LLM ostaje izvan entry hot patha i koristi se za offline kontekst ili objašnjenja.
