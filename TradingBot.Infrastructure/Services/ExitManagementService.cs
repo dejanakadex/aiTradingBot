@@ -1058,6 +1058,12 @@ namespace TradingBot.Infrastructure.Services
             return status.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsCancelled(string status)
+        {
+            return status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("Canceled", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool IsBrokerAcknowledged(OrderStatusDto status)
         {
             var parsed = ParseOrderStatus(status.Status);
