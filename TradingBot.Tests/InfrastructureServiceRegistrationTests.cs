@@ -17,6 +17,24 @@ namespace TradingBot.Tests
     public sealed class InfrastructureServiceRegistrationTests
     {
         [Fact]
+        public void AddInfrastructure_AnalysisOnlyUsesPaperAccountForPaperEndpoint()
+        {
+            var services = new ServiceCollection();
+            services.AddOptions();
+            services.Configure<TradingSettings>(settings => settings.OperatingMode = TradingOperatingMode.AnalysisOnly);
+            services.Configure<IbkrSettings>(settings =>
+            {
+                settings.AccountId = "LIVE_ACCOUNT";
+                settings.PaperAccountId = "PAPER_ACCOUNT";
+            });
+            services.AddInfrastructure();
+
+            using var provider = services.BuildServiceProvider();
+            var options = provider.GetRequiredService<TradingBot.Infrastructure.Options.IbkrOptions>();
+            Assert.Equal("PAPER_ACCOUNT", options.AccountId);
+        }
+
+        [Fact]
         public void AddInfrastructure_WithoutConcreteIbkrAdapter_ValidatesAndFailsClosed()
         {
             var services = new ServiceCollection();

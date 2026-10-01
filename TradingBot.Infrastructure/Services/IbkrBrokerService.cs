@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading.Channels;
 using IBApi;
 using Microsoft.Extensions.Logging;
+using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Exceptions;
 using TradingBot.Application.Interfaces;
@@ -13,7 +14,7 @@ using TradingBot.Infrastructure.Options;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, IDisposable
+    public sealed class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IIbkrRuntimeDiagnostics, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, IDisposable
     {
         private static readonly TimeSpan BrokerResponseTimeout = TimeSpan.FromSeconds(10);
         private static readonly string[] AccountSummaryTags = ["NetLiquidation", "AvailableFunds", "BuyingPower", "MaintMarginReq"];
@@ -30,6 +31,8 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<int, HistoricalBarsRequest> _historicalRequests = new();
         private readonly ConcurrentDictionary<int, StreamingSubscription> _subscriptions = new();
         private readonly ConcurrentDictionary<int, LevelOneSubscription> _levelOneSubscriptions = new();
+        private readonly ConcurrentDictionary<int, ContractDetailsRequest> _contractRequests = new();
+        private readonly ConcurrentDictionary<string, int> _marketDataErrors = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, decimal> _commissionsByExecutionId = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, OrderStatusDto> _executionsById = new(StringComparer.OrdinalIgnoreCase);
 
@@ -39,6 +42,8 @@ namespace TradingBot.Infrastructure.Services
         private Task? _readerLoop;
         private int _nextOrderId;
         private int _nextRequestId = 10_000;
+        private bool _managedAccountsReceived;
+        private bool? _configuredAccountRecognized;
 
         public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger)
         {
@@ -47,6 +52,11 @@ namespace TradingBot.Infrastructure.Services
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
+        public string ApiVersion => typeof(EClientSocket).Assembly.GetName().Version?.ToString() ?? "Unknown";
+        public int? ServerVersion => IsConnected ? _client?.ServerVersion : null;
+        public bool ManagedAccountsReceived => _managedAccountsReceived;
+        public bool? ConfiguredAccountRecognized => _configuredAccountRecognized;
+        public int? GetMarketDataErrorCode(string symbol) => _marketDataErrors.TryGetValue(symbol, out var code) ? code : null;
 
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
@@ -69,6 +79,9 @@ namespace TradingBot.Infrastructure.Services
                 _signal = new EReaderMonitorSignal();
                 _client = new EClientSocket(this, _signal);
                 _readerLoopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                _managedAccountsReceived = false;
+                _configuredAccountRecognized = null;
+                _marketDataErrors.Clear();
             }
 
             await PublishConnectionStatusAsync(ConnectionStatus.Connecting).ConfigureAwait(false);
@@ -139,6 +152,9 @@ namespace TradingBot.Infrastructure.Services
                 _client = null;
                 _signal = null;
                 _nextOrderId = 0;
+                _managedAccountsReceived = false;
+                _configuredAccountRecognized = null;
+                _marketDataErrors.Clear();
             }
 
             await PublishReadinessAsync(false).ConfigureAwait(false);
@@ -389,6 +405,28 @@ namespace TradingBot.Infrastructure.Services
             return Task.FromResult<IMarketDataSubscription>(subscription);
         }
 
+        public async Task<IbkrContractProbe> ProbeContractAsync(ConfiguredInstrument instrument, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(instrument);
+            var client = GetConnectedClient();
+            var requestId = GetNextRequestId();
+            var request = new ContractDetailsRequest(instrument);
+            _contractRequests[requestId] = request;
+            try
+            {
+                client.reqContractDetails(requestId, BuildStockContract(instrument.Symbol));
+                return await request.Completion.Task.WaitAsync(BrokerResponseTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return new IbkrContractProbe("TimedOut");
+            }
+            finally
+            {
+                _contractRequests.TryRemove(requestId, out _);
+            }
+        }
+
         public override void nextValidId(int orderId)
         {
             if (orderId <= 0) return;
@@ -398,12 +436,19 @@ namespace TradingBot.Infrastructure.Services
 
         public override void managedAccounts(string accountsList)
         {
-            _logger.LogInformation("IBKR managed accounts received: {ManagedAccounts}", accountsList);
+            var accounts = accountsList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            _configuredAccountRecognized = string.IsNullOrWhiteSpace(_options.AccountId)
+                ? null
+                : accounts.Contains(_options.AccountId, StringComparer.OrdinalIgnoreCase);
+            _managedAccountsReceived = true;
+            _logger.LogInformation("IBKR managed accounts received; count={AccountCount}; configured account match={AccountMatch}", accounts.Length, _configuredAccountRecognized);
         }
 
         public override void connectionClosed()
         {
             _logger.LogWarning("IBKR connection closed.");
+            _managedAccountsReceived = false;
+            _configuredAccountRecognized = null;
             _ = PublishReadinessAsync(false);
             _ = PublishConnectionStatusAsync(ConnectionStatus.Disconnected);
         }
@@ -444,6 +489,20 @@ namespace TradingBot.Infrastructure.Services
                     new InvalidOperationException($"IBKR historical data error {errorCode}: {errorMsg}"));
             }
 
+            if (_contractRequests.TryGetValue(id, out var contractRequest))
+            {
+                contractRequest.Completion.TrySetResult(new IbkrContractProbe("BrokerError", ErrorCode: errorCode));
+            }
+
+            if (_levelOneSubscriptions.TryGetValue(id, out var levelOne))
+            {
+                _marketDataErrors[levelOne.Symbol] = errorCode;
+            }
+            else if (_subscriptions.TryGetValue(id, out var stream))
+            {
+                _marketDataErrors[stream.Symbol] = errorCode;
+            }
+
             if (errorCode is 1100 or 1300)
             {
                 _ = PublishReadinessAsync(false);
@@ -453,6 +512,16 @@ namespace TradingBot.Infrastructure.Services
             {
                 _ = PublishConnectionStatusAsync(ConnectionStatus.Connected);
             }
+        }
+
+        public override void contractDetails(int reqId, ContractDetails contractDetails)
+        {
+            if (_contractRequests.TryGetValue(reqId, out var request)) request.Add(contractDetails);
+        }
+
+        public override void contractDetailsEnd(int reqId)
+        {
+            if (_contractRequests.TryGetValue(reqId, out var request)) request.Complete();
         }
 
         public override void accountSummary(int reqId, string account, string tag, string value, string currency)
@@ -738,6 +807,8 @@ namespace TradingBot.Infrastructure.Services
             };
             if (!kind.HasValue) return;
 
+            _marketDataErrors.TryRemove(subscription.Symbol, out _);
+
             var now = DateTime.UtcNow;
             var sequence = subscription.NextSequence(kind.Value);
             var marketEvent = new CanonicalMarketDataEvent
@@ -769,6 +840,7 @@ namespace TradingBot.Infrastructure.Services
                     return;
                 }
 
+                _marketDataErrors.TryRemove(subscription.Symbol, out _);
                 var marketBar = ToMarketBar(subscription.Symbol, subscription.Timeframe, bar);
                 var completedBar = subscription.AcceptLiveUpdate(marketBar);
                 if (completedBar == null)
@@ -1222,6 +1294,33 @@ namespace TradingBot.Infrastructure.Services
             public void Record(MarketBar bar)
             {
                 Bars.Add(bar);
+            }
+        }
+
+        private sealed class ContractDetailsRequest
+        {
+            private readonly ConfiguredInstrument _instrument;
+            private readonly ConcurrentBag<ContractDetails> _details = new();
+            public ContractDetailsRequest(ConfiguredInstrument instrument) => _instrument = instrument;
+            public TaskCompletionSource<IbkrContractProbe> Completion { get; } = NewTcs<IbkrContractProbe>();
+
+            public void Add(ContractDetails details) => _details.Add(details);
+
+            public void Complete()
+            {
+                var results = _details.ToArray();
+                var probe = results.Length switch
+                {
+                    0 => new IbkrContractProbe("NotFound"),
+                    1 when results[0].Contract?.ConId > 0
+                        && string.Equals(results[0].Contract.Symbol, _instrument.Symbol, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(results[0].Contract.SecType, _instrument.SecurityType, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(results[0].Contract.Currency, _instrument.Currency, StringComparison.OrdinalIgnoreCase) => new IbkrContractProbe(
+                        "Confirmed", results[0].Contract.ConId, results[0].Contract.PrimaryExch),
+                    1 => new IbkrContractProbe("Mismatch"),
+                    _ => new IbkrContractProbe("Ambiguous")
+                };
+                Completion.TrySetResult(probe);
             }
         }
 

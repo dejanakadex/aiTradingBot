@@ -58,6 +58,8 @@ GET /api/market-data/streams
 GET /api/market-data/incidents
 GET /api/market-data/latest
 GET /api/market-data/collection
+GET /api/ibkr/diagnostics
+GET /api/ibkr/diagnostics?probeInstrumentId=US-STK-SPY-SMART
 GET /api/datasets/manifest
 GET /api/datasets/verify
 GET /api/historical-backfill/jobs
@@ -88,6 +90,7 @@ POST /api/replays/{replayRunId}/cancel
 `/api/health` and `/api/health/live` report web-process health. Dependency and trading readiness endpoints report database, IBKR, trading engine and OpenAI status separately, so the web app can remain healthy while trading is unavailable.
 `/api/instruments` is a read-only view of configured instruments, persisted onboarding status, broker metadata and effective research/paper/live readiness.
 The market-data endpoints expose persisted quality checkpoints/incidents, the in-memory latest bid/ask/trade plus 5s/15s aggregates, and independent collection heartbeat/reconnect/lag/gap-fill state for every configured instrument/timeframe.
+The IBKR diagnostics endpoint reports the compiled adapter type, official API assembly version, negotiated broker server version, connection and configured-account match, plus contract and feed state per instrument. It omits account identifiers and raw broker error text. Without `probeInstrumentId`, contract status is `NotProbed`; specifying one configured instrument sends a read-only `reqContractDetails` request when the real broker is connected. `Confirmed` means that one broker contract matched the configured symbol/security type/currency. Market-data `Available` requires a live collection stream and fresh bid/ask, while `BrokerError`, `NoBidAsk`, `StaleBidAsk` and `BrokerDisconnected` identify separate failures. Restrict access to operational endpoints until authentication is added.
 The dataset endpoints expose the deterministic Parquet manifest and verify the manifest plus every listed file against SHA-256 hashes; they are read-only and never enable trading.
 The historical-backfill endpoints expose durable per-instrument/timeframe checkpoints, retry and deduplication metrics, plus measured missing intervals.
 The replay endpoints create and control isolated research runs over verified Parquet bar data. Replay results never enter the live event bus or order pipeline. Protect mutating replay endpoints with authentication, authorization and rate limiting before exposing the application publicly.
@@ -152,6 +155,14 @@ dotnet test TradingBot.sln -p:IbkrApiDll="C:\path\to\CSharpAPI.dll"
 Without that DLL, the unavailable/fallback broker services are used. Passing tests in that
 configuration does not verify the real adapter. Generated copies of broker DLLs in `bin`
 are not a substitute for this prerequisite.
+
+For a repeatable local verification with the official DLL, run:
+
+```powershell
+./scripts/verify-ibkr-adapter.ps1 -IbkrApiDll 'C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll'
+```
+
+The script restores, builds Release, checks that the output DLL matches the selected DLL by SHA-256, and runs all solution tests. It does not start the web app or connect to TWS. The compile and fake-broker tests do not establish a real paper connection; use the diagnostics endpoint during a supervised TWS/Gateway paper session to verify the broker handshake, account, contracts and market data.
 
 ### Repository hygiene
 

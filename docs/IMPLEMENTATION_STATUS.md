@@ -25,6 +25,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 16 — Scalping execution | Završeno | Finalni bid/ask, latency i risk refresh; usporedba market/limit/marketable-limit troška, edge-after-cost gate i holding u sekundama. CI: 295/295 testova. |
 | 17 — Shadow i paper rollout | Završeno | Trajni per-instrument rollout scorecard, automatski research/shadow/paper prijelazi, stvarni fill/slippage/latency kriteriji, fail-closed suspenzija i ručno live odobrenje. CI: 298/298 testova. |
 | 18 — Numerički model i LLM | Završeno | Verzijski ML.NET LightGBM kandidat, purged walk-forward i netaknuti holdout nakon troškova, ručno odobrenje te lokalna fail-closed inferencija bez LLM poziva u entry putu. CI: 302/302 testova. |
+| 19 — Stvarni IBKR adapter i dijagnostika | Implementirano i lokalno provjereno | Ponovljiv build sa službenim DLL-om, odvojena dijagnostika adaptera/veze/računa/contracta/feeda i broker `reqContractDetails` provjera. Stvarna TWS paper veza još nije potvrđena. |
 
 ## Točka 1 — izvedeno
 
@@ -433,3 +434,10 @@ Verifikacija: [GitHub Actions run 36761349366](https://github.com/dejanakadex/ai
 - Model promotion ostaje interna operacija dok se ne uvedu autentikacija i autorizacija za operativne mutation endpointove. Read-only model API ne može trenirati, odobriti niti poslati nalog.
 - LLM implementacije ostaju dostupne za eksplicitno isključen `UseApprovedModelForEntry` legacy/offline tok, ali nisu dio zadane produkcijske entry latencije.
 - Stvarno short izvršavanje i dalje nije omogućeno; numerički model može učiti direction feature, ali execution sigurnost i borrow provjera ostaju zaseban preduvjet.
+
+## Točka 19 — stvarni IBKR adapter i dijagnostika
+
+- Lokalna provjera sa službenim `CSharpAPI.dll` 10.49.02.0 kompajlira `IBKR_API_AVAILABLE` put, a Release build i solution testovi prolaze. `scripts/verify-ibkr-adapter.ps1` ponavlja restore, build, SHA-256 usporedbu kopiranog DLL-a i testove za eksplicitno zadanu putanju DLL-a. DLL se ne sprema u Git.
+- `GET /api/ibkr/diagnostics` odvojeno prikazuje adapter (`Real`, `Custom`, `Unavailable`), verziju C# API-ja, verziju broker servera samo nakon spajanja, stanje veze, paper-account konfiguraciju i potvrdu da se konfigurirani račun nalazi među brokerovim managed accounts. Identifikatori računa nisu u odgovoru ni u novom log zapisu.
+- Za svaki instrument dijagnostika pokazuje podržava li sadašnji adapter contract (`STK/SMART/USD`), status broker provjere, zadnju grešku kao kod, stanje collection streamova i dostupnost svježeg bid/aska. `probeInstrumentId` šalje samo `reqContractDetails` za jedan konfigurirani instrument; rezultat razlikuje `Confirmed`, `NotFound`, `Ambiguous`, `Mismatch`, `BrokerError` i `TimedOut`.
+- Obični prikaz ne šalje broker zahtjeve. Provjera contracta traži aktivnu TWS/IB Gateway vezu; build i fake testovi ne dokazuju ni handshake, pravo na podatke ni paper nalog. Sadašnji realni adapter još koristi `reqMktData` i `STK/SMART/USD` contract za izvršavanje i pretplate; tick-by-tick feed je točka 20. Operativni endpoint treba ograničiti pristupom dok autentikacija nije uvedena.

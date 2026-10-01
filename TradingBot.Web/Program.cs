@@ -266,6 +266,17 @@ try
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
     app.MapGet("/api/market-data/collection", (IMarketDataCollectionStatusService collection) => Results.Ok(collection.GetAll()));
+    app.MapGet("/api/ibkr/diagnostics", async (string? probeInstrumentId, TradingBot.Infrastructure.Services.IbkrDiagnosticsService diagnostics, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            return Results.Ok(await diagnostics.GetAsync(probeInstrumentId, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
     app.MapGet("/api/datasets/manifest", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
         Results.Ok(await datasets.GetManifestAsync(cancellationToken)));
     app.MapGet("/api/datasets/verify", async (IMarketDatasetStore datasets, CancellationToken cancellationToken) =>
@@ -364,54 +375,8 @@ try
             return result.Success ? Results.Ok(result) : Results.BadRequest(result);
         });
 
-        app.MapGet("/api/dev/ibkr-diagnostics", async (
-            IServiceProvider serviceProvider,
-            IOptions<IbkrSettings> ibkrOptions,
-            IOptions<TradingSettings> tradingOptions,
-            CancellationToken cancellationToken) =>
-        {
-            var ibkrSettings = ibkrOptions.Value;
-            var tradingSettings = tradingOptions.Value;
-            var endpointPort = ibkrSettings.GetPort(tradingSettings.OperatingMode);
-            var adapter = serviceProvider.GetService<TradingBot.Infrastructure.Interfaces.IIbkrAdapter>();
-            var connection = serviceProvider.GetService<IIbkrConnectionService>();
-            var apiDllInOutput = Path.Combine(AppContext.BaseDirectory, "CSharpAPI.dll");
-            const string defaultApiDllPath = @"C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll";
-
-            var socketReachable = false;
-            string? socketError = null;
-            try
-            {
-                using var tcpClient = new System.Net.Sockets.TcpClient();
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(2));
-                await tcpClient.ConnectAsync(ibkrSettings.Host, endpointPort, timeoutCts.Token).ConfigureAwait(false);
-                socketReachable = tcpClient.Connected;
-            }
-            catch (Exception ex) when (ex is System.Net.Sockets.SocketException or TimeoutException or OperationCanceledException)
-            {
-                socketError = ex.Message;
-            }
-
-            return Results.Ok(new
-            {
-                environment = app.Environment.EnvironmentName,
-                operatingMode = tradingSettings.OperatingMode.ToString(),
-                tradingEnabled = tradingSettings.Enabled,
-                endpoint = $"{ibkrSettings.Host}:{endpointPort}",
-                hostType = ibkrSettings.HostType.ToString(),
-                clientId = ibkrSettings.ClientId,
-                configuredPaperAccount = string.IsNullOrWhiteSpace(ibkrSettings.PaperAccountId) ? "" : "configured",
-                configuredLiveAccount = string.IsNullOrWhiteSpace(ibkrSettings.AccountId) ? "" : "configured",
-                adapterType = adapter?.GetType().FullName ?? "not registered",
-                connectionServiceType = connection?.GetType().FullName ?? "not registered",
-                connectionStatus = connection?.Status.ToString() ?? "Unavailable",
-                csharpApiDllCopiedToOutput = System.IO.File.Exists(apiDllInOutput),
-                csharpApiDllDefaultPathExists = System.IO.File.Exists(defaultApiDllPath),
-                socketReachable,
-                socketError
-            });
-        });
+        app.MapGet("/api/dev/ibkr-diagnostics", async (string? probeInstrumentId, TradingBot.Infrastructure.Services.IbkrDiagnosticsService diagnostics, CancellationToken cancellationToken) =>
+            Results.Ok(await diagnostics.GetAsync(probeInstrumentId, cancellationToken)));
 
         app.MapGet("/api/dev/dashboard-snapshot", async (IDashboardService dashboardService, CancellationToken cancellationToken) =>
         {

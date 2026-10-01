@@ -84,6 +84,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
             services.AddSingleton<IMarketDataCollectionStatusService, MarketDataCollectionStatusService>();
+            services.AddSingleton<IbkrDiagnosticsService>();
             services.AddSingleton<IMarketDatasetStore, ParquetMarketDatasetStore>();
             services.AddSingleton<MarketDatasetWriterHostedService>();
             services.AddSingleton<IMarketDatasetSink>(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
@@ -132,9 +133,9 @@ namespace TradingBot.Infrastructure
                     Host = ibkr.Host,
                     Port = ibkr.GetPort(trading.OperatingMode),
                     ClientId = ibkr.ClientId,
-                    AccountId = trading.OperatingMode == TradingBot.Domain.Enums.TradingOperatingMode.PaperTrading
-                        ? ibkr.PaperAccountId
-                        : ibkr.AccountId
+                    AccountId = trading.OperatingMode == TradingBot.Domain.Enums.TradingOperatingMode.LiveTrading
+                        ? ibkr.AccountId
+                        : ibkr.PaperAccountId
                 };
             });
             services.AddSingleton<MarketDataPipeline>();
