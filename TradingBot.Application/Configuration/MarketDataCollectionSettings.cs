@@ -11,6 +11,8 @@ namespace TradingBot.Application.Configuration
         public int ReconnectInitialDelaySeconds { get; set; } = 2;
         public int ReconnectMaximumDelaySeconds { get; set; } = 60;
         public int MaximumGapFillLookbackMinutes { get; set; } = 1440;
+        public int TickHeartbeatTimeoutSeconds { get; set; } = 60;
+        public int TickQueueCapacity { get; set; } = 8192;
 
         public IReadOnlyList<string> GetValidationErrors()
         {
@@ -21,6 +23,8 @@ namespace TradingBot.Application.Configuration
             if (ReconnectInitialDelaySeconds <= 0) errors.Add("MarketDataCollection:ReconnectInitialDelaySeconds must be greater than zero.");
             if (ReconnectMaximumDelaySeconds < ReconnectInitialDelaySeconds) errors.Add("MarketDataCollection:ReconnectMaximumDelaySeconds cannot be less than ReconnectInitialDelaySeconds.");
             if (MaximumGapFillLookbackMinutes <= 0) errors.Add("MarketDataCollection:MaximumGapFillLookbackMinutes must be greater than zero.");
+            if (TickHeartbeatTimeoutSeconds <= 0) errors.Add("MarketDataCollection:TickHeartbeatTimeoutSeconds must be greater than zero.");
+            if (TickQueueCapacity < 128) errors.Add("MarketDataCollection:TickQueueCapacity must be at least 128.");
             return errors;
         }
     }

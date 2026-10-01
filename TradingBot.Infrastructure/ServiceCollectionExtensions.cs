@@ -26,6 +26,7 @@ namespace TradingBot.Infrastructure
             services.TryAddSingleton<IAccountService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IPositionService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IMarketDataService>(sp => sp.GetRequiredService<IbkrBrokerService>());
+            services.TryAddSingleton<ITickMarketDataService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IIbkrConnectionService, IbkrConnectionService>();
 #else
             var hasConcreteIbkrAdapter = services.Any(descriptor => descriptor.ServiceType == typeof(IIbkrAdapter));
@@ -107,6 +108,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService<ProtectiveStopInvariantHostedService>();
             services.AddHostedService<ExitManagementHostedService>();
             services.AddHostedService<MarketDataSubscriptionHostedService>();
+            services.AddHostedService<TickMarketDataHostedService>();
             services.AddHostedService<CandlePatternDetectionBackgroundService>();
             services.AddHostedService<PatternDecisionBackgroundService>();
             services.AddHostedService<ApprovedOrderExecutionBackgroundService>();

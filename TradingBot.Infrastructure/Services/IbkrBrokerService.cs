@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading.Channels;
 using IBApi;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Exceptions;
@@ -14,7 +15,7 @@ using TradingBot.Infrastructure.Options;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IIbkrRuntimeDiagnostics, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, IDisposable
+    public sealed class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IIbkrRuntimeDiagnostics, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, ITickMarketDataService, IDisposable
     {
         private static readonly TimeSpan BrokerResponseTimeout = TimeSpan.FromSeconds(10);
         private static readonly string[] AccountSummaryTags = ["NetLiquidation", "AvailableFunds", "BuyingPower", "MaintMarginReq"];
@@ -30,7 +31,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<int, OpenOrdersRequest> _openOrdersRequests = new();
         private readonly ConcurrentDictionary<int, HistoricalBarsRequest> _historicalRequests = new();
         private readonly ConcurrentDictionary<int, StreamingSubscription> _subscriptions = new();
-        private readonly ConcurrentDictionary<int, LevelOneSubscription> _levelOneSubscriptions = new();
+        private readonly ConcurrentDictionary<int, TickSubscription> _tickSubscriptions = new();
         private readonly ConcurrentDictionary<int, ContractDetailsRequest> _contractRequests = new();
         private readonly ConcurrentDictionary<string, int> _marketDataErrors = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, decimal> _commissionsByExecutionId = new(StringComparer.OrdinalIgnoreCase);
@@ -44,11 +45,13 @@ namespace TradingBot.Infrastructure.Services
         private int _nextRequestId = 10_000;
         private bool _managedAccountsReceived;
         private bool? _configuredAccountRecognized;
+        private readonly int _tickQueueCapacity;
 
-        public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger)
+        public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger, IOptions<MarketDataCollectionSettings>? collectionSettings = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _tickQueueCapacity = collectionSettings?.Value.TickQueueCapacity ?? 8192;
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
@@ -61,7 +64,10 @@ namespace TradingBot.Infrastructure.Services
         public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
         public event Func<bool, Task>? ReadinessChanged;
         public event Func<MarketBar, Task>? MarketBarReceived;
+        // Retained for the existing adapter contract; tick callbacks are consumed through a bounded channel.
+#pragma warning disable CS0067
         public event Func<CanonicalMarketDataEvent, Task>? MarketDataEventReceived;
+#pragma warning restore CS0067
         public event Func<AccountInfo, Task>? AccountUpdated;
         public event Func<PositionDto, Task>? PositionUpdated;
         public event Func<OrderStatusDto, Task>? OrderStatusUpdated;
@@ -363,13 +369,6 @@ namespace TradingBot.Infrastructure.Services
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var normalizedTimeframe = NormalizeTimeframe(timeframe);
-            int? levelOneRequestId = null;
-            if (normalizedTimeframe == "1m")
-            {
-                levelOneRequestId = GetNextRequestId();
-                _levelOneSubscriptions[levelOneRequestId.Value] = new LevelOneSubscription(symbol);
-                client.reqMktData(levelOneRequestId.Value, BuildStockContract(symbol), string.Empty, false, false, []);
-            }
             var channel = Channel.CreateBounded<MarketBar>(new BoundedChannelOptions(128)
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
@@ -380,11 +379,6 @@ namespace TradingBot.Infrastructure.Services
             {
                 _subscriptions.TryRemove(requestId, out _);
                 TryBrokerCall(() => client.cancelHistoricalData(requestId), "cancel streaming historical data");
-                if (levelOneRequestId.HasValue)
-                {
-                    _levelOneSubscriptions.TryRemove(levelOneRequestId.Value, out _);
-                    TryBrokerCall(() => client.cancelMktData(levelOneRequestId.Value), "cancel level-one market data");
-                }
             });
             subscription.SetContext(symbol, normalizedTimeframe);
 
@@ -403,6 +397,35 @@ namespace TradingBot.Infrastructure.Services
                 []);
 
             return Task.FromResult<IMarketDataSubscription>(subscription);
+        }
+
+        public Task<ITickMarketDataSubscription> SubscribeTicksAsync(string instrumentId, string symbol, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var client = GetConnectedClient();
+            var tradeId = GetNextRequestId();
+            var quoteId = GetNextRequestId();
+            var subscription = new TickSubscription(instrumentId, symbol, _tickQueueCapacity, () =>
+            {
+                _tickSubscriptions.TryRemove(tradeId, out _);
+                _tickSubscriptions.TryRemove(quoteId, out _);
+                TryBrokerCall(() => client.cancelTickByTickData(tradeId), "cancel trade tick data");
+                TryBrokerCall(() => client.cancelTickByTickData(quoteId), "cancel bid/ask tick data");
+            });
+            _tickSubscriptions[tradeId] = subscription;
+            _tickSubscriptions[quoteId] = subscription;
+            try
+            {
+                var contract = BuildStockContract(symbol);
+                client.reqTickByTickData(tradeId, contract, "AllLast", 0, false);
+                client.reqTickByTickData(quoteId, contract, "BidAsk", 0, false);
+                return Task.FromResult<ITickMarketDataSubscription>(subscription);
+            }
+            catch
+            {
+                subscription.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                throw;
+            }
         }
 
         public async Task<IbkrContractProbe> ProbeContractAsync(ConfiguredInstrument instrument, CancellationToken cancellationToken = default)
@@ -446,6 +469,7 @@ namespace TradingBot.Infrastructure.Services
 
         public override void connectionClosed()
         {
+            foreach (var subscription in _tickSubscriptions.Values.Distinct()) subscription.Complete("IBKR connection closed.");
             _logger.LogWarning("IBKR connection closed.");
             _managedAccountsReceived = false;
             _configuredAccountRecognized = null;
@@ -455,6 +479,7 @@ namespace TradingBot.Infrastructure.Services
 
         public override void error(Exception e)
         {
+            foreach (var subscription in _tickSubscriptions.Values.Distinct()) subscription.Complete("IBKR exception callback.");
             _logger.LogError(e, "IBKR exception callback.");
             _ = PublishReadinessAsync(false);
             _ = PublishConnectionStatusAsync(ConnectionStatus.Failed);
@@ -494,13 +519,14 @@ namespace TradingBot.Infrastructure.Services
                 contractRequest.Completion.TrySetResult(new IbkrContractProbe("BrokerError", ErrorCode: errorCode));
             }
 
-            if (_levelOneSubscriptions.TryGetValue(id, out var levelOne))
-            {
-                _marketDataErrors[levelOne.Symbol] = errorCode;
-            }
-            else if (_subscriptions.TryGetValue(id, out var stream))
+            if (_subscriptions.TryGetValue(id, out var stream))
             {
                 _marketDataErrors[stream.Symbol] = errorCode;
+            }
+            if (_tickSubscriptions.TryGetValue(id, out var tickSubscription))
+            {
+                _marketDataErrors[tickSubscription.Symbol] = errorCode;
+                tickSubscription.Complete($"IBKR tick request error {errorCode}: {errorMsg}");
             }
 
             if (errorCode is 1100 or 1300)
@@ -788,43 +814,22 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        public override void tickPrice(int tickerId, int field, double price, TickAttrib attribs)
+        public override void tickByTickAllLast(int reqId, int tickType, long time, double price, decimal size, TickAttribLast tickAttribLast, string exchange, string specialConditions)
         {
-            if (!_levelOneSubscriptions.TryGetValue(tickerId, out var subscription)
-                || double.IsNaN(price)
-                || double.IsInfinity(price)
-                || price <= 0d)
+            if (_tickSubscriptions.TryGetValue(reqId, out var subscription))
             {
-                return;
+                subscription.Publish(MarketDataEventKind.Trade, time, price, size);
+                _marketDataErrors.TryRemove(subscription.Symbol, out _);
             }
+        }
 
-            var kind = field switch
+        public override void tickByTickBidAsk(int reqId, long time, double bidPrice, double askPrice, decimal bidSize, decimal askSize, TickAttribBidAsk tickAttribBidAsk)
+        {
+            if (_tickSubscriptions.TryGetValue(reqId, out var subscription))
             {
-                1 => MarketDataEventKind.Bid,
-                2 => MarketDataEventKind.Ask,
-                4 => MarketDataEventKind.Trade,
-                _ => (MarketDataEventKind?)null
-            };
-            if (!kind.HasValue) return;
-
-            _marketDataErrors.TryRemove(subscription.Symbol, out _);
-
-            var now = DateTime.UtcNow;
-            var sequence = subscription.NextSequence(kind.Value);
-            var marketEvent = new CanonicalMarketDataEvent
-            {
-                EventId = $"IBKR:{tickerId}:{kind.Value}:{sequence}",
-                InstrumentId = subscription.Symbol,
-                Symbol = subscription.Symbol,
-                Kind = kind.Value,
-                EventTimeUtc = now,
-                ReceivedTimeUtc = now,
-                Source = "IBKR.Level1",
-                Sequence = sequence,
-                IsFinal = true,
-                Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture)
-            };
-            _ = InvokeMarketDataEventReceivedAsync(marketEvent);
+                subscription.PublishQuote(time, bidPrice, askPrice, bidSize, askSize);
+                _marketDataErrors.TryRemove(subscription.Symbol, out _);
+            }
         }
 
         public override void historicalDataUpdate(int reqId, Bar bar)
@@ -1165,11 +1170,6 @@ namespace TradingBot.Infrastructure.Services
             return MarketBarReceived?.Invoke(bar) ?? Task.CompletedTask;
         }
 
-        private Task InvokeMarketDataEventReceivedAsync(CanonicalMarketDataEvent marketEvent)
-        {
-            return MarketDataEventReceived?.Invoke(marketEvent) ?? Task.CompletedTask;
-        }
-
         private Task InvokeAccountUpdatedAsync(AccountInfo account)
         {
             return AccountUpdated?.Invoke(account) ?? Task.CompletedTask;
@@ -1373,25 +1373,83 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        private sealed class LevelOneSubscription
+        internal sealed class TickSubscription : ITickMarketDataSubscription
         {
-            private long _bidSequence;
-            private long _askSequence;
-            private long _tradeSequence;
+            private readonly Channel<CanonicalMarketDataEvent> _channel;
+            private readonly Action _dispose;
+            private readonly string _sessionId = Guid.NewGuid().ToString("N");
+            private long _nextId;
+            private long _droppedEvents;
+            private int _disposed;
+            private (double Price, decimal Size)? _lastBid;
+            private (double Price, decimal Size)? _lastAsk;
 
-            public LevelOneSubscription(string symbol)
+            public TickSubscription(string instrumentId, string symbol, int capacity, Action dispose)
             {
+                InstrumentId = instrumentId;
                 Symbol = symbol;
+                _dispose = dispose;
+                _channel = Channel.CreateBounded<CanonicalMarketDataEvent>(new BoundedChannelOptions(capacity)
+                {
+                    FullMode = BoundedChannelFullMode.Wait,
+                    SingleReader = true,
+                    SingleWriter = true
+                });
             }
 
+            public string InstrumentId { get; }
             public string Symbol { get; }
-            public long NextSequence(MarketDataEventKind kind) => kind switch
+            public ChannelReader<CanonicalMarketDataEvent> Reader => _channel.Reader;
+            public long DroppedEvents => Interlocked.Read(ref _droppedEvents);
+
+            public void PublishQuote(long epochSeconds, double bidPrice, double askPrice, decimal bidSize, decimal askSize)
             {
-                MarketDataEventKind.Bid => Interlocked.Increment(ref _bidSequence),
-                MarketDataEventKind.Ask => Interlocked.Increment(ref _askSequence),
-                MarketDataEventKind.Trade => Interlocked.Increment(ref _tradeSequence),
-                _ => throw new ArgumentOutOfRangeException(nameof(kind))
-            };
+                if (_lastBid != (bidPrice, bidSize))
+                {
+                    Publish(MarketDataEventKind.Bid, epochSeconds, bidPrice, bidSize);
+                    _lastBid = (bidPrice, bidSize);
+                }
+                if (_lastAsk != (askPrice, askSize))
+                {
+                    Publish(MarketDataEventKind.Ask, epochSeconds, askPrice, askSize);
+                    _lastAsk = (askPrice, askSize);
+                }
+            }
+
+            public void Publish(MarketDataEventKind kind, long epochSeconds, double price, decimal size)
+            {
+                if (_disposed != 0 || !double.IsFinite(price) || price <= 0 || price > (double)decimal.MaxValue || size < 0) return;
+                DateTime eventTime;
+                try { eventTime = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).UtcDateTime; }
+                catch (ArgumentOutOfRangeException) { return; }
+                var id = Interlocked.Increment(ref _nextId);
+                var marketEvent = new CanonicalMarketDataEvent
+                {
+                    EventId = $"IBKR:TBT:{_sessionId}:{id}",
+                    InstrumentId = InstrumentId,
+                    Symbol = Symbol,
+                    Kind = kind,
+                    EventTimeUtc = eventTime,
+                    ReceivedTimeUtc = DateTime.UtcNow,
+                    Source = "IBKR.TickByTick",
+                    Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture),
+                    Size = size,
+                    IsFinal = true
+                };
+                if (!_channel.Writer.TryWrite(marketEvent)) Interlocked.Increment(ref _droppedEvents);
+            }
+
+            public void Complete(string reason) => _channel.Writer.TryComplete(new IOException(reason));
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    _dispose();
+                    _channel.Writer.TryComplete();
+                }
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }

@@ -201,7 +201,7 @@ Popravak: dijeljen HTTP klijent/policy, odvojene metrike poslovnog poziva i poje
 
 ### R16 — P2: operativna pouzdanost i deploy nisu završeni
 
-Status: **djelomično riješeno kroz točke 6, 15 i 17** — collection ima per-stream health/reconnect, broker lifecycle i reconciliation su trajni, a rollout monitor automatski suspendira instrument na feed/order/reconciliation mismatchu. Autentikacija operativnih endpointova, market calendar, službeni IBKR DLL build i produkcijski backup/restore postupak ostaju otvoreni.
+Status: **djelomično riješeno kroz točke 6, 15, 17, 19 i 20** — collection ima per-stream health/reconnect i zasebne tick pretplate, broker lifecycle i reconciliation su trajni, a rollout monitor automatski suspendira instrument na feed/order/reconciliation mismatchu. Službeni IBKR DLL build lokalno prolazi. Autentikacija operativnih endpointova, market calendar, stvarni TWS paper callback test, mjerenje tick throughputa i produkcijski backup/restore postupak ostaju otvoreni.
 
 Izvor: [MarketDataSubscriptionHostedService.cs](../TradingBot.Infrastructure/Background/MarketDataSubscriptionHostedService.cs), [Program.cs](../TradingBot.Web/Program.cs), [MigrationHostedService.cs](../TradingBot.Persistence/MigrationHostedService.cs), [TradingBot.Infrastructure.csproj](../TradingBot.Infrastructure/TradingBot.Infrastructure.csproj).
 
@@ -211,7 +211,7 @@ Izvor: [MarketDataSubscriptionHostedService.cs](../TradingBot.Infrastructure/Bac
 - Trading raspored pokriva sate/dane, ali nema kalendar blagdana i ranih zatvaranja tržišta.
 - Web nema ugrađenu autentikaciju/autorizaciju za dashboard kontrole. Ako se izlaže mreži, pristup treba ograničiti i autentificirati; lokalni launch profil sam po sebi nije dokaz javne izloženosti.
 - Startup mijenja DB shemu i radi dodatni schema repair. Postoje testovi poznatih repair slučajeva; treba dodati backup/restore i upgrade iz stvarnih prethodnih shema. SQLite je prihvatljiv početak za trenutni opseg, ali tick/L2 volumen treba odvojeno izmjeriti.
-- Realni broker kod kompajlira se samo kad postoji `CSharpAPI.dll` na konfiguriranoj putanji. Običan test bez DLL-a ne dokazuje ni kompilaciju adaptera. Naknadni commit na radnom branchu dodaje .NET 10 `global.json`, usklađuje Microsoft pakete i uvodi CI; zasebna provjera s broker DLL-om i dalje je potrebna.
+- Realni broker kod kompajlira se samo kad postoji `CSharpAPI.dll` na konfiguriranoj putanji. Točke 19 i 20 lokalno su izgrađene sa službenim DLL-om, ali taj build ne potvrđuje stvarno TWS paper ponašanje ni feed prava. .NET 10 `global.json`, usklađeni Microsoft paketi i CI već su u branchu.
 
 ## Testna strategija nakon potvrde plana
 

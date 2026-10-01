@@ -28,6 +28,7 @@ namespace TradingBot.Persistence
         public DbSet<InstrumentStatusTransitionRecord> InstrumentStatusTransitionRecords { get; set; }
         public DbSet<MarketDataStreamStateRecord> MarketDataStreamStateRecords { get; set; }
         public DbSet<MarketDataQualityIncidentRecord> MarketDataQualityIncidentRecords { get; set; }
+        public DbSet<TickCoverageGapRecord> TickCoverageGapRecords { get; set; }
         public DbSet<HistoricalBackfillJobRecord> HistoricalBackfillJobRecords { get; set; }
         public DbSet<HistoricalBackfillSegmentRecord> HistoricalBackfillSegmentRecords { get; set; }
         public DbSet<HistoricalDataGapRecord> HistoricalDataGapRecords { get; set; }
@@ -51,6 +52,13 @@ namespace TradingBot.Persistence
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<TickCoverageGapRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.InstrumentId, x.StartUtc });
+                b.HasIndex(x => x.RecordedAtUtc);
+            });
 
             modelBuilder.Entity<Candle>(b =>
             {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.EntityFrameworkCore;
 using TradingBot.Persistence;
 using TradingBot.Infrastructure;
 using NLog.Web;
@@ -266,6 +267,13 @@ try
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));
     app.MapGet("/api/market-data/collection", (IMarketDataCollectionStatusService collection) => Results.Ok(collection.GetAll()));
+    app.MapGet("/api/market-data/tick-gaps", async (int? count, IDbContextFactory<TradingBotDbContext> factory, CancellationToken cancellationToken) =>
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return Results.Ok(await db.TickCoverageGapRecords.AsNoTracking()
+            .OrderByDescending(gap => gap.RecordedAtUtc).ThenByDescending(gap => gap.Id)
+            .Take(Math.Clamp(count ?? 100, 1, 500)).ToListAsync(cancellationToken));
+    });
     app.MapGet("/api/ibkr/diagnostics", async (string? probeInstrumentId, TradingBot.Infrastructure.Services.IbkrDiagnosticsService diagnostics, CancellationToken cancellationToken) =>
     {
         try

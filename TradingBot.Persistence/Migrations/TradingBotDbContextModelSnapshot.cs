@@ -688,6 +688,45 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("InstrumentStatusTransitionRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.TickCoverageGapRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DroppedEvents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EndUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstrumentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstrumentId", "StartUtc");
+
+                    b.HasIndex("RecordedAtUtc");
+
+                    b.ToTable("TickCoverageGapRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.MarketDataQualityIncidentRecord", b =>
                 {
                     b.Property<long>("Id")

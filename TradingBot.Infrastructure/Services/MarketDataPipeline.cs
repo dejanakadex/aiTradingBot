@@ -250,7 +250,12 @@ namespace TradingBot.Infrastructure.Services
                 Source = marketEvent.Source.Trim()
             };
             var assessment = await _qualityService.EvaluateAsync(normalized, false, cancellationToken).ConfigureAwait(false);
-            await RecordDatasetAsync(normalized, assessment, cancellationToken).ConfigureAwait(false);
+            if (_datasetSink != null)
+            {
+                var accepted = await _datasetSink.EnqueueAsync(
+                    MarketDatasetRecord.From(normalized, assessment, string.Empty), cancellationToken).ConfigureAwait(false);
+                if (!accepted) throw new IOException($"Dataset writer rejected tick event {normalized.EventId}.");
+            }
             if (assessment.IsHealthy)
             {
                 _latestMarketData.Apply(normalized);
