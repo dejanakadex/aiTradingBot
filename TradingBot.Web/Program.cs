@@ -71,6 +71,10 @@ try
         .Bind(builder.Configuration.GetSection("MarketDataCollection"))
         .Validate(settings => settings.GetValidationErrors().Count == 0, "MarketDataCollection configuration is invalid. Check heartbeat, reconnect and gap-fill values.")
         .ValidateOnStart();
+    builder.Services.AddOptions<ShortAggregateSettings>()
+        .Bind(builder.Configuration.GetSection("ShortAggregates"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ShortAggregates configuration is invalid.")
+        .ValidateOnStart();
 
     builder.Services.AddOptions<ReplaySettings>()
         .Bind(builder.Configuration.GetSection("Replay"))

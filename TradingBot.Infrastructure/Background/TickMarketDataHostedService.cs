@@ -18,6 +18,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
     private readonly MarketDataPipeline _pipeline;
     private readonly IMarketDataCollectionStatusService _status;
     private readonly IMarketDataQualityService _quality;
+    private readonly ILatestMarketDataService _latest;
     private readonly IDbContextFactory<TradingBotDbContext> _dbFactory;
     private readonly TradingSettings _trading;
     private readonly MarketDataCollectionSettings _settings;
@@ -30,6 +31,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
         MarketDataPipeline pipeline,
         IMarketDataCollectionStatusService status,
         IMarketDataQualityService quality,
+        ILatestMarketDataService latest,
         IDbContextFactory<TradingBotDbContext> dbFactory,
         IOptions<TradingSettings> trading,
         IOptions<MarketDataCollectionSettings> settings,
@@ -41,6 +43,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
         _pipeline = pipeline;
         _status = status;
         _quality = quality;
+        _latest = latest;
         _dbFactory = dbFactory;
         _trading = trading.Value;
         _settings = settings.Value;
@@ -131,6 +134,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
                             throw new IOException($"Tick queue overflow: {subscription.DroppedEvents - lastDropped} events dropped.");
                         }
                         var now = _clock.UtcNow;
+                        _latest.AdvanceTo(now);
                         if (IsRegularSession(now) && now - lastActivity > TimeSpan.FromSeconds(_settings.TickHeartbeatTimeoutSeconds))
                             throw new IOException("Tick heartbeat timeout.");
                         if (!IsRegularSession(now)) lastActivity = now;

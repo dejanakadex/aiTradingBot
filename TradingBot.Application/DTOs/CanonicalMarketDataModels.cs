@@ -74,6 +74,8 @@ namespace TradingBot.Application.DTOs
     {
         public int IntervalSeconds { get; init; }
         public DateTime WindowStartUtc { get; init; }
+        public DateTime WindowEndUtc { get; init; }
+        public DateTime AvailableAtUtc { get; init; }
         public DateTime LastEventTimeUtc { get; init; }
         public decimal Open { get; init; }
         public decimal High { get; init; }
@@ -81,6 +83,7 @@ namespace TradingBot.Application.DTOs
         public decimal Close { get; init; }
         public decimal Volume { get; init; }
         public int TradeCount { get; init; }
+        public int EmptyIntervalsBefore { get; init; }
     }
 
     public sealed record LatestMarketDataSnapshot
@@ -96,5 +99,6 @@ namespace TradingBot.Application.DTOs
         public DateTime? LastTradeTimeUtc { get; init; }
         public DateTime? AsOfUtc { get; init; }
         public IReadOnlyList<ShortIntervalBarSnapshot> ShortAggregates { get; init; } = Array.Empty<ShortIntervalBarSnapshot>();
+        public long LateShortAggregateTrades { get; init; }
     }
 }

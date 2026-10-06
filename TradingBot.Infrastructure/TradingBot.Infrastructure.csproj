@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="Microsoft.ML.LightGbm" Version="5.0.0" />
     <PackageReference Include="Parquet.Net" Version="6.1.0" />
+    <PackageReference Include="FacioQuo.Stock.Indicators" Version="3.0.1" />
     <PackageReference Include="Google.Protobuf" Version="3.29.5" Condition="Exists('$(IbkrApiDll)')" />
   </ItemGroup>
 

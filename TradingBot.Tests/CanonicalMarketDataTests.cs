@@ -70,6 +70,9 @@ namespace TradingBot.Tests
             latest.Apply(Tick("trade-1", MarketDataEventKind.Trade, NowUtc.AddSeconds(1), NowUtc.AddSeconds(1), 100.01m, 5m));
             latest.Apply(Tick("trade-2", MarketDataEventKind.Trade, NowUtc.AddSeconds(2), NowUtc.AddSeconds(2), 100.03m, 7m));
 
+            Assert.Empty(latest.Get("SPY")!.ShortAggregates); // open windows are unavailable to strategies
+            latest.AdvanceTo(NowUtc.AddSeconds(17));
+
             var snapshot = latest.Get("SPY")!;
             Assert.NotNull(snapshot);
             Assert.Equal(0.04m, snapshot.Spread);
@@ -79,6 +82,8 @@ namespace TradingBot.Tests
             Assert.Equal(100.03m, fiveSeconds.High);
             Assert.Equal(12m, fiveSeconds.Volume);
             Assert.Equal(2, fiveSeconds.TradeCount);
+            Assert.Equal(NowUtc.AddSeconds(7), fiveSeconds.AvailableAtUtc);
+            Assert.Equal(NowUtc.AddSeconds(5), fiveSeconds.WindowEndUtc);
             Assert.Contains(snapshot.ShortAggregates, item => item.IntervalSeconds == 15);
         }
 

@@ -18,6 +18,8 @@ namespace TradingBot.Application.Interfaces
     public interface ILatestMarketDataService
     {
         void Apply(CanonicalMarketDataEvent marketEvent);
+        void AdvanceTo(DateTime receivedTimeUtc);
+        IReadOnlyList<ShortIntervalBarSnapshot> GetCompletedShortAggregates(string instrumentId, int intervalSeconds, DateTime asOfUtc, int count = 100);
         LatestMarketDataSnapshot? Get(string instrumentIdOrSymbol);
         IReadOnlyList<LatestMarketDataSnapshot> GetAll();
     }

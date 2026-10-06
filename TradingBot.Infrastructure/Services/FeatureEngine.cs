@@ -11,6 +11,7 @@ namespace TradingBot.Infrastructure.Services
     public sealed class FeatureEngine : IFeatureEngine
     {
         private readonly CanonicalFeatureSettings _settings;
+        private readonly FacioQuoIndicatorAdapter _indicators = new();
 
         public FeatureEngine(CanonicalFeatureSettings settings)
         {
@@ -72,9 +73,11 @@ namespace TradingBot.Infrastructure.Services
 
             ValidateSeriesIdentity(candles);
             var last = candles[^1];
-            var emaShort = ComputeEma(candles, _settings.EmaShortPeriod);
-            var emaLong = ComputeEma(candles, _settings.EmaLongPeriod);
-            var rsi = ComputeRsi(candles, _settings.RsiPeriod);
+            var verified = _indicators.Compute(candles, _settings.EmaShortPeriod, _settings.EmaLongPeriod,
+                _settings.RsiPeriod, _settings.AtrPeriod, includeAtr: false);
+            var emaShort = verified.EmaShort;
+            var emaLong = verified.EmaLong;
+            var rsi = verified.Rsi;
             var atr = ComputeAtr(candles, _settings.AtrPeriod);
             var vwap = ComputeVwap(candles);
             var volumeAverage = ComputeVolumeAverage(candles, _settings.VolumeAveragePeriod);
@@ -155,7 +158,7 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        private static decimal? ComputeEma(IReadOnlyList<Candle> candles, int period)
+        internal static decimal? ComputeEma(IReadOnlyList<Candle> candles, int period)
         {
             if (candles.Count < period) return null;
             var value = candles.Take(period).Average(item => item.Close);
@@ -167,7 +170,7 @@ namespace TradingBot.Infrastructure.Services
             return value;
         }
 
-        private static decimal? ComputeRsi(IReadOnlyList<Candle> candles, int period)
+        internal static decimal? ComputeRsi(IReadOnlyList<Candle> candles, int period)
         {
             if (candles.Count <= period) return null;
             decimal gain = 0m;
@@ -195,7 +198,7 @@ namespace TradingBot.Infrastructure.Services
             return 100m - 100m / (1m + relativeStrength);
         }
 
-        private static decimal? ComputeAtr(IReadOnlyList<Candle> candles, int period)
+        internal static decimal? ComputeAtr(IReadOnlyList<Candle> candles, int period)
         {
             if (candles.Count <= period) return null;
             var trueRanges = new List<decimal>(candles.Count - 1);

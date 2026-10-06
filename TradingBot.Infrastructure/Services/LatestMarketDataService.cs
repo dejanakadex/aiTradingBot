@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
+using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
@@ -7,8 +9,15 @@ namespace TradingBot.Infrastructure.Services
 {
     public sealed class LatestMarketDataService : ILatestMarketDataService
     {
-        private static readonly int[] AggregateIntervals = [5, 15];
+        private readonly ShortAggregateSettings _settings;
         private readonly ConcurrentDictionary<string, InstrumentState> _states = new(StringComparer.OrdinalIgnoreCase);
+
+        public LatestMarketDataService(IOptions<ShortAggregateSettings>? settings = null)
+        {
+            _settings = settings?.Value ?? new ShortAggregateSettings();
+            var errors = _settings.GetValidationErrors();
+            if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors), nameof(settings));
+        }
 
         public void Apply(CanonicalMarketDataEvent marketEvent)
         {
@@ -16,6 +25,7 @@ namespace TradingBot.Infrastructure.Services
             var state = _states.GetOrAdd(marketEvent.InstrumentId, _ => new InstrumentState(marketEvent.InstrumentId, marketEvent.Symbol));
             lock (state.Sync)
             {
+                AdvanceState(state, ToUtc(marketEvent.ReceivedTimeUtc));
                 state.Symbol = marketEvent.Symbol;
                 switch (marketEvent.Kind)
                 {
@@ -28,12 +38,15 @@ namespace TradingBot.Infrastructure.Services
                         state.AskTimeUtc = marketEvent.EventTimeUtc;
                         break;
                     case MarketDataEventKind.Trade:
+                        if (!state.TryRegisterTrade(marketEvent.EventId)) break;
                         state.LastTrade = marketEvent.Price;
                         state.LastTradeTimeUtc = marketEvent.EventTimeUtc;
-                        foreach (var interval in AggregateIntervals)
+                        var lateForAnyInterval = false;
+                        foreach (var interval in _settings.IntervalsSeconds)
                         {
-                            UpdateAggregate(state, interval, marketEvent);
+                            lateForAnyInterval |= !UpdateAggregate(state, interval, marketEvent);
                         }
+                        if (lateForAnyInterval) state.LateShortAggregateTrades++;
                         break;
                     case MarketDataEventKind.Bar:
                         if (!state.LastTradeTimeUtc.HasValue || marketEvent.EventTimeUtc >= state.LastTradeTimeUtc.Value)
@@ -43,6 +56,29 @@ namespace TradingBot.Infrastructure.Services
                         }
                         break;
                 }
+            }
+        }
+
+        public void AdvanceTo(DateTime receivedTimeUtc)
+        {
+            var now = ToUtc(receivedTimeUtc);
+            foreach (var state in _states.Values)
+            {
+                lock (state.Sync) AdvanceState(state, now);
+            }
+        }
+
+        public IReadOnlyList<ShortIntervalBarSnapshot> GetCompletedShortAggregates(
+            string instrumentId, int intervalSeconds, DateTime asOfUtc, int count = 100)
+        {
+            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+            if (!_settings.IntervalsSeconds.Contains(intervalSeconds)) throw new ArgumentOutOfRangeException(nameof(intervalSeconds));
+            if (!_states.TryGetValue(instrumentId, out var state)) return [];
+            lock (state.Sync)
+            {
+                return state.Completed.TryGetValue(intervalSeconds, out var completed)
+                    ? completed.Where(x => x.AvailableAtUtc <= ToUtc(asOfUtc)).TakeLast(count).ToArray()
+                    : [];
             }
         }
 
@@ -59,7 +95,7 @@ namespace TradingBot.Infrastructure.Services
             .Select(Snapshot)
             .ToArray();
 
-        private static void UpdateAggregate(InstrumentState state, int intervalSeconds, CanonicalMarketDataEvent marketEvent)
+        private bool UpdateAggregate(InstrumentState state, int intervalSeconds, CanonicalMarketDataEvent marketEvent)
         {
             var price = marketEvent.Price!.Value;
             var size = marketEvent.Size ?? 0m;
@@ -67,18 +103,77 @@ namespace TradingBot.Infrastructure.Services
             var windowTicks = TimeSpan.FromSeconds(intervalSeconds).Ticks;
             var windowStart = new DateTime(eventTime.Ticks - eventTime.Ticks % windowTicks, DateTimeKind.Utc);
 
-            if (!state.Aggregates.TryGetValue(intervalSeconds, out var aggregate) || aggregate.WindowStartUtc != windowStart)
+            var windowEnd = windowStart.AddSeconds(intervalSeconds);
+            if (state.ClosedThroughUtc.TryGetValue(intervalSeconds, out var closedThrough) && windowEnd <= closedThrough)
             {
-                state.Aggregates[intervalSeconds] = new MutableAggregate(windowStart, eventTime, price, price, price, price, size, 1);
-                return;
+                return false;
             }
 
-            aggregate.LastEventTimeUtc = eventTime;
+            if (!state.Open.TryGetValue(intervalSeconds, out var windows))
+            {
+                windows = new SortedDictionary<DateTime, MutableAggregate>();
+                state.Open[intervalSeconds] = windows;
+            }
+            if (!windows.TryGetValue(windowStart, out var aggregate))
+            {
+                windows[windowStart] = new MutableAggregate(windowStart, eventTime, price, price, price, price, size, 1);
+                return true;
+            }
+
+            if (eventTime < aggregate.FirstEventTimeUtc)
+            {
+                aggregate.FirstEventTimeUtc = eventTime;
+                aggregate.Open = price;
+            }
+            if (eventTime >= aggregate.LastEventTimeUtc)
+            {
+                aggregate.LastEventTimeUtc = eventTime;
+                aggregate.Close = price;
+            }
             aggregate.High = Math.Max(aggregate.High, price);
             aggregate.Low = Math.Min(aggregate.Low, price);
-            aggregate.Close = price;
             aggregate.Volume += size;
             aggregate.TradeCount++;
+            return true;
+        }
+
+        private void AdvanceState(InstrumentState state, DateTime nowUtc)
+        {
+            if (nowUtc <= state.LastAdvanceUtc) return;
+            state.LastAdvanceUtc = nowUtc;
+            foreach (var interval in _settings.IntervalsSeconds)
+            {
+                var cutoff = nowUtc.AddSeconds(-_settings.AllowedLatenessSeconds);
+                state.ClosedThroughUtc[interval] = cutoff;
+                if (!state.Open.TryGetValue(interval, out var windows)) continue;
+                foreach (var start in windows.Keys.TakeWhile(start => start.AddSeconds(interval) <= cutoff).ToArray())
+                {
+                    var current = windows[start];
+                    windows.Remove(start);
+                    if (!state.Completed.TryGetValue(interval, out var completed))
+                    {
+                        completed = new Queue<ShortIntervalBarSnapshot>();
+                        state.Completed[interval] = completed;
+                    }
+                    var previousEnd = completed.Count == 0 ? start : completed.Last().WindowEndUtc;
+                    completed.Enqueue(new ShortIntervalBarSnapshot
+                    {
+                        IntervalSeconds = interval,
+                        WindowStartUtc = start,
+                        WindowEndUtc = start.AddSeconds(interval),
+                        AvailableAtUtc = start.AddSeconds(interval + _settings.AllowedLatenessSeconds),
+                        LastEventTimeUtc = current.LastEventTimeUtc,
+                        Open = current.Open,
+                        High = current.High,
+                        Low = current.Low,
+                        Close = current.Close,
+                        Volume = current.Volume,
+                        TradeCount = current.TradeCount,
+                        EmptyIntervalsBefore = Math.Max(0, (int)((start - previousEnd).TotalSeconds / interval))
+                    });
+                    while (completed.Count > _settings.MaxCompletedPerInterval) completed.Dequeue();
+                }
+            }
         }
 
         private static LatestMarketDataSnapshot Snapshot(InstrumentState state)
@@ -101,21 +196,11 @@ namespace TradingBot.Infrastructure.Services
                     AskTimeUtc = state.AskTimeUtc,
                     LastTradeTimeUtc = state.LastTradeTimeUtc,
                     AsOfUtc = asOf == default ? null : asOf,
-                    ShortAggregates = state.Aggregates
-                        .OrderBy(item => item.Key)
-                        .Select(item => new ShortIntervalBarSnapshot
-                        {
-                            IntervalSeconds = item.Key,
-                            WindowStartUtc = item.Value.WindowStartUtc,
-                            LastEventTimeUtc = item.Value.LastEventTimeUtc,
-                            Open = item.Value.Open,
-                            High = item.Value.High,
-                            Low = item.Value.Low,
-                            Close = item.Value.Close,
-                            Volume = item.Value.Volume,
-                            TradeCount = item.Value.TradeCount
-                        })
-                        .ToArray()
+                    ShortAggregates = state.Completed.OrderBy(item => item.Key)
+                        .Where(item => item.Value.Count > 0)
+                        .Select(item => item.Value.Last())
+                        .ToArray(),
+                    LateShortAggregateTrades = state.LateShortAggregateTrades
                 };
             }
         }
@@ -144,7 +229,22 @@ namespace TradingBot.Infrastructure.Services
             public DateTime? BidTimeUtc { get; set; }
             public DateTime? AskTimeUtc { get; set; }
             public DateTime? LastTradeTimeUtc { get; set; }
-            public Dictionary<int, MutableAggregate> Aggregates { get; } = new();
+            public Dictionary<int, SortedDictionary<DateTime, MutableAggregate>> Open { get; } = new();
+            public Dictionary<int, Queue<ShortIntervalBarSnapshot>> Completed { get; } = new();
+            public Dictionary<int, DateTime> ClosedThroughUtc { get; } = new();
+            public DateTime LastAdvanceUtc { get; set; }
+            public long LateShortAggregateTrades { get; set; }
+            private readonly HashSet<string> _seenTradeIds = new(StringComparer.Ordinal);
+            private readonly Queue<string> _recentTradeIds = new();
+
+            public bool TryRegisterTrade(string eventId)
+            {
+                if (string.IsNullOrWhiteSpace(eventId)) return true;
+                if (!_seenTradeIds.Add(eventId)) return false;
+                _recentTradeIds.Enqueue(eventId);
+                while (_recentTradeIds.Count > 8192) _seenTradeIds.Remove(_recentTradeIds.Dequeue());
+                return true;
+            }
         }
 
         private sealed class MutableAggregate
@@ -152,6 +252,7 @@ namespace TradingBot.Infrastructure.Services
             public MutableAggregate(DateTime windowStartUtc, DateTime lastEventTimeUtc, decimal open, decimal high, decimal low, decimal close, decimal volume, int tradeCount)
             {
                 WindowStartUtc = windowStartUtc;
+                FirstEventTimeUtc = lastEventTimeUtc;
                 LastEventTimeUtc = lastEventTimeUtc;
                 Open = open;
                 High = high;
@@ -162,8 +263,9 @@ namespace TradingBot.Infrastructure.Services
             }
 
             public DateTime WindowStartUtc { get; }
+            public DateTime FirstEventTimeUtc { get; set; }
             public DateTime LastEventTimeUtc { get; set; }
-            public decimal Open { get; }
+            public decimal Open { get; set; }
             public decimal High { get; set; }
             public decimal Low { get; set; }
             public decimal Close { get; set; }

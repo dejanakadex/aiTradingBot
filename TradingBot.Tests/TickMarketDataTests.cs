@@ -74,17 +74,18 @@ public sealed class TickMarketDataTests
         var clock = new SystemClock();
         var tickService = new FakeTickService();
         var sink = new CapturingSink();
+        var latest = new LatestMarketDataService();
         using var bus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
         using var pipeline = new MarketDataPipeline(
             new FakeIbkrAdapter(), bus, factory,
             new MarketDataValidator(Options.Create(settings), clock), null,
             NullLogger<MarketDataPipeline>.Instance,
-            settings: Options.Create(settings), clock: clock, datasetSink: sink);
+            latestMarketData: latest, settings: Options.Create(settings), clock: clock, datasetSink: sink);
         var quality = new MarketDataQualityService(factory, Options.Create(settings), clock,
             NullLogger<MarketDataQualityService>.Instance);
         var status = new MarketDataCollectionStatusService();
         var service = new TickMarketDataHostedService([tickService], new ConnectedBroker(), pipeline,
-            status, quality, factory, Options.Create(settings), Options.Create(new MarketDataCollectionSettings
+            status, quality, latest, factory, Options.Create(settings), Options.Create(new MarketDataCollectionSettings
             {
                 MonitorIntervalSeconds = 1,
                 TickHeartbeatTimeoutSeconds = 30,
