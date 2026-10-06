@@ -238,7 +238,7 @@ namespace TradingBot.Infrastructure.Background
                     if (result.Submitted || result.Status == OrderStatus.PendingBrokerConfirmation)
                     {
                         await CommitReservationAsync(plan, result.BrokerOrderId, cancellationToken).ConfigureAwait(false);
-                        if (result.Submitted)
+                        if (result.Submitted || !string.IsNullOrWhiteSpace(result.BrokerOrderId))
                         {
                             await _exitManagementService.RegisterApprovedEntryAsync(plan, result, cancellationToken).ConfigureAwait(false);
                         }

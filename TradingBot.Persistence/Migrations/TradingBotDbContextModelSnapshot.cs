@@ -267,10 +267,16 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<decimal>("CurrentProtectiveStop")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("CurrentTakeProfitPrice")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("ProtectedQuantity")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("ProtectiveStopFilledQuantity").HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProtectiveStopCancelConfirmedUtc")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ProtectiveStopBrokerOrderId")
                         .IsRequired()
@@ -291,6 +297,7 @@ namespace TradingBot.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TakeProfitBrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime?>("TakeProfitCancelConfirmedUtc").HasColumnType("TEXT");
                     b.Property<decimal>("TakeProfitFilledQuantity").HasColumnType("TEXT");
                     b.Property<decimal>("ManagedExitFilledQuantity").HasColumnType("TEXT");
 

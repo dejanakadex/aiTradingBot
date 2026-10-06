@@ -4,7 +4,7 @@ namespace TradingBot.Application.Configuration
 {
     public sealed class ExitStrategySettings
     {
-        public ExitStrategyMode Mode { get; set; } = ExitStrategyMode.AtrTrailing;
+        public ExitStrategyMode Mode { get; set; } = ExitStrategyMode.FixedBracket;
         public decimal BreakEvenTriggerR { get; set; } = 0.8m;
         public decimal BreakEvenOffsetR { get; set; } = 0.05m;
         public decimal TrailingActivationR { get; set; } = 1.2m;

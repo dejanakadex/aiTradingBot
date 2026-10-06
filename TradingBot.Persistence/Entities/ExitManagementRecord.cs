@@ -29,6 +29,9 @@ namespace TradingBot.Persistence
         public decimal ManagedExitFilledQuantity { get; set; }
         public decimal HighestPriceSinceEntry { get; set; }
         public decimal CurrentProtectiveStop { get; set; }
+        public decimal CurrentTakeProfitPrice { get; set; }
+        public DateTime? ProtectiveStopCancelConfirmedUtc { get; set; }
+        public DateTime? TakeProfitCancelConfirmedUtc { get; set; }
         public bool BreakEvenActivated { get; set; }
         public bool TrailingActivated { get; set; }
         public string TrailingAtrTimeframe { get; set; } = string.Empty;

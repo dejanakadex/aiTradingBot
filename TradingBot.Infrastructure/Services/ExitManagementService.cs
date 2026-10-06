@@ -115,6 +115,7 @@ namespace TradingBot.Infrastructure.Services
                     ProtectedQuantity = 0m,
                     HighestPriceSinceEntry = initialEntry,
                     CurrentProtectiveStop = initialStop,
+                    CurrentTakeProfitPrice = plan.StrategyDecision.TakeProfitPrice ?? 0m,
                     TrailingAtrTimeframe = NormalizeTimeframe(_settings.TrailingAtrTimeframe),
                     TrailingAtrMultiplier = _settings.TrailingAtrMultiplier,
                     MaximumHoldingSeconds = ResolveMaximumHoldingSeconds(plan),
@@ -131,6 +132,18 @@ namespace TradingBot.Infrastructure.Services
                     }, JsonOptions)
                 });
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_settings.Mode == ExitStrategyMode.FixedBracket
+                && (string.IsNullOrWhiteSpace(entryOrder.ProtectiveStopOrderId)
+                    || string.IsNullOrWhiteSpace(entryOrder.TakeProfitOrderId)
+                    || !entryOrder.Submitted))
+            {
+                var record = await db.ExitManagementRecords.SingleAsync(
+                    x => x.EntryBrokerOrderId == entryOrder.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                await MarkFaultedAsync(db, record,
+                    "Fixed bracket is incomplete or its broker state is uncertain; cancel the entry and reconcile broker orders and position before trading resumes.",
+                    cancellationToken).ConfigureAwait(false);
             }
 
             var persistedEntry = await db.OrderRecords.AsNoTracking()
@@ -186,7 +199,8 @@ namespace TradingBot.Infrastructure.Services
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var unsafeRecords = await db.ExitManagementRecords
                 .Where(x => x.State != ExitManagementState.Closed
-                    && (x.State == ExitManagementState.ExitCancelPending
+                    && (x.State == ExitManagementState.Faulted
+                        || x.State == ExitManagementState.ExitCancelPending
                         || (x.State == ExitManagementState.ExitSubmitted && x.ExitBrokerOrderId == string.Empty)
                         || (x.FilledQuantity > x.ExitedQuantity
                             && x.State != ExitManagementState.ExitSubmitted
@@ -285,12 +299,42 @@ namespace TradingBot.Infrastructure.Services
                     return;
                 }
 
+                if (IsCancelled(status.Status) && status.FilledQuantity > 0m)
+                {
+                    await HandleExitFillAsync(db, record, brokerOrderId, status, cancellationToken).ConfigureAwait(false);
+                }
+                if (record.State == ExitManagementState.Closed)
+                {
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    return;
+                }
                 if (record.ProtectiveStopBrokerOrderId == brokerOrderId
                     && record.State == ExitManagementState.ExitCancelPending
                     && IsCancelled(status.Status))
                 {
                     record.ProtectedQuantity = 0m;
-                    await SubmitManagedExitNowAsync(db, record, record.ExitReason, record.InitialEntryPrice, cancellationToken).ConfigureAwait(false);
+                    record.ProtectiveStopCancelConfirmedUtc = DateTime.UtcNow;
+                    await SubmitAfterExitCancellationsAsync(db, record, cancellationToken).ConfigureAwait(false);
+                }
+                else if (record.TakeProfitBrokerOrderId == brokerOrderId
+                    && record.State == ExitManagementState.ExitCancelPending
+                    && IsCancelled(status.Status))
+                {
+                    record.TakeProfitCancelConfirmedUtc = DateTime.UtcNow;
+                    await SubmitAfterExitCancellationsAsync(db, record, cancellationToken).ConfigureAwait(false);
+                }
+                else if (IsCancelled(status.Status)
+                    && (record.ProtectiveStopBrokerOrderId == brokerOrderId || record.TakeProfitBrokerOrderId == brokerOrderId))
+                {
+                    await MarkFaultedAsync(db, record, "Protective child was cancelled while the position remains open; broker reconciliation required.", cancellationToken).ConfigureAwait(false);
+                }
+                else if (IsRejected(status)
+                    && (record.ProtectiveStopBrokerOrderId == brokerOrderId || record.TakeProfitBrokerOrderId == brokerOrderId))
+                {
+                    if (status.FilledQuantity > 0m)
+                        await HandleExitFillAsync(db, record, brokerOrderId, status, cancellationToken).ConfigureAwait(false);
+                    await MarkFaultedAsync(db, record, status.Message ?? "Broker rejected a fixed-bracket protective child.", cancellationToken).ConfigureAwait(false);
+                    await RequestCancellationAsync(record.EntryBrokerOrderId, cancellationToken).ConfigureAwait(false);
                 }
                 else if (status.FilledQuantity > 0m)
                 {
@@ -382,8 +426,10 @@ namespace TradingBot.Infrastructure.Services
             {
                 await SubmitInitialProtectiveStopAsync(db, record, averageEntry, cancellationToken).ConfigureAwait(false);
             }
-            else if (record.ProtectedQuantity < status.FilledQuantity)
+            else if (record.ProtectedQuantity < status.FilledQuantity - record.ExitedQuantity)
             {
+                if (!string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)
+                    && !await ModifyTakeProfitAsync(db, record, cancellationToken).ConfigureAwait(false)) return;
                 await ModifyProtectiveStopAsync(
                     db,
                     record,
@@ -440,7 +486,8 @@ namespace TradingBot.Infrastructure.Services
 
             record.ProtectiveStopBrokerOrderId = brokerOrderId;
             record.ProtectedQuantity = record.FilledQuantity;
-            record.State = ExitManagementState.InitialProtection;
+            if (record.State != ExitManagementState.Faulted)
+                record.State = ExitManagementState.InitialProtection;
             record.UpdatedUtc = DateTime.UtcNow;
             if (_signalArbitrationService != null && record.SignalId.HasValue)
             {
@@ -552,7 +599,9 @@ namespace TradingBot.Infrastructure.Services
             }
 
             var oldStop = record.CurrentProtectiveStop;
-            var request = BuildProtectiveStopRequest(record, record.FilledQuantity - record.ExitedQuantity, newStop, "ProtectiveStopModify");
+            var request = BuildProtectiveStopRequest(record,
+                record.ProtectiveStopFilledQuantity + record.FilledQuantity - record.ExitedQuantity,
+                newStop, "ProtectiveStopModify");
             OrderStatusDto status;
             try
             {
@@ -580,6 +629,50 @@ namespace TradingBot.Infrastructure.Services
             return true;
         }
 
+        private async Task<bool> ModifyTakeProfitAsync(
+            TradingBot.Persistence.TradingBotDbContext db,
+            TradingBot.Persistence.ExitManagementRecord record,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)) return true;
+            var modificationService = _serviceProvider.GetService<IOrderModificationService>();
+            if (modificationService == null || record.CurrentTakeProfitPrice <= 0m)
+            {
+                await MarkFaultedAsync(db, record, "Cannot resize the fixed-bracket take-profit order.", cancellationToken).ConfigureAwait(false);
+                return false;
+            }
+
+            var remaining = record.FilledQuantity - record.ExitedQuantity;
+            if (!await EnsureExitAuthorizedAsync(db, record, remaining, cancellationToken).ConfigureAwait(false)) return false;
+            var request = new OrderRequestDto
+            {
+                Symbol = record.Symbol,
+                Quantity = record.TakeProfitFilledQuantity + remaining,
+                Side = "SELL",
+                Type = "LIMIT",
+                LimitPrice = record.CurrentTakeProfitPrice,
+                ParentBrokerOrderId = record.EntryBrokerOrderId,
+                Role = "TakeProfitModify",
+                ClientOrderKey = $"exit:{record.EntryBrokerOrderId}:TakeProfitModify",
+                CreatedAtUtc = DateTime.UtcNow,
+                Transmit = true
+            };
+            OrderStatusDto status;
+            try
+            {
+                status = await modificationService.ModifyOrderAsync(record.TakeProfitBrokerOrderId, request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is BrokerOrderStateUnknownException or InvalidOperationException or TimeoutException or TaskCanceledException)
+            {
+                await MarkFaultedAsync(db, record, $"Take-profit modification failed: {ex.Message}", cancellationToken).ConfigureAwait(false);
+                return false;
+            }
+            await PersistOrderRecordAsync(db, record.TakeProfitBrokerOrderId, request, "TakeProfitModify", status, cancellationToken).ConfigureAwait(false);
+            if (IsBrokerAcknowledged(status)) return true;
+            await MarkFaultedAsync(db, record, status.Message ?? "Broker did not confirm take-profit modification.", cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
         private async Task RequestManagedExitAsync(
             TradingBot.Persistence.TradingBotDbContext db,
             TradingBot.Persistence.ExitManagementRecord record,
@@ -587,7 +680,7 @@ namespace TradingBot.Infrastructure.Services
             decimal marketPrice,
             CancellationToken cancellationToken)
         {
-            if (record.State is ExitManagementState.ExitCancelPending or ExitManagementState.ExitSubmitted or ExitManagementState.Closed) return;
+            if (record.State is ExitManagementState.ExitCancelPending or ExitManagementState.ExitSubmitted or ExitManagementState.Closed or ExitManagementState.Faulted) return;
             if (!CanSubmitProtectiveBrokerOrder(out var safetyReason))
             {
                 await MarkFaultedAsync(db, record, safetyReason, cancellationToken).ConfigureAwait(false);
@@ -602,19 +695,43 @@ namespace TradingBot.Infrastructure.Services
             record.ExitRequestedQuantity = remaining;
             record.UpdatedUtc = DateTime.UtcNow;
 
-            if (!string.IsNullOrWhiteSpace(record.ProtectiveStopBrokerOrderId) && record.ProtectedQuantity > 0m)
+            if ((!string.IsNullOrWhiteSpace(record.ProtectiveStopBrokerOrderId) && record.ProtectedQuantity > 0m)
+                || !string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId))
             {
                 record.State = ExitManagementState.ExitCancelPending;
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-                var accepted = await RequestCancellationAsync(record.ProtectiveStopBrokerOrderId, cancellationToken).ConfigureAwait(false);
-                if (!accepted)
+                if (!string.IsNullOrWhiteSpace(record.ProtectiveStopBrokerOrderId)
+                    && record.ProtectedQuantity > 0m
+                    && !record.ProtectiveStopCancelConfirmedUtc.HasValue
+                    && !await RequestCancellationAsync(record.ProtectiveStopBrokerOrderId, cancellationToken).ConfigureAwait(false))
                 {
                     await MarkFaultedAsync(db, record, "Protective stop cancellation request was rejected; managed exit was not submitted.", cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                if (!string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)
+                    && !record.TakeProfitCancelConfirmedUtc.HasValue
+                    && !await RequestCancellationAsync(record.TakeProfitBrokerOrderId, cancellationToken).ConfigureAwait(false))
+                {
+                    await MarkFaultedAsync(db, record, "Take-profit cancellation request was rejected; managed exit was not submitted.", cancellationToken).ConfigureAwait(false);
                 }
                 return;
             }
 
             await SubmitManagedExitNowAsync(db, record, reason, marketPrice, cancellationToken).ConfigureAwait(false);
+        }
+
+        private Task SubmitAfterExitCancellationsAsync(
+            TradingBot.Persistence.TradingBotDbContext db,
+            TradingBot.Persistence.ExitManagementRecord record,
+            CancellationToken cancellationToken)
+        {
+            var stopConfirmed = string.IsNullOrWhiteSpace(record.ProtectiveStopBrokerOrderId)
+                || record.ProtectiveStopCancelConfirmedUtc.HasValue;
+            var targetConfirmed = string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)
+                || record.TakeProfitCancelConfirmedUtc.HasValue;
+            return stopConfirmed && targetConfirmed
+                ? SubmitManagedExitNowAsync(db, record, record.ExitReason, record.InitialEntryPrice, cancellationToken)
+                : Task.CompletedTask;
         }
 
         private async Task SubmitManagedExitNowAsync(
@@ -691,9 +808,15 @@ namespace TradingBot.Infrastructure.Services
             else if (record.ExitBrokerOrderId == brokerOrderId)
                 record.ManagedExitFilledQuantity = Math.Max(record.ManagedExitFilledQuantity, cumulativeForOrder);
 
-            record.ExitedQuantity = Math.Min(
-                record.FilledQuantity,
-                record.ProtectiveStopFilledQuantity + record.TakeProfitFilledQuantity + record.ManagedExitFilledQuantity);
+            var observedExited = record.ProtectiveStopFilledQuantity + record.TakeProfitFilledQuantity + record.ManagedExitFilledQuantity;
+            record.ExitedQuantity = Math.Min(record.FilledQuantity, observedExited);
+            if (observedExited > record.FilledQuantity)
+            {
+                await MarkFaultedAsync(db, record,
+                    $"Broker exits total {observedExited} but entry fills total {record.FilledQuantity}; possible oversell requires reconciliation.",
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
             var remaining = Math.Max(0m, record.FilledQuantity - record.ExitedQuantity);
             record.ProtectedQuantity = Math.Min(record.ProtectedQuantity, remaining);
             record.UpdatedUtc = DateTime.UtcNow;
@@ -720,9 +843,13 @@ namespace TradingBot.Infrastructure.Services
                 return;
             }
 
+            if (record.State is ExitManagementState.ExitCancelPending or ExitManagementState.ExitSubmitted) return;
+
             if (record.ProtectiveStopBrokerOrderId == brokerOrderId)
             {
                 record.ProtectedQuantity = remaining;
+                if (!string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId))
+                    await ModifyTakeProfitAsync(db, record, cancellationToken).ConfigureAwait(false);
             }
             else if (!string.IsNullOrWhiteSpace(record.ProtectiveStopBrokerOrderId))
             {
@@ -816,6 +943,8 @@ namespace TradingBot.Infrastructure.Services
                 CreatedAtUtc = DateTime.UtcNow,
                 Role = role,
                 ClientOrderKey = $"exit:{record.EntryBrokerOrderId}:{role}",
+                ParentBrokerOrderId = string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)
+                    ? null : record.EntryBrokerOrderId,
                 Transmit = true
             };
         }

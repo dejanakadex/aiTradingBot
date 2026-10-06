@@ -105,6 +105,14 @@ namespace TradingBot.Infrastructure.Services
             {
                 throw new ArgumentException("Bracket take profit must be a sell limit order.", nameof(takeProfit));
             }
+            if (!string.Equals(entryLimitBuy.Symbol, stopLoss.Symbol, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(entryLimitBuy.Symbol, takeProfit.Symbol, StringComparison.OrdinalIgnoreCase)
+                || entryLimitBuy.Quantity <= 0m
+                || stopLoss.Quantity != entryLimitBuy.Quantity
+                || takeProfit.Quantity != entryLimitBuy.Quantity)
+            {
+                throw new ArgumentException("Bracket entry, stop and target must have the same symbol and positive quantity.");
+            }
 
             var guard = await _executionGuard.CanSubmitBrokerOrderAsync(riskDecision, cancellationToken).ConfigureAwait(false);
             if (!guard.Approved)
@@ -135,15 +143,37 @@ namespace TradingBot.Infrastructure.Services
                 var stop = await SubmitOrderToBrokerAsync(stopLoss, "ProtectiveStop", idempotencyKey, entry.BrokerOrderId, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(stop.BrokerOrderId)) childOrderIds.Add(stop.BrokerOrderId);
 
-                var target = await SubmitOrderToBrokerAsync(takeProfit, "TakeProfit", idempotencyKey, entry.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                // Do not transmit the parent/stop package if the stop was not acknowledged.
+                var target = stop.Submitted
+                    ? await SubmitOrderToBrokerAsync(takeProfit, "TakeProfit", idempotencyKey, entry.BrokerOrderId, cancellationToken).ConfigureAwait(false)
+                    : new ManagedOrderResult { Status = stop.Status, Submitted = false, Message = "Protective stop was not acknowledged." };
                 if (!string.IsNullOrWhiteSpace(target.BrokerOrderId)) childOrderIds.Add(target.BrokerOrderId);
+
+                var complete = stop.Submitted && target.Submitted
+                    && !string.IsNullOrWhiteSpace(stop.BrokerOrderId)
+                    && !string.IsNullOrWhiteSpace(target.BrokerOrderId);
+                if (!complete)
+                {
+                    // Cancellation is only a request. Keep the entry/reservation pending until
+                    // broker callbacks or reconciliation prove that no fill occurred.
+                    try
+                    {
+                        await CancelOrderAsync(entry.BrokerOrderId, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or TaskCanceledException)
+                    {
+                        _logger.LogError(ex, "Could not request entry cancellation for incomplete bracket {EntryOrderId}; reconciliation required.", entry.BrokerOrderId);
+                    }
+                    _logger.LogError("Incomplete bracket for {Symbol}, entry {EntryOrderId}: stop={StopStatus}, target={TargetStatus}. Broker reconciliation required.",
+                        entryLimitBuy.Symbol, entry.BrokerOrderId, stop.Status, target.Status);
+                }
 
                 return new ManagedOrderResult
                 {
                     OrderId = entry.OrderId,
                     BrokerOrderId = entry.BrokerOrderId,
-                    Status = entry.Status,
-                    Submitted = entry.Submitted,
+                    Status = complete ? entry.Status : OrderStatus.PendingBrokerConfirmation,
+                    Submitted = complete,
                     IsDuplicate = false,
                     FilledQuantity = entry.FilledQuantity,
                     RemainingQuantity = entry.RemainingQuantity,
@@ -152,9 +182,9 @@ namespace TradingBot.Infrastructure.Services
                     ChildOrderIds = childOrderIds,
                     ProtectiveStopOrderId = stop.BrokerOrderId,
                     TakeProfitOrderId = target.BrokerOrderId,
-                    Message = childOrderIds.Count == 2
+                    Message = complete
                         ? "Bracket workflow submitted. Fill must be confirmed by broker status updates."
-                        : "Bracket entry submitted, but one or more protective child orders were not accepted by the execution adapter."
+                        : "Incomplete bracket: entry cancellation requested; broker order and position reconciliation required."
                 };
             }
             finally

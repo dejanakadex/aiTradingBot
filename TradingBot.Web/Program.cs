@@ -176,6 +176,7 @@ try
         .Validate(settings => settings.TrailingAtrMultiplier > 0m, "ExitStrategy:TrailingAtrMultiplier must be greater than zero.")
         .Validate(settings => !string.IsNullOrWhiteSpace(settings.TrailingAtrTimeframe), "ExitStrategy:TrailingAtrTimeframe is required.")
         .Validate(settings => settings.MaximumHoldingMinutes == null || settings.MaximumHoldingMinutes > 0, "ExitStrategy:MaximumHoldingMinutes must be null or greater than zero.")
+        .Validate(settings => settings.MaximumHoldingSeconds == null || settings.MaximumHoldingSeconds > 0, "ExitStrategy:MaximumHoldingSeconds must be null or greater than zero.")
         .ValidateOnStart();
 
     builder.Services.AddOptions<DatabaseSettings>()

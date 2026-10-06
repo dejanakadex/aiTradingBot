@@ -955,7 +955,8 @@ namespace TradingBot.Infrastructure.Services
                 if (request.Side.Equals("SELL", StringComparison.OrdinalIgnoreCase))
                 {
                     order.OcaGroup = $"TradingBot:{parentOrderId}";
-                    order.OcaType = 1;
+                    // Reduce the other exit after a partial fill while blocking simultaneous routing.
+                    order.OcaType = 2;
                 }
             }
 

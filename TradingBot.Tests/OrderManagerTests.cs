@@ -105,6 +105,29 @@ namespace TradingBot.Tests
             manager.Dispose();
         }
 
+        [Theory]
+        [InlineData("ProtectiveStop", 2)]
+        [InlineData("TakeProfit", 3)]
+        public async Task RejectedBracketChild_CancelsEntryAndKeepsBrokerStatePendingReconciliation(string rejectedRole, int submissions)
+        {
+            var manager = CreateManager(out var adapter, out _, out var connection);
+            adapter.RejectRole = rejectedRole;
+
+            var result = await manager.SubmitBracketOrderAsync(
+                LimitBuy(),
+                new OrderRequest("SPY", OrderSide.Sell, OrderType.Stop, 10m, 99m, DateTime.UtcNow),
+                new OrderRequest("SPY", OrderSide.Sell, OrderType.Limit, 10m, 105m, DateTime.UtcNow),
+                ApprovedRisk());
+
+            Assert.False(result.Submitted);
+            Assert.Equal(OrderStatus.PendingBrokerConfirmation, result.Status);
+            Assert.Equal("BRK-1", result.BrokerOrderId);
+            Assert.Equal(submissions, adapter.Submitted.Count);
+            Assert.Contains("BRK-1", adapter.Cancelled);
+            connection.Dispose();
+            manager.Dispose();
+        }
+
         [Fact]
         public async Task BrokerFillUpdate_TracksPartialAndFinalFillsWithExecutionRecords()
         {
@@ -358,6 +381,7 @@ namespace TradingBot.Tests
             public List<OrderRequestDto> Submitted { get; } = new();
             public List<string> Cancelled { get; } = new();
             public string NextStatus { get; set; } = "Submitted";
+            public string? RejectRole { get; set; }
             public bool ThrowOnSubmit { get; set; }
             public TimeSpan SubmitDelay { get; set; } = TimeSpan.Zero;
 
@@ -378,7 +402,7 @@ namespace TradingBot.Tests
                 {
                     OrderId = brokerOrderId,
                     BrokerOrderId = brokerOrderId,
-                    Status = NextStatus,
+                    Status = request.Role == RejectRole ? "Rejected" : NextStatus,
                     RemainingQuantity = request.Quantity,
                     TimestampUtc = DateTime.UtcNow
                 };
