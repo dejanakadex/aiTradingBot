@@ -21,6 +21,8 @@ namespace TradingBot.Persistence
         public decimal InitialStopPrice { get; set; }
         public decimal InitialRiskPerShare { get; set; }
         public decimal FilledQuantity { get; set; }
+        public decimal EntryRemainingQuantity { get; set; }
+        public DateTime? EntryCancelConfirmedUtc { get; set; }
         public decimal ProtectedQuantity { get; set; }
         public decimal ExitRequestedQuantity { get; set; }
         public decimal ExitedQuantity { get; set; }
@@ -37,6 +39,9 @@ namespace TradingBot.Persistence
         public string TrailingAtrTimeframe { get; set; } = string.Empty;
         public decimal TrailingAtrMultiplier { get; set; }
         public int? MaximumHoldingSeconds { get; set; }
+        public DateTime? ExitDeadlineUtc { get; set; }
+        public DateTime? TimeExitDeferredUtc { get; set; }
+        public string TimeExitDeferredReason { get; set; } = string.Empty;
         public DateTime OpenedUtc { get; set; }
         public DateTime UpdatedUtc { get; set; }
         public DateTime? ClosedUtc { get; set; }

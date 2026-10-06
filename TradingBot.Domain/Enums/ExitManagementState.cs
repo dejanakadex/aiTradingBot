@@ -9,6 +9,8 @@ namespace TradingBot.Domain.Enums
         ExitCancelPending,
         ExitSubmitted,
         Closed,
-        Faulted
+        Faulted,
+        TimeExitDeferred,
+        EntryCancelPending
     }
 }

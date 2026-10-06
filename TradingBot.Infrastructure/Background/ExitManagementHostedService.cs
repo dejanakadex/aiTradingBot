@@ -8,7 +8,7 @@ using TradingBot.Domain.Enums;
 
 namespace TradingBot.Infrastructure.Background
 {
-    public sealed class ExitManagementHostedService : IHostedService
+    public sealed class ExitManagementHostedService : BackgroundService
     {
         private readonly IExitManagementService _exitManagementService;
         private readonly ITradingEngineStatusService _statusService;
@@ -24,7 +24,7 @@ namespace TradingBot.Infrastructure.Background
             _logger = logger;
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public override async Task StartAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -36,12 +36,37 @@ namespace TradingBot.Infrastructure.Background
                 _logger.LogError(ex, "Exit management startup restore failed. Trading must fail closed.");
                 _statusService.SetState(TradingEngineState.Degraded, false, "Exit management startup restore failed.", new[] { ex.Message });
             }
+
+            await base.StartAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        public Task StopAsync(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            do
+            {
+                try
+                {
+                    await _exitManagementService.ProcessExpiredPositionsAsync(DateTime.UtcNow, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Time-exit deadline monitor failed. Trading must fail closed.");
+                    _statusService.SetState(TradingEngineState.Degraded, false,
+                        "Time-exit deadline monitor failed. Trading disabled.", new[] { ex.Message });
+                }
+            }
+            while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Exit management service stopping.");
-            return Task.CompletedTask;
+            await base.StopAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }

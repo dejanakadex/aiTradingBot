@@ -240,7 +240,8 @@ namespace TradingBot.Infrastructure.Background
                         await CommitReservationAsync(plan, result.BrokerOrderId, cancellationToken).ConfigureAwait(false);
                         if (result.Submitted || !string.IsNullOrWhiteSpace(result.BrokerOrderId))
                         {
-                            await _exitManagementService.RegisterApprovedEntryAsync(plan, result, cancellationToken).ConfigureAwait(false);
+                            await _exitManagementService.RegisterApprovedEntryAsync(plan, result, cancellationToken,
+                                executionDecision?.ExpectedHoldingSeconds).ConfigureAwait(false);
                         }
                     }
                     else
@@ -275,7 +276,8 @@ namespace TradingBot.Infrastructure.Background
                 }
 
                 await CommitReservationAsync(plan, entryResult.BrokerOrderId, cancellationToken).ConfigureAwait(false);
-                await _exitManagementService.RegisterApprovedEntryAsync(plan, entryResult, cancellationToken).ConfigureAwait(false);
+                await _exitManagementService.RegisterApprovedEntryAsync(plan, entryResult, cancellationToken,
+                    executionDecision?.ExpectedHoldingSeconds).ConfigureAwait(false);
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.OrderExecution,
                     TradingPipelineActivityState.Completed,
@@ -364,12 +366,18 @@ namespace TradingBot.Infrastructure.Background
 
         private sealed class NoopExitManagementService : IExitManagementService
         {
-            public Task RegisterApprovedEntryAsync(ApprovedTradePlan plan, ManagedOrderResult entryOrder, CancellationToken cancellationToken = default)
+            public Task RegisterApprovedEntryAsync(ApprovedTradePlan plan, ManagedOrderResult entryOrder,
+                CancellationToken cancellationToken = default, int? approvedHoldingSeconds = null)
             {
                 return Task.CompletedTask;
             }
 
             public Task ProcessMarketCandleAsync(Candle candle, CancellationToken cancellationToken = default)
+            {
+                return Task.CompletedTask;
+            }
+
+            public Task ProcessExpiredPositionsAsync(DateTime asOfUtc, CancellationToken cancellationToken = default)
             {
                 return Task.CompletedTask;
             }

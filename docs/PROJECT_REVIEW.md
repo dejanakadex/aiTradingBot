@@ -73,7 +73,7 @@ Popravak: nula u bilo kojem obveznom kapacitetu mora odbiti ulaz. U istom koraku
 
 ### R03 — P1: maximum-holding izlaz može više puta prodati istu poziciju
 
-Status: **riješeno u točki 15** — time/operator izlaz ima trajni intent i stanje, čeka potvrdu otkaza zaštite, serijalizira konkurentne događaje i ograničava ukupni izlaz na preostalu fillanu količinu.
+Status: **riješeno u točkama 15, 23 i 24** — time/operator izlaz ima trajni intent i stanje, čeka potvrdu otkaza entry ostatka i oba zaštitna naloga, serijalizira konkurentne događaje te provjerava trajni rok od prvog filla neovisno o svijeći. Stvarni IBKR paper slijed ostaje za točku 31.
 
 Izvor: [ExitManagementService.cs](../TradingBot.Infrastructure/Services/ExitManagementService.cs#L371), `SubmitMaximumHoldingExitAsync` i `HandleOrderUpdateAsync`.
 

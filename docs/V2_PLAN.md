@@ -61,7 +61,7 @@ Planirani statusi registra: `Disabled`, `BackfillPending`, `Backfilling`, `Colle
 
 ## Pravila paralelizma
 
-Nastavak nakon točke 18 provodi se redom, po jednoj točki. Točka 23 pokriva fiksni parent/stop/target bracket, partial-fill prilagodbu i potvrde otkazivanja konkurentnih izlaza. Točka 24 uvodi neovisni vremenski izlaz u sekundama, a točka 31 stvarnu IBKR paper provjeru cijelog ciklusa. Lokalni fake testovi i build adaptera ne zamjenjuju paper potvrdu.
+Nastavak nakon točke 18 provodi se redom, po jednoj točki. Točka 23 pokriva fiksni parent/stop/target bracket, partial-fill prilagodbu i potvrde otkazivanja konkurentnih izlaza. Točka 24 dodaje trajni rok od prvog filla i neovisni nadzor isteka u sekundama. Točka 31 ostaje stvarna IBKR paper provjera cijelog ciklusa; lokalni fake testovi i build adaptera ne zamjenjuju paper potvrdu.
 
 - Signali različitih instrumenata mogu se obrađivati i izvršavati paralelno.
 - Jedan instrument u početnoj sigurnoj verziji ima jednu stvarnu neto broker poziciju.

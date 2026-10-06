@@ -137,13 +137,15 @@ namespace TradingBot.Tests
             await using (var db = harness.Factory.CreateDbContext())
             {
                 var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
-                record.OpenedUtc = DateTime.UtcNow.AddMinutes(-2);
+                record.ExitDeadlineUtc = DateTime.UtcNow.AddSeconds(-1);
                 await db.SaveChangesAsync();
             }
 
-            await harness.Service.ProcessMarketCandleAsync(CandleAt(100.25m));
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddSeconds(1));
 
             Assert.Contains("STOP-1", harness.Execution.Cancelled);
+            Assert.Single(harness.Execution.Cancelled);
             Assert.Single(harness.Execution.Submitted, x => x.Role == "ProtectiveStop");
             await using (var db = harness.Factory.CreateDbContext())
                 Assert.Equal(ExitManagementState.ExitCancelPending, Assert.Single(await db.ExitManagementRecords.ToListAsync()).State);
@@ -158,8 +160,327 @@ namespace TradingBot.Tests
 
             var exit = Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
             Assert.Equal(10m, exit.Quantity);
-            await harness.Service.ProcessMarketCandleAsync(CandleAt(100.30m, timestampUtc: DateTime.UtcNow.AddMinutes(1)));
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddMinutes(1));
             Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+        }
+
+        [Fact]
+        public async Task DeadlineStartsAtFirstFillAndAdditionalFillsNeverExtendIt()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 3);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+                record.OpenedUtc = DateTime.UtcNow.AddMinutes(-5);
+                await db.SaveChangesAsync();
+            }
+
+            var firstFill = DateTime.UtcNow.AddSeconds(-1);
+            await harness.Execution.EmitStatusAsync(EntryFill(4m, 6m, 100m, firstFill));
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow));
+
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+                Assert.Equal(firstFill, record.OpenedUtc);
+                Assert.Equal(firstFill.AddSeconds(3), record.ExitDeadlineUtc);
+                Assert.Equal(3, record.MaximumHoldingSeconds);
+            }
+            await harness.Service.ProcessExpiredPositionsAsync(firstFill.AddSeconds(2));
+            Assert.Empty(harness.Execution.Cancelled);
+            await harness.Service.ProcessExpiredPositionsAsync(firstFill.AddSeconds(3));
+            Assert.Contains("BRACKET-STOP", harness.Execution.Cancelled);
+            Assert.Contains("BRACKET-TARGET", harness.Execution.Cancelled);
+        }
+
+        [Fact]
+        public async Task ApprovedExecutionHorizonInSecondsIsPersistedWithoutMinuteRounding()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 10);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder(),
+                approvedHoldingSeconds: 5);
+            var firstFill = DateTime.UtcNow.AddSeconds(-1);
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, firstFill));
+
+            await using var db = harness.Factory.CreateDbContext();
+            var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+            Assert.Equal(5, record.MaximumHoldingSeconds);
+            Assert.Equal(firstFill.AddSeconds(5), record.ExitDeadlineUtc);
+        }
+
+        [Fact]
+        public async Task FillObservedBeforeRegistrationUsesEarliestPersistedExecutionTime()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                maximumHoldingSeconds: 5);
+            var firstFill = DateTime.UtcNow.AddSeconds(-4);
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var order = new TradingBot.Persistence.OrderRecord
+                {
+                    IntentId = Guid.NewGuid(), BrokerOrderId = "ENTRY-1", Symbol = "SPY",
+                    Status = OrderStatus.Filled, FilledQuantity = 10m, RemainingQuantity = 0m,
+                    CreatedUtc = firstFill.AddSeconds(-1), UpdatedUtc = DateTime.UtcNow,
+                    RawJson = "{}"
+                };
+                db.OrderRecords.Add(order);
+                await db.SaveChangesAsync();
+                db.ExecutionRecords.Add(new TradingBot.Persistence.ExecutionRecord
+                {
+                    BrokerExecutionId = "EXEC-FIRST", OrderRecordId = order.Id,
+                    Status = ExecutionStatus.Completed, TimestampUtc = firstFill,
+                    Quantity = 10m, Price = 100m, RawJson = "{}"
+                });
+                await db.SaveChangesAsync();
+            }
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), new ManagedOrderResult
+            {
+                OrderId = "ENTRY-1", BrokerOrderId = "ENTRY-1", Status = OrderStatus.Filled,
+                Submitted = true, FilledQuantity = 10m, RemainingQuantity = 0m, AverageFillPrice = 100m
+            });
+
+            await using var checkDb = harness.Factory.CreateDbContext();
+            Assert.Equal(firstFill.AddSeconds(5), Assert.Single(await checkDb.ExitManagementRecords.ToListAsync()).ExitDeadlineUtc);
+        }
+
+        [Fact]
+        public async Task LateExecutionCallbackCanMoveDeadlineEarlierButNeverLater()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 5);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            var statusTime = DateTime.UtcNow;
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, statusTime));
+            var executionTime = statusTime.AddSeconds(-2);
+            await harness.Execution.EmitFillAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "ENTRY-1", Status = "Filled", BrokerExecutionId = "EXEC-EARLY",
+                FilledQuantity = 10m, RemainingQuantity = 0m, TimestampUtc = executionTime
+            });
+            await harness.Execution.EmitFillAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "ENTRY-1", Status = "Filled", BrokerExecutionId = "EXEC-LATE",
+                FilledQuantity = 10m, RemainingQuantity = 0m, TimestampUtc = statusTime.AddSeconds(1)
+            });
+
+            await using var db = harness.Factory.CreateDbContext();
+            var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+            Assert.Equal(executionTime.AddSeconds(5), record.ExitDeadlineUtc);
+            Assert.Equal(executionTime, Assert.Single(await db.Trades.ToListAsync()).OpenedUtc);
+        }
+
+        [Fact]
+        public async Task ExpiredPartialEntry_CancelsRemainingBuyBeforeExitChildrenAndMarketSell()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            var firstFill = DateTime.UtcNow.AddSeconds(-3);
+            await harness.Execution.EmitStatusAsync(EntryFill(4m, 6m, 100m, firstFill));
+
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            Assert.Equal(new[] { "ENTRY-1" }, harness.Execution.Cancelled);
+            Assert.DoesNotContain(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "ENTRY-1", Status = "Cancelled", FilledQuantity = 6m,
+                RemainingQuantity = 0m, TimestampUtc = DateTime.UtcNow
+            });
+            Assert.Contains("BRACKET-STOP", harness.Execution.Cancelled);
+            Assert.Contains("BRACKET-TARGET", harness.Execution.Cancelled);
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-STOP", Status = "Cancelled", TimestampUtc = DateTime.UtcNow
+            });
+            Assert.DoesNotContain(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-TARGET", Status = "Cancelled", TimestampUtc = DateTime.UtcNow
+            });
+            Assert.Equal(6m, Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit").Quantity);
+            await using var db = harness.Factory.CreateDbContext();
+            Assert.Equal(firstFill.AddSeconds(2), Assert.Single(await db.ExitManagementRecords.ToListAsync()).ExitDeadlineUtc);
+        }
+
+        [Fact]
+        public async Task StaleExecutionCallbackCannotReopenAlreadyFilledEntryRemainder()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow.AddSeconds(-3)));
+            await harness.Execution.EmitFillAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "ENTRY-1", Status = "Unknown", FilledQuantity = 4m,
+                RemainingQuantity = 6m, TimestampUtc = DateTime.UtcNow
+            });
+
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            Assert.DoesNotContain("ENTRY-1", harness.Execution.Cancelled);
+            Assert.Contains("BRACKET-STOP", harness.Execution.Cancelled);
+            await using var db = harness.Factory.CreateDbContext();
+            Assert.Equal(0m, Assert.Single(await db.ExitManagementRecords.ToListAsync()).EntryRemainingQuantity);
+        }
+
+        [Fact]
+        public async Task DisconnectedExpiryIsDurableAndWaitsForFreshBrokerReconciliation()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2,
+                connectionStatus: ConnectionStatus.Disconnected);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow.AddSeconds(-3)));
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+
+            Assert.Empty(harness.Execution.Cancelled);
+            Assert.Equal(TradingEngineState.Degraded, harness.Status.Current.State);
+            Assert.False(harness.Status.Current.ReconciliationCompleted);
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+                Assert.Equal(ExitManagementState.TimeExitDeferred, record.State);
+                Assert.NotNull(record.TimeExitDeferredUtc);
+                Assert.Equal("MaximumHoldingTimeExit", record.ExitReason);
+            }
+
+            await harness.BrokerConnection.ConnectAsync();
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddSeconds(1));
+            Assert.Empty(harness.Execution.Cancelled);
+            harness.Status.SetState(TradingEngineState.Degraded, false, "broker reconciled",
+                brokerEnvironmentVerification: BrokerEnvironmentVerificationStatus.VerifiedPaper,
+                reconciliationCompleted: true);
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddSeconds(2));
+            Assert.Contains("BRACKET-STOP", harness.Execution.Cancelled);
+            Assert.Contains("BRACKET-TARGET", harness.Execution.Cancelled);
+        }
+
+        [Fact]
+        public async Task PartialTargetFillBeforeDeadline_OnlyRemainingPositionIsTimedOut()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow.AddSeconds(-3)));
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-TARGET", Status = "PartiallyFilled",
+                FilledQuantity = 4m, RemainingQuantity = 6m, TimestampUtc = DateTime.UtcNow
+            });
+
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-STOP", Status = "Cancelled", TimestampUtc = DateTime.UtcNow
+            });
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-TARGET", Status = "Cancelled",
+                FilledQuantity = 4m, RemainingQuantity = 0m, TimestampUtc = DateTime.UtcNow
+            });
+
+            Assert.Equal(6m, Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit").Quantity);
+        }
+
+        [Fact]
+        public async Task DisconnectDuringCancellationPersistsUnknownOutcomeWithoutDuplicateSell()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow.AddSeconds(-3)));
+            harness.Execution.ThrowOnCancel = true;
+
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddSeconds(1));
+
+            Assert.DoesNotContain(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+            Assert.Equal(TradingEngineState.Degraded, harness.Status.Current.State);
+            await using var db = harness.Factory.CreateDbContext();
+            var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+            Assert.Equal(ExitManagementState.ExitCancelPending, record.State);
+            Assert.NotNull(record.TimeExitDeferredUtc);
+            Assert.Contains("unknown", record.TimeExitDeferredReason);
+        }
+
+        [Fact]
+        public async Task ChildCancelConfirmationsDuringDisconnectResumeExitOnlyAfterReconciliation()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, DateTime.UtcNow.AddSeconds(-3)));
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+            await harness.BrokerConnection.DisconnectAsync();
+
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-STOP", Status = "Cancelled", TimestampUtc = DateTime.UtcNow
+            });
+            await harness.Execution.EmitStatusAsync(new OrderStatusDto
+            {
+                BrokerOrderId = "BRACKET-TARGET", Status = "Cancelled", TimestampUtc = DateTime.UtcNow
+            });
+            Assert.DoesNotContain(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit");
+            await using (var db = harness.Factory.CreateDbContext())
+                Assert.Equal(ExitManagementState.TimeExitDeferred,
+                    Assert.Single(await db.ExitManagementRecords.ToListAsync()).State);
+
+            await harness.BrokerConnection.ConnectAsync();
+            harness.Status.SetState(TradingEngineState.Degraded, false, "broker reconciled",
+                brokerEnvironmentVerification: BrokerEnvironmentVerificationStatus.VerifiedPaper,
+                reconciliationCompleted: true);
+            await harness.Service.ProcessExpiredPositionsAsync(DateTime.UtcNow.AddSeconds(1));
+            Assert.Equal(10m, Assert.Single(harness.Execution.Submitted, x => x.Role == "MaximumHoldingTimeExit").Quantity);
+        }
+
+        [Fact]
+        public async Task RestartUsesPersistedDeadlineWithoutExtendingPositionLifetime()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            var firstFill = DateTime.UtcNow.AddSeconds(-3);
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, firstFill));
+            harness.Service.Dispose();
+
+            using var restarted = new ExitManagementService(
+                harness.Execution, harness.ServiceProvider, harness.Factory, harness.OperatingMode,
+                harness.Status, harness.FeatureEngine, Options.Create(harness.ExitSettings),
+                Options.Create(new TradingSettings { Enabled = true, OperatingMode = harness.Mode }),
+                NullLogger<ExitManagementService>.Instance);
+            await restarted.RestoreAsync();
+            await restarted.ProcessExpiredPositionsAsync(DateTime.UtcNow);
+
+            Assert.Contains("BRACKET-STOP", harness.Execution.Cancelled);
+            await using var db = harness.Factory.CreateDbContext();
+            Assert.Equal(firstFill.AddSeconds(2), Assert.Single(await db.ExitManagementRecords.ToListAsync()).ExitDeadlineUtc);
+        }
+
+        [Fact]
+        public async Task RestoreBackfillsLegacyDeadlineFromTradeFirstFillInsteadOfRegistrationTime()
+        {
+            using var harness = CreateHarness(TradingOperatingMode.PaperTrading,
+                exitMode: ExitStrategyMode.FixedBracket, maximumHoldingSeconds: 2);
+            await harness.Service.RegisterApprovedEntryAsync(Plan(), BracketEntryOrder());
+            var firstFill = DateTime.UtcNow.AddSeconds(-4);
+            await harness.Execution.EmitStatusAsync(EntryFill(10m, 0m, 100m, firstFill));
+            await using (var db = harness.Factory.CreateDbContext())
+            {
+                var record = Assert.Single(await db.ExitManagementRecords.ToListAsync());
+                record.OpenedUtc = DateTime.UtcNow;
+                record.ExitDeadlineUtc = null;
+                await db.SaveChangesAsync();
+            }
+
+            await harness.Service.RestoreAsync();
+            await using var checkDb = harness.Factory.CreateDbContext();
+            var restored = Assert.Single(await checkDb.ExitManagementRecords.ToListAsync());
+            Assert.Equal(firstFill, restored.OpenedUtc);
+            Assert.Equal(firstFill.AddSeconds(2), restored.ExitDeadlineUtc);
         }
 
         [Fact]
@@ -333,11 +654,30 @@ namespace TradingBot.Tests
             Assert.Equal(3L, Convert.ToInt64(await command.ExecuteScalarAsync()));
         }
 
-        private static Harness CreateHarness(TradingOperatingMode mode, decimal atr = 0.50m, int? maximumHoldingMinutes = null, ExitStrategyMode exitMode = ExitStrategyMode.AtrTrailing)
+        [Fact]
+        public async Task MigrationAddsDurableTimeExitDeadlineAndEntryCancellationState()
+        {
+            await using var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            var options = new DbContextOptionsBuilder<TradingBot.Persistence.TradingBotDbContext>()
+                .UseSqlite(connection).Options;
+            await using (var db = new TradingBot.Persistence.TradingBotDbContext(options))
+                await db.Database.MigrateAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('ExitManagementRecords') WHERE name IN ('ExitDeadlineUtc', 'TimeExitDeferredUtc', 'TimeExitDeferredReason', 'EntryRemainingQuantity', 'EntryCancelConfirmedUtc');";
+            Assert.Equal(5L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+
+        private static Harness CreateHarness(TradingOperatingMode mode, decimal atr = 0.50m,
+            int? maximumHoldingMinutes = null, ExitStrategyMode exitMode = ExitStrategyMode.AtrTrailing,
+            int? maximumHoldingSeconds = null, ConnectionStatus connectionStatus = ConnectionStatus.Connected)
         {
             var execution = new FakeExecutionService();
+            var brokerConnection = new FakeConnectionService { Status = connectionStatus };
             var root = new ServiceCollection();
             root.AddSingleton<IOrderModificationService>(execution);
+            root.AddSingleton<IIbkrConnectionService>(brokerConnection);
             var serviceProvider = root.BuildServiceProvider();
             var factory = CreateInMemoryFactory(out var connection);
             var operatingMode = new OperatingModeService(
@@ -347,6 +687,17 @@ namespace TradingBot.Tests
             var status = new TradingEngineStatusService();
             status.SetState(TradingEngineState.Ready, true, "ready", brokerEnvironmentVerification: BrokerEnvironmentVerificationStatus.VerifiedPaper, reconciliationCompleted: true);
             var featureEngine = new FakeFeatureEngine { Atr = atr };
+            var exitSettings = new ExitStrategySettings
+            {
+                Mode = exitMode,
+                BreakEvenTriggerR = 0.8m,
+                BreakEvenOffsetR = 0.05m,
+                TrailingActivationR = 1.2m,
+                TrailingAtrMultiplier = 1.0m,
+                TrailingAtrTimeframe = "1m",
+                MaximumHoldingMinutes = maximumHoldingMinutes,
+                MaximumHoldingSeconds = maximumHoldingSeconds
+            };
             var service = new ExitManagementService(
                 execution,
                 serviceProvider,
@@ -354,20 +705,12 @@ namespace TradingBot.Tests
                 operatingMode,
                 status,
                 featureEngine,
-                Options.Create(new ExitStrategySettings
-                {
-                    Mode = exitMode,
-                    BreakEvenTriggerR = 0.8m,
-                    BreakEvenOffsetR = 0.05m,
-                    TrailingActivationR = 1.2m,
-                    TrailingAtrMultiplier = 1.0m,
-                    TrailingAtrTimeframe = "1m",
-                    MaximumHoldingMinutes = maximumHoldingMinutes
-                }),
+                Options.Create(exitSettings),
                 Options.Create(new TradingSettings { Enabled = true, OperatingMode = mode }),
                 NullLogger<ExitManagementService>.Instance);
 
-            return new Harness(service, execution, factory, connection, status, featureEngine, serviceProvider);
+            return new Harness(service, execution, factory, connection, status, featureEngine,
+                serviceProvider, operatingMode, brokerConnection, exitSettings, mode);
         }
 
         private static ApprovedTradePlan Plan()
@@ -412,7 +755,7 @@ namespace TradingBot.Tests
             };
         }
 
-        private static OrderStatusDto EntryFill(decimal filled, decimal remaining, decimal averagePrice)
+        private static OrderStatusDto EntryFill(decimal filled, decimal remaining, decimal averagePrice, DateTime? timestampUtc = null)
         {
             return new OrderStatusDto
             {
@@ -423,7 +766,7 @@ namespace TradingBot.Tests
                 RemainingQuantity = remaining,
                 AverageFillPrice = averagePrice,
                 LastFillPrice = averagePrice,
-                TimestampUtc = DateTime.UtcNow
+                TimestampUtc = timestampUtc ?? DateTime.UtcNow
             };
         }
 
@@ -471,13 +814,33 @@ namespace TradingBot.Tests
             SqliteConnection Connection,
             TradingEngineStatusService Status,
             FakeFeatureEngine FeatureEngine,
-            ServiceProvider ServiceProvider) : IDisposable
+            ServiceProvider ServiceProvider,
+            OperatingModeService OperatingMode,
+            FakeConnectionService BrokerConnection,
+            ExitStrategySettings ExitSettings,
+            TradingOperatingMode Mode) : IDisposable
         {
             public void Dispose()
             {
                 Service.Dispose();
                 ServiceProvider.Dispose();
                 Connection.Dispose();
+            }
+        }
+
+        private sealed class FakeConnectionService : IIbkrConnectionService
+        {
+            public ConnectionStatus Status { get; set; }
+            public event Func<ConnectionStatus, Task>? ConnectionStatusChanged;
+            public Task ConnectAsync(CancellationToken cancellationToken = default)
+            {
+                Status = ConnectionStatus.Connected;
+                return ConnectionStatusChanged?.Invoke(Status) ?? Task.CompletedTask;
+            }
+            public Task DisconnectAsync(CancellationToken cancellationToken = default)
+            {
+                Status = ConnectionStatus.Disconnected;
+                return ConnectionStatusChanged?.Invoke(Status) ?? Task.CompletedTask;
             }
         }
 
@@ -489,6 +852,7 @@ namespace TradingBot.Tests
             public List<(string BrokerOrderId, OrderRequestDto Request)> Modified { get; } = new();
             public List<string> Cancelled { get; } = new();
             public bool RejectStops { get; set; }
+            public bool ThrowOnCancel { get; set; }
 
             public event Func<OrderStatusDto, Task>? OrderStatusUpdated;
             public event Func<OrderStatusDto, Task>? OrderFilled;
@@ -523,6 +887,7 @@ namespace TradingBot.Tests
 
             public Task<bool> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
             {
+                if (ThrowOnCancel) throw new InvalidOperationException("Broker disconnected during cancellation");
                 Cancelled.Add(orderId);
                 return Task.FromResult(true);
             }

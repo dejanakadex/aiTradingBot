@@ -9,9 +9,12 @@ namespace TradingBot.Application.Interfaces
         Task RegisterApprovedEntryAsync(
             ApprovedTradePlan plan,
             ManagedOrderResult entryOrder,
-            CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default,
+            int? approvedHoldingSeconds = null);
 
         Task ProcessMarketCandleAsync(Candle candle, CancellationToken cancellationToken = default);
+
+        Task ProcessExpiredPositionsAsync(System.DateTime asOfUtc, CancellationToken cancellationToken = default);
 
         Task RestoreAsync(CancellationToken cancellationToken = default);
 

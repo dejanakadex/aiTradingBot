@@ -43,6 +43,36 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ReconcileAsync_OverdueDeferredExitKeepsTradingDisabledAfterBrokerMatch()
+        {
+            var factory = CreateInMemoryFactory(out var connection);
+            await SeedOpenTradeAsync(factory, "SPY", 4m);
+            await using (var db = factory.CreateDbContext())
+            {
+                db.ExitManagementRecords.Add(new TradingBot.Persistence.ExitManagementRecord
+                {
+                    EntryBrokerOrderId = "ENTRY-TIME-1", Symbol = "SPY",
+                    State = ExitManagementState.TimeExitDeferred,
+                    FilledQuantity = 4m, ProtectedQuantity = 4m,
+                    ExitDeadlineUtc = DateTime.UtcNow.AddSeconds(-1),
+                    MaximumHoldingSeconds = 2, OpenedUtc = DateTime.UtcNow.AddSeconds(-3)
+                });
+                await db.SaveChangesAsync();
+            }
+            var status = new TradingEngineStatusService();
+            var service = CreateService(factory, status,
+                new[] { new PositionDto { Symbol = "SPY", Quantity = 4m, AveragePrice = 100m } },
+                Array.Empty<OrderStatusDto>());
+
+            var result = await service.ReconcileAsync();
+
+            Assert.Equal(TradingEngineState.Degraded, result.State);
+            Assert.False(result.TradingEnabled);
+            Assert.True(result.ReconciliationCompleted);
+            connection.Dispose();
+        }
+
+        [Fact]
         public async Task ReconcileAsync_WhenBrokerHasPositionMissingInSqlite_RemainsDegraded()
         {
             var factory = CreateInMemoryFactory(out var connection);

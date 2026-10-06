@@ -105,6 +105,25 @@ namespace TradingBot.Infrastructure.Services
                     return SetFinal(TradingEngineState.Degraded, "Broker state does not match SQLite. Trading remains disabled.", mismatches);
                 }
 
+                var nowUtc = DateTime.UtcNow;
+                var unresolvedExits = await db.ExitManagementRecords.AsNoTracking()
+                    .Where(x => x.State == ExitManagementState.Faulted
+                        || x.State == ExitManagementState.EntryCancelPending
+                        || x.State == ExitManagementState.ExitCancelPending
+                        || x.State == ExitManagementState.TimeExitDeferred
+                        || (x.ExitDeadlineUtc.HasValue && x.ExitDeadlineUtc.Value <= nowUtc
+                            && x.FilledQuantity > x.ExitedQuantity && x.State != ExitManagementState.ExitSubmitted))
+                    .Select(x => x.Symbol)
+                    .Distinct()
+                    .ToListAsync(cancellationToken).ConfigureAwait(false);
+                if (unresolvedExits.Count > 0)
+                {
+                    return SetFinal(TradingEngineState.Degraded,
+                        "Broker state reconciled, but an exit deadline or pending exit requires resolution. Trading remains disabled.",
+                        unresolvedExits.Select(x => $"Unresolved exit for {x}.").ToArray(),
+                        environment, accountId, reconciliationCompleted: true);
+                }
+
                 var permission = await db.TradingControlStateRecords.AsNoTracking()
                     .SingleOrDefaultAsync(x => x.Id == 1, cancellationToken)
                     .ConfigureAwait(false);

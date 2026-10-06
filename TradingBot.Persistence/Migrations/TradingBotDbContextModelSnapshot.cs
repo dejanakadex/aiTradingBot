@@ -234,7 +234,11 @@ namespace TradingBot.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("EntryCancelConfirmedUtc").HasColumnType("TEXT");
+                    b.Property<decimal>("EntryRemainingQuantity").HasColumnType("TEXT");
+
                     b.Property<string>("ExitBrokerOrderId").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime?>("ExitDeadlineUtc").HasColumnType("TEXT");
                     b.Property<string>("ExitReason").IsRequired().HasColumnType("TEXT");
                     b.Property<decimal>("ExitRequestedQuantity").HasColumnType("TEXT");
                     b.Property<decimal>("ExitedQuantity").HasColumnType("TEXT");
@@ -300,6 +304,8 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<DateTime?>("TakeProfitCancelConfirmedUtc").HasColumnType("TEXT");
                     b.Property<decimal>("TakeProfitFilledQuantity").HasColumnType("TEXT");
                     b.Property<decimal>("ManagedExitFilledQuantity").HasColumnType("TEXT");
+                    b.Property<DateTime?>("TimeExitDeferredUtc").HasColumnType("TEXT");
+                    b.Property<string>("TimeExitDeferredReason").IsRequired().HasColumnType("TEXT");
 
                     b.Property<string>("Symbol")
                         .IsRequired()
@@ -327,6 +333,8 @@ namespace TradingBot.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ExitBrokerOrderId");
+
+                    b.HasIndex("ExitDeadlineUtc");
 
                     b.HasIndex("ProtectiveStopBrokerOrderId");
 

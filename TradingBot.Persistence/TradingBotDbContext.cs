@@ -101,6 +101,7 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.State);
                 b.HasIndex(x => x.UpdatedUtc);
                 b.HasIndex(x => x.SignalId);
+                b.HasIndex(x => x.ExitDeadlineUtc);
             });
 
             modelBuilder.Entity<ExitStopAuditRecord>(b =>
