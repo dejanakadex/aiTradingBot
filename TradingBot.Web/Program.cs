@@ -317,6 +317,11 @@ try
     });
     app.MapGet("/api/replays/{replayRunId:guid}/signals", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
         Results.Ok(await replay.GetSignalsAsync(replayRunId, cancellationToken)));
+    app.MapGet("/api/replays/backtests/{backtestId:guid}", async (Guid backtestId, IReplayBacktestService backtest, CancellationToken cancellationToken) =>
+    {
+        var result = await backtest.GetAsync(backtestId, cancellationToken);
+        return result == null ? Results.NotFound() : Results.Ok(result);
+    });
     app.MapGet("/api/research/candidates", async (string? instrumentId, TradingBot.Domain.Enums.ResearchCandidateOutcome? outcome, int? count, ICandidateResearchService research, CancellationToken cancellationToken) =>
         Results.Ok(await research.GetCandidatesAsync(instrumentId, outcome, count ?? 100, cancellationToken)));
     app.MapGet("/api/research/candidates/{candidateId:long}/labels", async (long candidateId, ICandidateResearchService research, CancellationToken cancellationToken) =>
@@ -354,6 +359,11 @@ try
     {
         var result = await replay.StartAsync(request, cancellationToken);
         return Results.Accepted($"/api/replays/{result.Id}", result);
+    });
+    app.MapPost("/api/replays/{replayRunId:guid}/backtests", async (Guid replayRunId, TradingBot.Application.DTOs.ReplayBacktestRequest request, IReplayBacktestService backtest, CancellationToken cancellationToken) =>
+    {
+        var result = await backtest.RunAsync(replayRunId, request, cancellationToken);
+        return Results.Ok(result);
     });
     app.MapPost("/api/replays/{replayRunId:guid}/pause", async (Guid replayRunId, IDeterministicReplayService replay, CancellationToken cancellationToken) =>
         Results.Ok(await replay.PauseAsync(replayRunId, cancellationToken)));

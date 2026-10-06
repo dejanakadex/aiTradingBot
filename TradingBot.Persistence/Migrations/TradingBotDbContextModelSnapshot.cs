@@ -1213,6 +1213,24 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("PostTradeAnalysisRecords");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.ReplayBacktestRecord", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("TEXT");
+                    b.Property<int>("ClosedTradeCount").HasColumnType("INTEGER");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("TEXT");
+                    b.Property<int>("FilledTradeCount").HasColumnType("INTEGER");
+                    b.Property<string>("InputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("OutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<decimal>("RealizedNetPnl").HasColumnType("TEXT");
+                    b.Property<Guid>("ReplayRunId").HasColumnType("TEXT");
+                    b.Property<string>("RequestSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ResultsJson").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("SignalCount").HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("ReplayRunId", "RequestSha256").IsUnique();
+                    b.ToTable("ReplayBacktestRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.ReplayRunRecord", b =>
                 {
                     b.Property<Guid>("Id")

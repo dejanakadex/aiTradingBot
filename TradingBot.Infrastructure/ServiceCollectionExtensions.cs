@@ -77,6 +77,8 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IResearchEvaluationService, ResearchEvaluationService>();
             services.AddSingleton<IResearchCalibrationService, ResearchCalibrationService>();
             services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
+            services.AddSingleton<ReplayTradeSimulator>();
+            services.AddSingleton<IReplayBacktestService, ReplayBacktestService>();
             services.AddSingleton<IAiAnalysisValidator, AiAnalysisValidator>();
             services.AddTransient<IAiUsageLimiter, AiUsageLimiter>();
             services.AddSingleton<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();

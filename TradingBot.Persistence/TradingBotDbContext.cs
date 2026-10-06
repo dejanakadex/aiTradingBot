@@ -34,6 +34,7 @@ namespace TradingBot.Persistence
         public DbSet<HistoricalDataGapRecord> HistoricalDataGapRecords { get; set; }
         public DbSet<ReplayRunRecord> ReplayRunRecords { get; set; }
         public DbSet<ReplaySignalRecord> ReplaySignalRecords { get; set; }
+        public DbSet<ReplayBacktestRecord> ReplayBacktestRecords { get; set; }
         public DbSet<ResearchCandidateRecord> ResearchCandidateRecords { get; set; }
         public DbSet<CandidateLabelRecord> CandidateLabelRecords { get; set; }
         public DbSet<ResearchEvaluationRunRecord> ResearchEvaluationRunRecords { get; set; }
@@ -287,6 +288,12 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.ReplayRunId, x.SignalId }).IsUnique();
                 b.HasIndex(x => new { x.ReplayRunId, x.DetectedAtUtc });
                 b.HasIndex(x => x.SourceEventId);
+            });
+
+            modelBuilder.Entity<ReplayBacktestRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.ReplayRunId, x.RequestSha256 }).IsUnique();
             });
 
             modelBuilder.Entity<ResearchCandidateRecord>(b =>

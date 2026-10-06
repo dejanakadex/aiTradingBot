@@ -157,8 +157,49 @@ namespace TradingBot.Tests
             }
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('ReplayRunRecords', 'ReplaySignalRecords');";
-            Assert.Equal(2L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('ReplayRunRecords', 'ReplaySignalRecords', 'ReplayBacktestRecords');";
+            Assert.Equal(3L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+
+        [Fact]
+        public async Task CompletedReplayBacktestIsPersistedAndIdempotent()
+        {
+            var records = CreateRecords(1);
+            records.Add(Quote("bid-before", "bid", StartUtc.AddSeconds(59), 100m));
+            records.Add(Quote("ask-before", "ask", StartUtc.AddSeconds(59), 100.02m));
+            var askFill = Quote("ask-fill", "ask", StartUtc.AddSeconds(61), 100.02m);
+            askFill.Size = 40m;
+            records.Add(askFill);
+            var bidExit = Quote("bid-exit", "bid", StartUtc.AddSeconds(65), 100.60m);
+            bidExit.Size = 40m;
+            records.Add(bidExit);
+            records.Add(Quote("bid-horizon", "bid", StartUtc.AddSeconds(122), 100.70m));
+            await using var harness = await ReplayHarness.CreateAsync(records);
+            var run = await harness.Service.StartAsync(Request());
+            run = await harness.Service.ProcessBatchAsync(run.Id, 100);
+            Assert.Equal(ReplayRunStatus.Completed, run.Status);
+
+            var backtest = harness.CreateBacktestService();
+            var first = await backtest.RunAsync(run.Id, new ReplayBacktestRequest());
+            var second = await backtest.RunAsync(run.Id, new ReplayBacktestRequest());
+            var stored = await backtest.GetAsync(first.Id);
+
+            Assert.Equal(first.Id, second.Id);
+            Assert.Equal(first.OutputSha256, stored!.OutputSha256);
+            Assert.Equal(1, first.FilledTradeCount);
+            Assert.Equal(1, first.ClosedTradeCount);
+            Assert.Equal("Target", Assert.Single(first.Trades).ExitReason);
+            Assert.NotNull(first.Trades[0].HorizonReturnBps);
+
+            var changedPolicy = await harness.CreateBacktestService(new ScalpingExecutionSettings
+            {
+                SafetyBufferBps = 4m
+            }).RunAsync(run.Id, new ReplayBacktestRequest());
+            Assert.NotEqual(first.Id, changedPolicy.Id);
+            Assert.NotEqual(first.RequestSha256, changedPolicy.RequestSha256);
+
+            harness.Dataset.Records.Add(Quote("tamper", "bid", StartUtc.AddMinutes(3), 100.50m));
+            await Assert.ThrowsAsync<InvalidDataException>(() => backtest.RunAsync(run.Id, new ReplayBacktestRequest()));
         }
 
         private static ReplayStartRequest Request(decimal speed = 0m) => new(
@@ -266,6 +307,15 @@ namespace TradingBot.Tests
                 _clock,
                 Options.Create(_settings),
                 NullLogger<DeterministicReplayService>.Instance);
+
+            public ReplayBacktestService CreateBacktestService(ScalpingExecutionSettings? execution = null) => new(
+                _provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>(),
+                Dataset,
+                new ReplayTradeSimulator(
+                    new PositionSizer(Options.Create(new RiskSettings())),
+                    Options.Create(new RiskSettings()),
+                    Options.Create(execution ?? new ScalpingExecutionSettings())),
+                _clock);
 
             public async ValueTask DisposeAsync()
             {

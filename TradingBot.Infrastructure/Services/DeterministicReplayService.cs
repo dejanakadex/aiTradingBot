@@ -492,7 +492,7 @@ namespace TradingBot.Infrastructure.Services
             return true;
         }
 
-        private static string ComputeInputHash(IReadOnlyList<MarketDatasetRecord> records)
+        internal static string ComputeInputHash(IReadOnlyList<MarketDatasetRecord> records)
         {
             var canonical = new StringBuilder(records.Count * 160);
             foreach (var item in records)
@@ -517,7 +517,7 @@ namespace TradingBot.Infrastructure.Services
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();
         }
 
-        private static async Task<string> ComputeOutputHashAsync(
+        internal static async Task<string> ComputeOutputHashAsync(
             TradingBotDbContext db,
             Guid replayRunId,
             CancellationToken cancellationToken)
