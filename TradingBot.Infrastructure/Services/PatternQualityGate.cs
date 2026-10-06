@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Extensions.Options;
+using TradingBot.Application.Configuration;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
@@ -10,10 +11,12 @@ namespace TradingBot.Infrastructure.Services
     public sealed class PatternQualityGate : IPatternQualityGate
     {
         private readonly PatternDetectorOptions _options;
+        private readonly ShortSignalSettings _shortSignals;
 
-        public PatternQualityGate(IOptions<PatternDetectorOptions> options)
+        public PatternQualityGate(IOptions<PatternDetectorOptions> options, IOptions<ShortSignalSettings>? shortSignals = null)
         {
             _options = options?.Value ?? new PatternDetectorOptions();
+            _shortSignals = shortSignals?.Value ?? new ShortSignalSettings();
         }
 
         public bool TryCreateTradeSetup(
@@ -40,7 +43,7 @@ namespace TradingBot.Infrastructure.Services
                 reasons.Add("Short pattern is research-only until short strategy, risk, borrow and execution support is implemented.");
             }
 
-            if (!IsConfiguredAiTimeframe(pattern.Timeframe))
+            if (!IsConfiguredAiTimeframe(pattern))
             {
                 reasons.Add($"Pattern timeframe {pattern.Timeframe} is not configured as an AI entry trigger.");
             }
@@ -139,8 +142,14 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        private bool IsConfiguredAiTimeframe(Timeframe timeframe)
+        private bool IsConfiguredAiTimeframe(PatternCandidate pattern)
         {
+            if (pattern.Timeframe is Timeframe.OneSecond or Timeframe.FiveSeconds or Timeframe.FifteenSeconds)
+            {
+                var profile = _shortSignals.Find(pattern.InstrumentId, pattern.StrategyId, pattern.Timeframe);
+                return profile?.PatternTypes.Contains(pattern.PatternType) == true;
+            }
+            var timeframe = pattern.Timeframe;
             var configured = _options.AiAnalysisTimeframes ?? Array.Empty<string>();
             if (configured.Length == 0) return timeframe == Timeframe.OneMinute;
 

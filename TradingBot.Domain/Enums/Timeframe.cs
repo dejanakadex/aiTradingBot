@@ -7,6 +7,9 @@ namespace TradingBot.Domain.Enums
         FifteenMinutes,
         OneHour,
         FourHour,
-        Daily
+        Daily,
+        OneSecond,
+        FiveSeconds,
+        FifteenSeconds
     }
 }

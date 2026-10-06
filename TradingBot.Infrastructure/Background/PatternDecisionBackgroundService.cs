@@ -32,6 +32,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ILogger<PatternDecisionBackgroundService> _logger;
         private readonly ICandidateResearchService? _candidateResearchService;
         private readonly NumericalModelSettings? _numericalModelSettings;
+        private readonly ShortSignalSettings _shortSignalSettings;
         private readonly ConcurrentDictionary<string, byte> _processedPatterns = new();
 
         public PatternDecisionBackgroundService(
@@ -47,7 +48,8 @@ namespace TradingBot.Infrastructure.Background
             ILogger<PatternDecisionBackgroundService> logger,
             ITradingPipelineStatusService? pipelineStatusService = null,
             ICandidateResearchService? candidateResearchService = null,
-            IOptions<NumericalModelSettings>? numericalModelSettings = null)
+            IOptions<NumericalModelSettings>? numericalModelSettings = null,
+            IOptions<ShortSignalSettings>? shortSignalSettings = null)
         {
             _eventBus = eventBus;
             _pipelineChannel = pipelineChannel;
@@ -62,6 +64,7 @@ namespace TradingBot.Infrastructure.Background
             _logger = logger;
             _candidateResearchService = candidateResearchService;
             _numericalModelSettings = numericalModelSettings?.Value;
+            _shortSignalSettings = shortSignalSettings?.Value ?? new ShortSignalSettings();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -118,8 +121,18 @@ namespace TradingBot.Infrastructure.Background
                 return;
             }
 
+            var isShort = pattern.Timeframe is Timeframe.OneSecond or Timeframe.FiveSeconds or Timeframe.FifteenSeconds;
+            var shortProfile = isShort ? _shortSignalSettings.Find(pattern.InstrumentId, pattern.StrategyId, pattern.Timeframe) : null;
+            if (isShort && (shortProfile == null || _numericalModelSettings?.UseApprovedModelForEntry != true))
+            {
+                const string reason = "Short signal requires an enabled instrument/strategy profile and approved local numerical-model mode.";
+                await MarkBlockedAsync(pattern, "ShortSignalConfiguration", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                return;
+            }
             var patternAge = _clock.UtcNow - ToUtc(pattern.DetectedAtUtc);
-            var maximumPatternAge = TimeSpan.FromSeconds(Math.Max(1, _tradingSettings.MaximumCandleAgeSeconds));
+            var maximumPatternAge = TimeSpan.FromSeconds(isShort
+                ? shortProfile!.MaximumSignalAgeSeconds
+                : Math.Max(1, _tradingSettings.MaximumCandleAgeSeconds));
             if (patternAge > maximumPatternAge)
             {
                 var reason = $"Pattern is stale ({FormatAge(patternAge)} old); AI analysis skipped.";
@@ -241,11 +254,18 @@ namespace TradingBot.Infrastructure.Background
                         await MarkBlockedAsync(pattern, "NumericalModel", new[] { reason }, cancellationToken).ConfigureAwait(false);
                         return;
                     }
+                    if (isShort && !pattern.Context.FeatureVersion.Equals(
+                            $"{features.FeatureVersion}+short-{shortProfile!.IntervalSeconds}s-v1", StringComparison.Ordinal))
+                    {
+                        const string reason = "Short signal feature contract does not match the current minute context and trigger interval.";
+                        await MarkBlockedAsync(pattern, "ShortSignalVersion", new[] { reason }, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
                     NumericalModelPrediction prediction;
                     try
                     {
                         prediction = await models.PredictAsync(new NumericalModelPredictionRequest(
-                            pattern.InstrumentId, pattern.StrategyId, features.FeatureVersion, pattern.Confidence,
+                            pattern.InstrumentId, pattern.StrategyId, pattern.Context.FeatureVersion, pattern.Confidence,
                             (int)pattern.PatternType, (int)pattern.Direction, (int)pattern.Timeframe,
                             features.NormalizedLiquidity ?? 0m, features.AtrToPriceRatio ?? 0m,
                             features.SpreadBps ?? 0m, _clock.UtcNow), cancellationToken).ConfigureAwait(false);
@@ -430,6 +450,7 @@ namespace TradingBot.Infrastructure.Background
             return timeframe switch
             {
                 Timeframe.OneMinute => snapshot.OneMinute.Features,
+                Timeframe.OneSecond or Timeframe.FiveSeconds or Timeframe.FifteenSeconds => snapshot.OneMinute.Features,
                 Timeframe.FiveMinutes => snapshot.FiveMinutes.Features,
                 Timeframe.FifteenMinutes => snapshot.FifteenMinutes.Features,
                 _ => null

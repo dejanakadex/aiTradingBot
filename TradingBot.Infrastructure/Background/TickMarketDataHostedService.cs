@@ -19,6 +19,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
     private readonly IMarketDataCollectionStatusService _status;
     private readonly IMarketDataQualityService _quality;
     private readonly ILatestMarketDataService _latest;
+    private readonly ShortSignalTriggerService? _shortSignals;
     private readonly IDbContextFactory<TradingBotDbContext> _dbFactory;
     private readonly TradingSettings _trading;
     private readonly MarketDataCollectionSettings _settings;
@@ -36,7 +37,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
         IOptions<TradingSettings> trading,
         IOptions<MarketDataCollectionSettings> settings,
         IClock clock,
-        ILogger<TickMarketDataHostedService> logger)
+        ILogger<TickMarketDataHostedService> logger,
+        ShortSignalTriggerService? shortSignals = null)
     {
         _ticks = tickServices.SingleOrDefault();
         _connection = connection;
@@ -44,6 +46,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
         _status = status;
         _quality = quality;
         _latest = latest;
+        _shortSignals = shortSignals;
         _dbFactory = dbFactory;
         _trading = trading.Value;
         _settings = settings.Value;
@@ -135,6 +138,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         }
                         var now = _clock.UtcNow;
                         _latest.AdvanceTo(now);
+                        if (_shortSignals != null)
+                            await _shortSignals.ProcessAsync(instrument, now, token).ConfigureAwait(false);
                         if (IsRegularSession(now) && now - lastActivity > TimeSpan.FromSeconds(_settings.TickHeartbeatTimeoutSeconds))
                             throw new IOException("Tick heartbeat timeout.");
                         if (!IsRegularSession(now)) lastActivity = now;
@@ -146,6 +151,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         var assessment = await _pipeline.ProcessCanonicalEventAsync(marketEvent, token).ConfigureAwait(false);
                         if (!assessment.CanPersist)
                             throw new IOException($"Tick quality rejected: {assessment.Status} {assessment.Reason}");
+                        if (assessment.IsHealthy && _shortSignals != null)
+                            await _shortSignals.ProcessAsync(instrument, marketEvent.ReceivedTimeUtc, token).ConfigureAwait(false);
                         lastActivity = _clock.UtcNow;
                         gapStart = marketEvent.ReceivedTimeUtc;
                         _status.ReportHeartbeat(key, marketEvent.EventTimeUtc, lastActivity,

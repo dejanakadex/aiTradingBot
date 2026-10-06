@@ -67,5 +67,25 @@ namespace TradingBot.Tests
             Assert.True(bus.TryPublish(c1));
             Assert.False(bus.TryPublish(c2));
         }
+
+        [Fact]
+        public async Task DefaultModeAppliesBackpressureWithoutDroppingOldestSignal()
+        {
+            using var bus = new TradingEventBus(new TradingEventBusOptions { PatternCandidateCapacity = 1 },
+                NullLogger<TradingEventBus>.Instance);
+            var now = DateTime.UtcNow;
+            var first = new PatternCandidate(TradingBot.Domain.Enums.PatternType.Hammer, "SPY",
+                TradingBot.Domain.Enums.Timeframe.FiveSeconds, now, 0.8m);
+            var second = new PatternCandidate(TradingBot.Domain.Enums.PatternType.BullishEngulfing, "SPY",
+                TradingBot.Domain.Enums.Timeframe.FiveSeconds, now.AddSeconds(5), 0.8m);
+
+            Assert.True(bus.TryPublish(first));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var pending = bus.PublishAsync(second, timeout.Token).AsTask();
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(first, await bus.PatternCandidateReader.ReadAsync(timeout.Token));
+            Assert.True(await pending);
+            Assert.Equal(second, await bus.PatternCandidateReader.ReadAsync(timeout.Token));
+        }
     }
 }

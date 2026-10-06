@@ -75,6 +75,10 @@ try
         .Bind(builder.Configuration.GetSection("ShortAggregates"))
         .Validate(settings => settings.GetValidationErrors().Count == 0, "ShortAggregates configuration is invalid.")
         .ValidateOnStart();
+    builder.Services.AddOptions<ShortSignalSettings>()
+        .Bind(builder.Configuration.GetSection("ShortSignals"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ShortSignals configuration is invalid.")
+        .ValidateOnStart();
 
     builder.Services.AddOptions<ReplaySettings>()
         .Bind(builder.Configuration.GetSection("Replay"))

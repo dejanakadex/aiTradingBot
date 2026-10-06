@@ -10,6 +10,6 @@ namespace TradingBot.Infrastructure.Options
         public int TradeSignalCapacity { get; set; } = 512;
         public int OrderRequestCapacity { get; set; } = 512;
 
-        public ChannelFullMode FullMode { get; set; } = ChannelFullMode.DropOldest;
+        public ChannelFullMode FullMode { get; set; } = ChannelFullMode.Wait;
     }
 }

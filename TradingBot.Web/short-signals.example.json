@@ -1,0 +1,21 @@
+{
+  "ShortAggregates": {
+    "IntervalsSeconds": [5, 15],
+    "AllowedLatenessSeconds": 2
+  },
+  "ShortSignals": {
+    "Profiles": [
+      {
+        "Enabled": false,
+        "InstrumentId": "US-STK-SPY-SMART",
+        "StrategyId": "micro-engulfing",
+        "IntervalSeconds": 5,
+        "PatternTypes": ["BullishEngulfing"],
+        "MinimumBars": 6,
+        "MinimumConfidence": 0.6,
+        "CooldownSeconds": 30,
+        "MaximumSignalAgeSeconds": 15
+      }
+    ]
+  }
+}

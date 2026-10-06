@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using TradingBot.Application.Configuration;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
 using TradingBot.Infrastructure.Options;
@@ -37,6 +38,37 @@ namespace TradingBot.Tests
             var approved = gate.TryCreateTradeSetup(pattern, Snapshot(), out _, out var reasons);
 
             Assert.True(approved, string.Join("; ", reasons));
+        }
+
+        [Fact]
+        public void ShortTimeframeRequiresMatchingInstrumentStrategyAndPatternProfile()
+        {
+            var options = new PatternDetectorOptions
+            {
+                MinimumOneMinuteCandlesForTradeSetup = 1,
+                MinimumFiveMinuteCandlesForTradeSetup = 1,
+                MinimumFifteenMinuteCandlesForTradeSetup = 1
+            };
+            var shortPattern = Pattern(PatternType.Hammer, Timeframe.FiveSeconds, 0.9m);
+            var blocked = new PatternQualityGate(Options.Create(options));
+            Assert.False(blocked.TryCreateTradeSetup(shortPattern, Snapshot(), out _, out var blockedReasons));
+            Assert.Contains(blockedReasons, reason => reason.Contains("timeframe", StringComparison.OrdinalIgnoreCase));
+
+            var enabled = new PatternQualityGate(Options.Create(options), Options.Create(new ShortSignalSettings
+            {
+                Profiles = [new ShortSignalProfile
+                {
+                    InstrumentId = shortPattern.InstrumentId,
+                    StrategyId = shortPattern.StrategyId,
+                    IntervalSeconds = 5,
+                    PatternTypes = [PatternType.Hammer]
+                }]
+            }));
+            Assert.True(enabled.TryCreateTradeSetup(shortPattern, Snapshot(), out _, out var allowedReasons),
+                string.Join("; ", allowedReasons));
+            var wrongPattern = Pattern(PatternType.BullishEngulfing, Timeframe.FiveSeconds, 0.9m);
+            Assert.False(enabled.TryCreateTradeSetup(wrongPattern, Snapshot(), out _, out var wrongReasons));
+            Assert.Contains(wrongReasons, reason => reason.Contains("timeframe", StringComparison.OrdinalIgnoreCase));
         }
 
         [Fact]

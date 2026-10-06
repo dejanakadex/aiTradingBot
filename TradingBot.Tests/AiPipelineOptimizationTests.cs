@@ -164,6 +164,78 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ConfiguredShortSignalNeverFallsBackToNetworkAnalyzers()
+        {
+            var profile = new ShortSignalProfile
+            {
+                InstrumentId = "SPY", StrategyId = PipelineContractVersions.DefaultStrategyId,
+                IntervalSeconds = 5, PatternTypes = [PatternType.BreakoutAndRetest]
+            };
+            var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Buy, 0.90m),
+                shortSettings: new ShortSignalSettings { Profiles = [profile] });
+
+            await harness.Service.ProcessPatternAsync(
+                new PatternCandidate(PatternType.BreakoutAndRetest, "SPY", Timeframe.FiveSeconds,
+                    MarketOpenUtc.AddSeconds(-5), 0.8m), CancellationToken.None);
+
+            Assert.Equal(0, harness.Analyzer.CallCount);
+            Assert.Equal(0, harness.Critic.CallCount);
+            Assert.Equal(0, harness.Strategy.CallCount);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task ShortSignalUsesProfileAgeBeforeNumericalInference()
+        {
+            var prediction = new NumericalModelPrediction(Guid.NewGuid(), 1, 0.8m, 0.6m, 1m, 30, true, "test");
+            var profile = new ShortSignalProfile
+            {
+                InstrumentId = "SPY", StrategyId = PipelineContractVersions.DefaultStrategyId,
+                IntervalSeconds = 5, PatternTypes = [PatternType.BreakoutAndRetest],
+                MaximumSignalAgeSeconds = 2
+            };
+            var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Buy, 0.90m),
+                numericalPrediction: prediction, shortSettings: new ShortSignalSettings { Profiles = [profile] });
+
+            await harness.Service.ProcessPatternAsync(
+                new PatternCandidate(PatternType.BreakoutAndRetest, "SPY", Timeframe.FiveSeconds,
+                    MarketOpenUtc.AddSeconds(-5), 0.8m), CancellationToken.None);
+
+            Assert.Equal(0, Assert.IsType<FakeNumericalModel>(harness.NumericalModel).CallCount);
+            Assert.Equal(0, harness.Analyzer.CallCount);
+            harness.Dispose();
+        }
+
+        [Fact]
+        public async Task ShortSignalUsesOnlyItsIntervalSpecificApprovedModelContract()
+        {
+            var prediction = new NumericalModelPrediction(Guid.NewGuid(), 1, 0.8m, 0.6m, 3m, 30, true, "test");
+            var profile = new ShortSignalProfile
+            {
+                InstrumentId = "SPY", StrategyId = PipelineContractVersions.DefaultStrategyId,
+                IntervalSeconds = 5, PatternTypes = [PatternType.BreakoutAndRetest]
+            };
+            var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Buy, 0.90m),
+                numericalPrediction: prediction, shortSettings: new ShortSignalSettings { Profiles = [profile] });
+            var at = MarketOpenUtc.AddSeconds(-5);
+            var context = PipelineContext.CreateForSignal("SPY",
+                $"long|BreakoutAndRetest|FiveSeconds|{at:O}",
+                featureVersion: $"{PipelineContractVersions.Features}+short-5s-v1");
+
+            await harness.Service.ProcessPatternAsync(new PatternCandidate(
+                PatternType.BreakoutAndRetest, "SPY", Timeframe.FiveSeconds, at, 0.8m,
+                context: context), CancellationToken.None);
+
+            var numerical = Assert.IsType<FakeNumericalModel>(harness.NumericalModel);
+            Assert.Equal(1, numerical.CallCount);
+            Assert.Equal($"{PipelineContractVersions.Features}+short-5s-v1", numerical.LastRequest?.FeatureVersion);
+            Assert.Equal(0, harness.Analyzer.CallCount);
+            Assert.Equal(0, harness.Critic.CallCount);
+            Assert.Equal(1, harness.Strategy.CallCount);
+            harness.Dispose();
+        }
+
+        [Fact]
         public async Task RiskHistory_LoadsOnlyTradesClosedInCurrentNewYorkSession()
         {
             var harness = CreateHarness(0.60m, Analysis(AiMarketActions.Wait, 0.90m));
@@ -203,7 +275,8 @@ namespace TradingBot.Tests
             DateTime? nowUtc = null,
             TradingOperatingMode operatingMode = TradingOperatingMode.AnalysisOnly,
             string? paperAccountId = null,
-            NumericalModelPrediction? numericalPrediction = null)
+            NumericalModelPrediction? numericalPrediction = null,
+            ShortSignalSettings? shortSettings = null)
         {
             var factory = CreateInMemoryFactory(out var connection);
             var eventBus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
@@ -243,7 +316,7 @@ namespace TradingBot.Tests
                     MinimumOneMinuteCandlesForTradeSetup = 1,
                     MinimumFiveMinuteCandlesForTradeSetup = 1,
                     MinimumFifteenMinuteCandlesForTradeSetup = 1
-                })),
+                }), shortSettings == null ? null : Options.Create(shortSettings)),
                 provider,
                 Options.Create(new TradingSettings
                 {
@@ -263,7 +336,8 @@ namespace TradingBot.Tests
                 NullLogger<PatternDecisionBackgroundService>.Instance,
                 numericalModelSettings: numericalModel == null
                     ? null
-                    : Options.Create(new NumericalModelSettings { UseApprovedModelForEntry = true }));
+                    : Options.Create(new NumericalModelSettings { UseApprovedModelForEntry = true }),
+                shortSignalSettings: shortSettings == null ? null : Options.Create(shortSettings));
 
             return new Harness(service, eventBus, factory, connection, analyzer, critic, strategy, numericalModel);
         }

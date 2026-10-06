@@ -497,6 +497,9 @@ namespace TradingBot.Infrastructure.Services
         private static string Format(decimal value) => value.ToString("0.####", CultureInfo.InvariantCulture);
         private static TimeSpan TimeframeDuration(Timeframe timeframe) => timeframe switch
         {
+            Timeframe.OneSecond => TimeSpan.FromSeconds(1),
+            Timeframe.FiveSeconds => TimeSpan.FromSeconds(5),
+            Timeframe.FifteenSeconds => TimeSpan.FromSeconds(15),
             Timeframe.OneMinute => TimeSpan.FromMinutes(1),
             Timeframe.FiveMinutes => TimeSpan.FromMinutes(5),
             Timeframe.FifteenMinutes => TimeSpan.FromMinutes(15),

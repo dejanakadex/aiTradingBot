@@ -57,6 +57,33 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public void DetectsExistingEngulfingPatternOnCompletedFiveSecondCandles()
+        {
+            var detector = new PatternDetector(new PatternDetectorOptions(), NullLogger<PatternDetector>.Instance);
+            var end = new DateTime(2026, 9, 24, 14, 0, 30, DateTimeKind.Utc);
+            var candles = new[]
+            {
+                MakeC("SPY", 16m, 16.2m, 15.8m, 16m, 100m, end.AddSeconds(-25), "SPY-ID", Timeframe.FiveSeconds),
+                MakeC("SPY", 15.8m, 16m, 15.6m, 15.8m, 100m, end.AddSeconds(-20), "SPY-ID", Timeframe.FiveSeconds),
+                MakeC("SPY", 15.6m, 15.8m, 15.4m, 15.6m, 100m, end.AddSeconds(-15), "SPY-ID", Timeframe.FiveSeconds),
+                MakeC("SPY", 15.4m, 15.6m, 15.1m, 15.4m, 100m, end.AddSeconds(-10), "SPY-ID", Timeframe.FiveSeconds),
+                MakeC("SPY", 15m, 16m, 14m, 14.5m, 100m, end.AddSeconds(-5), "SPY-ID", Timeframe.FiveSeconds),
+                MakeC("SPY", 14.4m, 16m, 14.4m, 16m, 300m, end, "SPY-ID", Timeframe.FiveSeconds)
+            };
+
+            var candidate = detector.Detect(new PatternDetectionInput
+            {
+                Candles = candles, StrategyId = "micro-engulfing",
+                FeatureVersion = "features-v3+short-5s-v1", Directions = [TradeDirection.Long]
+            }).Single(pattern => pattern.PatternType == PatternType.BullishEngulfing);
+
+            Assert.Equal(Timeframe.FiveSeconds, candidate.Timeframe);
+            Assert.Equal(end, candidate.DetectedAtUtc);
+            Assert.Equal("micro-engulfing", candidate.StrategyId);
+            Assert.True(candidate.Confidence >= 0.6m, $"Confidence was {candidate.Confidence}.");
+        }
+
+        [Fact]
         public void Detects_DoubleBottom()
         {
             var opts = new PatternDetectorOptions

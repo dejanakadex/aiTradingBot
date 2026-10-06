@@ -84,6 +84,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IMarketDataValidator, MarketDataValidator>();
             services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
+            services.AddSingleton<ShortSignalTriggerService>();
             services.AddSingleton<IMarketDataCollectionStatusService, MarketDataCollectionStatusService>();
             services.AddSingleton<IbkrDiagnosticsService>();
             services.AddSingleton<IMarketDatasetStore, ParquetMarketDatasetStore>();
