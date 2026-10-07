@@ -1,0 +1,66 @@
+{
+  "StartedAtUtc": "2026-10-07T18:35:30.673212Z",
+  "EndedAtUtc": "2026-10-07T18:36:00.7775473Z",
+  "DurationSeconds": 30,
+  "ServerVersion": 225,
+  "Thresholds": {
+    "MinimumDurationSeconds": 1800,
+    "MinimumTradeTicksPerInstrument": 1000,
+    "MinimumBidAskTicksPerInstrument": 1000,
+    "MaximumP95ReceiveLagMilliseconds": 1500,
+    "MaximumDroppedEvents": 0
+  },
+  "Instruments": [
+    {
+      "InstrumentId": "US-STK-SPY-SMART",
+      "Symbol": "SPY",
+      "TradeTicks": 0,
+      "BidTicks": 0,
+      "AskTicks": 0,
+      "DroppedEvents": 0,
+      "OutOfOrderEvents": 0,
+      "PeakQueueDepth": 0,
+      "P50ReceiveLagMilliseconds": null,
+      "P95ReceiveLagMilliseconds": null,
+      "P99ReceiveLagMilliseconds": null,
+      "BrokerMarketDataErrorCode": 10089,
+      "Passed": false,
+      "Reasons": [
+        "Trade ticks 0/1000.",
+        "Bid/ask ticks 0/0; minimum 1000 each.",
+        "P95 receive lag unavailable ms exceeds 1500 ms.",
+        "Broker market-data error code 10089."
+      ]
+    },
+    {
+      "InstrumentId": "US-STK-QQQ-SMART",
+      "Symbol": "QQQ",
+      "TradeTicks": 0,
+      "BidTicks": 0,
+      "AskTicks": 0,
+      "DroppedEvents": 0,
+      "OutOfOrderEvents": 0,
+      "PeakQueueDepth": 0,
+      "P50ReceiveLagMilliseconds": null,
+      "P95ReceiveLagMilliseconds": null,
+      "P99ReceiveLagMilliseconds": null,
+      "BrokerMarketDataErrorCode": 10089,
+      "Passed": false,
+      "Reasons": [
+        "Trade ticks 0/1000.",
+        "Bid/ask ticks 0/0; minimum 1000 each.",
+        "P95 receive lag unavailable ms exceeds 1500 ms.",
+        "Broker market-data error code 10089."
+      ]
+    }
+  ],
+  "Passed": false,
+  "Reasons": [
+    "SPY: broker tick stream terminated (IOException).",
+    "QQQ: broker tick stream terminated (IOException).",
+    "Operational SQLite database was not provided; signal timing, risk, rejection and model/baseline checks are unavailable.",
+    "Observation duration below 1800 seconds.",
+    "One or more instruments did not meet feed thresholds."
+  ],
+  "DecisionAssessment": null
+}
