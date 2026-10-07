@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Diagnostics;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
@@ -33,6 +34,7 @@ namespace TradingBot.Infrastructure.Background
         private readonly ICandidateResearchService? _candidateResearchService;
         private readonly NumericalModelSettings? _numericalModelSettings;
         private readonly ShortSignalSettings _shortSignalSettings;
+        private readonly ShadowPerformanceSettings _shadowPerformance;
         private readonly ConcurrentDictionary<string, byte> _processedPatterns = new();
 
         public PatternDecisionBackgroundService(
@@ -49,7 +51,8 @@ namespace TradingBot.Infrastructure.Background
             ITradingPipelineStatusService? pipelineStatusService = null,
             ICandidateResearchService? candidateResearchService = null,
             IOptions<NumericalModelSettings>? numericalModelSettings = null,
-            IOptions<ShortSignalSettings>? shortSignalSettings = null)
+            IOptions<ShortSignalSettings>? shortSignalSettings = null,
+            IOptions<ShadowPerformanceSettings>? shadowPerformanceSettings = null)
         {
             _eventBus = eventBus;
             _pipelineChannel = pipelineChannel;
@@ -65,6 +68,7 @@ namespace TradingBot.Infrastructure.Background
             _candidateResearchService = candidateResearchService;
             _numericalModelSettings = numericalModelSettings?.Value;
             _shortSignalSettings = shortSignalSettings?.Value ?? new ShortSignalSettings();
+            _shadowPerformance = shadowPerformanceSettings?.Value ?? new ShadowPerformanceSettings();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -93,6 +97,52 @@ namespace TradingBot.Infrastructure.Background
         }
 
         internal async Task ProcessPatternAsync(PatternCandidate pattern, CancellationToken cancellationToken)
+        {
+            if (!_shadowPerformance.Enabled)
+            {
+                await ProcessPatternCoreAsync(pattern, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            var startedUtc = _clock.UtcNow;
+            var started = Stopwatch.GetTimestamp();
+            var queueDepth = _eventBus.PatternCandidateReader.CanCount ? _eventBus.PatternCandidateReader.Count : 0;
+            try
+            {
+                await ProcessPatternCoreAsync(pattern, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                var durationMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                try
+                {
+                    await using var db = await _dbFactory.CreateDbContextAsync(CancellationToken.None).ConfigureAwait(false);
+                    db.AiAnalysisRecords.Add(new TradingBot.Persistence.AiAnalysisRecord
+                    {
+                        TimestampUtc = startedUtc,
+                        AgentType = AiAgentType.Pipeline.ToString(),
+                        Context = "ShadowPatternTiming",
+                        ResultJson = JsonSerializer.Serialize(new
+                        {
+                            pattern.Context.SignalId,
+                            pattern.InstrumentId,
+                            pattern.StrategyId,
+                            pattern.Symbol,
+                            startedUtc,
+                            signalAgeMilliseconds = Math.Max(0, (startedUtc - ToUtc(pattern.DetectedAtUtc)).TotalMilliseconds),
+                            processingMilliseconds = durationMs,
+                            pendingPatternQueueDepth = queueDepth
+                        })
+                    });
+                    await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to persist shadow timing for signal {SignalId}.", pattern.Context.SignalId);
+                }
+            }
+        }
+
+        private async Task ProcessPatternCoreAsync(PatternCandidate pattern, CancellationToken cancellationToken)
         {
             var key = pattern.PatternKey;
             if (!_processedPatterns.TryAdd(key, 0))

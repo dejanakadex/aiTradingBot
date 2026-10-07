@@ -155,6 +155,11 @@ try
         .Validate(settings => settings.GetValidationErrors().Count == 0, "InstrumentRollout configuration is invalid. Check sample, latency, slippage and monitoring thresholds.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<ShadowPerformanceSettings>()
+        .Bind(builder.Configuration.GetSection("ShadowPerformance"))
+        .Validate(settings => settings.GetValidationErrors().Count == 0, "ShadowPerformance thresholds are invalid.")
+        .ValidateOnStart();
+
     builder.Services.AddOptions<NumericalModelSettings>()
         .Bind(builder.Configuration.GetSection("NumericalModel"))
         .Validate(settings => settings.GetValidationErrors().Count == 0, "NumericalModel configuration is invalid. Check LightGBM, sample and approval thresholds.")

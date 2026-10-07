@@ -206,7 +206,16 @@ namespace TradingBot.Infrastructure.Background
                         pattern.PatternType.ToString());
 
                     await PersistPatternDetectionAsync(pattern, features, candles[^1], cancellationToken).ConfigureAwait(false);
-                    await _eventBus.PublishAsync(pattern, cancellationToken).ConfigureAwait(false);
+                    if (!await _eventBus.PublishAsync(pattern, cancellationToken).ConfigureAwait(false))
+                    {
+                        const string reason = "Pattern candidate could not be queued for decision processing.";
+                        _logger.LogError("{Reason} SignalId={SignalId}", reason, pattern.Context.SignalId);
+                        if (_candidateResearchService != null)
+                            await _candidateResearchService.MarkBlockedAsync(pattern.PatternKey, "PatternQueue", new[] { reason }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                        _statusService.SetState(TradingEngineState.Degraded, false, reason);
+                        _pipelineStatusService?.Mark(TradingPipelineStage.PatternAnalysis,
+                            TradingPipelineActivityState.Error, reason, pattern.Symbol);
+                    }
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

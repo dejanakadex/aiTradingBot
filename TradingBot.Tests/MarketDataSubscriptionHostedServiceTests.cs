@@ -384,10 +384,61 @@ namespace TradingBot.Tests
             harness.Dispose();
         }
 
-        private static Harness CreateHarness(TradingSettings? tradingSettings = null, OpenAiSettings? openAiSettings = null)
+        [Fact]
+        public async Task RejectedPatternQueueDegradesEngineInsteadOfSilentlyLosingSignal()
+        {
+            var tradingSettings = new TradingSettings
+            {
+                Instruments = new[]
+                {
+                    new InstrumentSettings
+                    {
+                        InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                        AllowedDirections = new[] { TradeDirection.Long },
+                        StrategyIds = new[] { "alpha", "beta" },
+                        MarketDataTimeframes = new[] { "1m" }
+                    }
+                },
+                MaximumCandleAgeSeconds = 300
+            };
+            var harness = CreateHarness(tradingSettings, busOptions: new TradingEventBusOptions
+            {
+                PatternCandidateCapacity = 1, FullMode = ChannelFullMode.Reject
+            });
+            harness.Status.SetState(TradingEngineState.Ready, true, "ready", reconciliationCompleted: true);
+            var patternService = new CandlePatternDetectionBackgroundService(
+                harness.EventBus, new CandleHistoryService(harness.Factory), new FeatureEngine(),
+                new PatternDetector(new PatternDetectorOptions(), NullLogger<PatternDetector>.Instance),
+                harness.Status, harness.Factory, NullLogger<CandlePatternDetectionBackgroundService>.Instance,
+                tradingSettings: Options.Create(tradingSettings));
+
+            await patternService.StartAsync(CancellationToken.None);
+            await harness.Service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 1);
+            var at = harness.Clock.UtcNow;
+            await harness.MarketData.PublishAsync("SPY", "1m", new MarketBar
+            {
+                Symbol = "SPY", Timeframe = "1m", TimestampUtc = at.AddMinutes(-1),
+                Open = 100m, High = 101m, Low = 99m, Close = 100m, Volume = 900m
+            });
+            await harness.MarketData.PublishAsync("SPY", "1m", new MarketBar
+            {
+                Symbol = "SPY", Timeframe = "1m", TimestampUtc = at,
+                Open = 100m, High = 101m, Low = 90m, Close = 100.5m, Volume = 1000m
+            });
+            await WaitUntilAsync(() => harness.Status.Current.State == TradingEngineState.Degraded);
+            Assert.False(harness.Status.Current.TradingEnabled);
+            Assert.Equal(1, harness.EventBus.PatternCandidateReader.Count);
+            await harness.Service.StopAsync(CancellationToken.None);
+            await patternService.StopAsync(CancellationToken.None);
+            harness.Dispose();
+        }
+
+        private static Harness CreateHarness(TradingSettings? tradingSettings = null, OpenAiSettings? openAiSettings = null,
+            TradingEventBusOptions? busOptions = null)
         {
             var factory = CreateInMemoryFactory(out var connection);
-            var eventBus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
+            var eventBus = new TradingEventBus(busOptions ?? new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
             var status = new TradingEngineStatusService();
             var fakeAdapter = new FakeIbkrAdapter();
             var clock = new MutableClock(new DateTime(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc));

@@ -393,6 +393,8 @@ Suggested next tasks
 
 ## Helpful commands
 
+Read-only TWS paper feed diagnostics and point 30 thresholds are in [docs/SHADOW_READINESS.md](docs/SHADOW_READINESS.md). The real-feed shadow assessment is still in progress.
+
 ```powershell
 # Build and run web app
 dotnet build
