@@ -429,7 +429,7 @@ namespace TradingBot.Infrastructure.Services
             Deserialize<NumericalModelMetrics>(x.BaselineWalkForwardJson), Deserialize<NumericalModelMetrics>(x.CandidateWalkForwardJson),
             Deserialize<NumericalModelMetrics>(x.BaselineHoldoutJson), Deserialize<NumericalModelMetrics>(x.CandidateHoldoutJson), x.ApprovalReady,
             Deserialize<string[]>(x.ApprovalReasonsJson), x.InputSha256, x.OutputSha256, x.CreatedAtUtc, x.DecidedAtUtc);
-        private static string OutputHash(NumericalModelRecord x) => Hash($"{x.InputSha256}|{x.ModelVersionTag}|{x.FeatureVersion}|{x.PatternVersion}|{x.LabelVersion}|{x.ProbabilityThreshold.ToString(CultureInfo.InvariantCulture)}|{x.BaselineWalkForwardJson}|{x.CandidateWalkForwardJson}|{x.BaselineHoldoutJson}|{x.CandidateHoldoutJson}|{Convert.ToHexString(SHA256.HashData(x.ModelArtifact))}");
+        internal static string OutputHash(NumericalModelRecord x) => Hash($"{x.InputSha256}|{x.ModelVersionTag}|{x.FeatureVersion}|{x.PatternVersion}|{x.LabelVersion}|{x.ProbabilityThreshold.ToString(CultureInfo.InvariantCulture)}|{x.BaselineWalkForwardJson}|{x.CandidateWalkForwardJson}|{x.BaselineHoldoutJson}|{x.CandidateHoldoutJson}|{Convert.ToHexString(SHA256.HashData(x.ModelArtifact))}");
         private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);
         private static T Deserialize<T>(string value) => JsonSerializer.Deserialize<T>(value, JsonOptions) ?? throw new InvalidDataException($"Persisted {typeof(T).Name} payload is invalid.");
         private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();

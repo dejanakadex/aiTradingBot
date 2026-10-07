@@ -306,6 +306,12 @@ namespace TradingBot.Infrastructure.Services
                 var receivedAt = ToUtc(_clock.UtcNow);
                 var inserted = await InsertBarsAsync(db, job, valid, receivedAt, "IBKR.AutomaticGapFill", cancellationToken).ConfigureAwait(false);
                 await RecordDatasetAsync(job, valid, receivedAt, "IBKR.AutomaticGapFill", cancellationToken).ConfigureAwait(false);
+                if (persistedJob != null && persistedJob.Status is HistoricalBackfillStatus.Completed or HistoricalBackfillStatus.CompletedWithGaps)
+                {
+                    persistedJob.GapCount = await RebuildGapReportAsync(db, persistedJob, receivedAt, cancellationToken).ConfigureAwait(false);
+                    persistedJob.Status = persistedJob.GapCount == 0 ? HistoricalBackfillStatus.Completed : HistoricalBackfillStatus.CompletedWithGaps;
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                }
                 _logger.LogInformation(
                     "Automatic gap fill completed for {InstrumentId} {Timeframe} [{StartUtc}, {EndUtc}): received={Received}, inserted={Inserted}.",
                     normalizedInstrumentId,

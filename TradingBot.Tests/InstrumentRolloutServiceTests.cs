@@ -19,6 +19,7 @@ namespace TradingBot.Tests
         public async Task ShadowSamplePassingThresholds_AdvancesInstrumentToPaperReady()
         {
             await using var harness = CreateHarness(InstrumentOnboardingStatus.ShadowReady);
+            await harness.SeedResearchAsync();
             await harness.SeedHealthyStreamAsync();
             await harness.SeedDecisionAsync(Guid.NewGuid(), true);
             await harness.SeedDecisionAsync(Guid.NewGuid(), true);
@@ -47,6 +48,7 @@ namespace TradingBot.Tests
         public async Task PaperMetricsPassing_AllowsExplicitManualLiveApproval()
         {
             await using var harness = CreateHarness(InstrumentOnboardingStatus.PaperReady, liveExplicitlyEnabled: true);
+            await harness.SeedResearchAsync();
             await harness.SeedHealthyStreamAsync();
             var signalId = Guid.NewGuid();
             await harness.SeedDecisionAsync(signalId, true);
@@ -60,6 +62,76 @@ namespace TradingBot.Tests
             Assert.Equal(InstrumentOnboardingStatus.LiveEnabled, approved.Status);
         }
 
+        [Fact]
+        public async Task CompletedBackfillAfterRestart_ResumesCollectingAndWarmup()
+        {
+            await using var harness = CreateHarness(InstrumentOnboardingStatus.Backfilling);
+            await harness.SeedResearchAsync();
+
+            var collecting = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+            var warming = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+            var research = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+
+            Assert.Equal(InstrumentOnboardingStatus.Collecting, collecting.StatusAfter);
+            Assert.Equal(InstrumentOnboardingStatus.WarmingUp, warming.StatusAfter);
+            Assert.Equal(InstrumentOnboardingStatus.ResearchReady, research.StatusAfter);
+        }
+
+        [Fact]
+        public async Task HistoricalGaps_BlockResearchReadinessWithReason()
+        {
+            await using var harness = CreateHarness(InstrumentOnboardingStatus.Collecting);
+            await harness.SeedResearchAsync(gaps: true);
+
+            var result = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+
+            Assert.Equal(InstrumentOnboardingStatus.Collecting, result.StatusAfter);
+            Assert.Contains(result.Reasons, x => x.Contains("gap", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public async Task MissingLabels_BlockResearchReadinessWithReason()
+        {
+            await using var harness = CreateHarness(InstrumentOnboardingStatus.WarmingUp);
+            await harness.SeedResearchAsync(labels: false);
+            var result = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+
+            Assert.Equal(InstrumentOnboardingStatus.WarmingUp, result.StatusAfter);
+            Assert.Contains(result.Reasons, x => x.Contains("labels", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Theory]
+        [InlineData(false, false, "evaluation")]
+        [InlineData(true, false, "model")]
+        public async Task ShadowCannotBecomePaperWithoutEvaluationAndApprovedModel(bool evaluation, bool approvedModel, string reason)
+        {
+            await using var harness = CreateHarness(InstrumentOnboardingStatus.ShadowReady);
+            await harness.SeedResearchAsync(evaluation, approvedModel);
+            await harness.SeedHealthyStreamAsync();
+            await harness.SeedDecisionAsync(Guid.NewGuid(), true);
+            await harness.SeedDecisionAsync(Guid.NewGuid(), true);
+
+            var result = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+
+            Assert.Equal(InstrumentOnboardingStatus.ShadowReady, result.StatusAfter);
+            Assert.Contains(result.Reasons, x => x.Contains(reason, StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public async Task DecisionsBeforeShadowEntry_DoNotCompleteProtocol()
+        {
+            await using var harness = CreateHarness(InstrumentOnboardingStatus.ShadowReady);
+            await harness.SeedResearchAsync();
+            await harness.SeedHealthyStreamAsync();
+            await harness.SeedDecisionAsync(Guid.NewGuid(), true, NowUtc.AddSeconds(-3));
+            await harness.SeedDecisionAsync(Guid.NewGuid(), true);
+
+            var result = await harness.Service.EvaluateAsync("US-STK-SPY-SMART", true);
+
+            Assert.Equal(InstrumentOnboardingStatus.ShadowReady, result.StatusAfter);
+            Assert.Equal(1, result.ShadowDecisionCount);
+        }
+
         private static Harness CreateHarness(InstrumentOnboardingStatus status, bool liveExplicitlyEnabled = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
@@ -70,6 +142,8 @@ namespace TradingBot.Tests
             var registry = new FakeRegistry(status);
             var rolloutSettings = new InstrumentRolloutSettings
             {
+                MinimumFinalBarsPerTimeframe = 1,
+                MinimumCompleteLabelsPerStrategy = 1,
                 LookbackHours = 24,
                 MinimumShadowDecisions = 2,
                 MinimumApprovedShadowDecisions = 1,
@@ -95,6 +169,74 @@ namespace TradingBot.Tests
             public FakeRegistry Registry { get; }
             public InstrumentRolloutService Service { get; }
 
+            public async Task SeedResearchAsync(bool evaluation = true, bool approvedModel = true, bool gaps = false, bool labels = true)
+            {
+                await using var db = Factory.CreateDbContext();
+                db.HistoricalBackfillJobRecords.Add(new HistoricalBackfillJobRecord
+                {
+                    InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", Timeframe = "1m",
+                    Status = gaps ? HistoricalBackfillStatus.CompletedWithGaps : HistoricalBackfillStatus.Completed,
+                    DesiredStartUtc = NowUtc.AddDays(-1), DesiredEndUtc = NowUtc, NextSegmentEndUtc = NowUtc.AddDays(-1),
+                    GapCount = gaps ? 1 : 0, Version = 1
+                });
+                db.Candles.Add(new TradingBot.Persistence.Candle
+                {
+                    InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", Timeframe = Timeframe.OneMinute,
+                    TimestampUtc = NowUtc.AddMinutes(-1), ReceivedTimeUtc = NowUtc, IsFinal = true,
+                    QualityStatus = MarketDataQualityStatus.Healthy, Open = 100m, High = 101m, Low = 99m, Close = 100m, Volume = 100m
+                });
+                var labelVersion = CandidateLabelVersion.Create(new CandidateLabelingSettings());
+                var featureVersion = new FeatureEngine(new CanonicalFeatureSettings()).FeatureVersion;
+                var candidate = new ResearchCandidateRecord
+                {
+                    RecordKey = Guid.NewGuid().ToString("N"), CandidateKey = Guid.NewGuid().ToString("N"),
+                    InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", StrategyId = "test",
+                    EvaluatedAtUtc = NowUtc.AddMinutes(-2), FeatureVersion = featureVersion,
+                    PatternVersion = PipelineContractVersions.Patterns, LabelVersion = labelVersion
+                };
+                db.ResearchCandidateRecords.Add(candidate);
+                if (labels)
+                    db.CandidateLabelRecords.Add(new CandidateLabelRecord
+                    {
+                        ResearchCandidate = candidate, HorizonSeconds = 60, Status = CandidateLabelStatus.Complete,
+                        LabelVersion = labelVersion, InputSha256 = "valid-input", NetReturnBps = 1m,
+                        WindowStartUtc = NowUtc.AddMinutes(-2), WindowEndUtc = NowUtc.AddMinutes(-1)
+                    });
+                if (evaluation)
+                {
+                    var run = new ResearchEvaluationRunRecord
+                    {
+                        Id = Guid.NewGuid(), RunKey = Guid.NewGuid().ToString("N"), InstrumentId = "US-STK-SPY-SMART",
+                        StrategyId = "test", EvaluationVersion = ResearchEvaluationVersion.Create(new ResearchEvaluationSettings()),
+                        FeatureVersion = featureVersion, PatternVersion = PipelineContractVersions.Patterns,
+                        LabelVersion = labelVersion, OutputSha256 = "valid-evaluation", CompletedAtUtc = NowUtc
+                    };
+                    db.ResearchEvaluationRunRecords.Add(run);
+                    if (approvedModel)
+                    {
+                        var model = new NumericalModelRecord
+                        {
+                            Id = Guid.NewGuid(), EvaluationRunId = run.Id, InstrumentId = "US-STK-SPY-SMART", StrategyId = "test",
+                            Status = NumericalModelStatus.Approved, ApprovalReady = true, ModelVersionTag = "numerical-model-v2",
+                            FeatureVersion = featureVersion, PatternVersion = PipelineContractVersions.Patterns,
+                            LabelVersion = labelVersion, ModelArtifact = [1, 2, 3], InputSha256 = "valid-input"
+                        };
+                        model.OutputSha256 = NumericalModelService.OutputHash(model);
+                        db.NumericalModelRecords.Add(model);
+                    }
+                }
+                await db.SaveChangesAsync();
+                if (approvedModel && evaluation)
+                {
+                    db.ChangeTracker.Clear();
+                    var persisted = await db.NumericalModelRecords.SingleAsync();
+                    persisted.OutputSha256 = NumericalModelService.OutputHash(persisted);
+                    await db.SaveChangesAsync();
+                    var reread = await db.NumericalModelRecords.AsNoTracking().SingleAsync();
+                    Assert.Equal(NumericalModelService.OutputHash(reread), reread.OutputSha256);
+                }
+            }
+
             public async Task SeedHealthyStreamAsync(bool healthy = true)
             {
                 await using var db = Factory.CreateDbContext();
@@ -107,13 +249,13 @@ namespace TradingBot.Tests
                 await db.SaveChangesAsync();
             }
 
-            public async Task SeedDecisionAsync(Guid signalId, bool approved)
+            public async Task SeedDecisionAsync(Guid signalId, bool approved, DateTime? evaluatedAtUtc = null)
             {
                 await using var db = Factory.CreateDbContext();
                 db.ScalpingExecutionDecisionRecords.Add(new ScalpingExecutionDecisionRecord
                 {
                     SignalId = signalId, InstrumentId = "US-STK-SPY-SMART", StrategyId = "test", Symbol = "SPY",
-                    EvaluatedAtUtc = NowUtc.AddSeconds(-1), QuoteAsOfUtc = NowUtc.AddSeconds(-1), Approved = approved,
+                    EvaluatedAtUtc = evaluatedAtUtc ?? NowUtc.AddSeconds(-1), QuoteAsOfUtc = evaluatedAtUtc ?? NowUtc.AddSeconds(-1), Approved = approved,
                     SelectedPolicy = "MarketableLimit", Bid = 100m, Ask = 100.02m, Quantity = 1m,
                     ExpectedHoldingSeconds = 60, ExpectedGrossEdgeBps = 20m, EstimatedCostBps = 5m, ExpectedNetEdgeBps = 15m,
                     Reason = approved ? "ok" : "rejected", DecisionJson = "{}"
@@ -187,7 +329,8 @@ namespace TradingBot.Tests
             private static InstrumentRegistrySnapshot Make(InstrumentOnboardingStatus status, int version) => new()
             {
                 InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", ConfiguredEnabled = true, TradingRequested = true,
-                Status = status, Version = version, BrokerContractId = 756733, BrokerPrimaryExchange = "ARCA"
+                Status = status, Version = version, StatusChangedAtUtc = NowUtc.AddSeconds(-2), BrokerContractId = 756733, BrokerPrimaryExchange = "ARCA",
+                MarketDataTimeframes = ["1m"], StrategyIds = ["test"]
             };
         }
     }

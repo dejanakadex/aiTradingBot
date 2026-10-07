@@ -171,6 +171,45 @@ namespace TradingBot.Tests
             Assert.Equal("IBKR.AutomaticGapFill", candle.Source);
         }
 
+        [Fact]
+        public async Task GapFillRefreshesCompletedJobSoOnboardingCanResume()
+        {
+            using var database = CreateDatabase(out var factory);
+            var clock = new MutableClock(new DateTime(2026, 9, 24, 20, 0, 0, DateTimeKind.Utc));
+            var registry = new InstrumentRegistryService(factory, Options.Create(BuildTradingSettings()), clock);
+            await registry.SynchronizeConfiguredAsync();
+            var marketData = new RecordingMarketDataService(request => new[] { Bar(request, request.StartUtc) });
+            var service = CreateService(factory, marketData, registry, BackfillSettings(1, 1), clock);
+            await service.SynchronizePlanAsync();
+            var start = clock.UtcNow.AddMinutes(-5);
+            await using (var db = factory.CreateDbContext())
+            {
+                var job = await db.HistoricalBackfillJobRecords.SingleAsync();
+                job.DesiredStartUtc = start;
+                job.DesiredEndUtc = start.AddMinutes(3);
+                job.Status = HistoricalBackfillStatus.CompletedWithGaps;
+                job.GapCount = 1;
+                foreach (var at in new[] { start, start.AddMinutes(2) })
+                    db.Candles.Add(new Candle
+                    {
+                        InstrumentId = job.InstrumentId, Symbol = job.Symbol, Timeframe = Timeframe.OneMinute,
+                        TimestampUtc = at, ReceivedTimeUtc = clock.UtcNow, Source = "test", IsFinal = true,
+                        QualityStatus = MarketDataQualityStatus.Healthy, Open = 100m, High = 100m,
+                        Low = 100m, Close = 100m, Volume = 1m
+                    });
+                await db.SaveChangesAsync();
+            }
+
+            var filled = await service.FillGapAsync("US-STK-SPY-SMART", "SPY", "1m", start.AddMinutes(1), start.AddMinutes(2));
+
+            Assert.True(filled.Success);
+            await using var verification = factory.CreateDbContext();
+            var updated = await verification.HistoricalBackfillJobRecords.SingleAsync();
+            Assert.Equal(HistoricalBackfillStatus.Completed, updated.Status);
+            Assert.Equal(0, updated.GapCount);
+            Assert.Empty(await verification.HistoricalDataGapRecords.ToListAsync());
+        }
+
         private static HistoricalBackfillService CreateService(
             IDbContextFactory<TradingBotDbContext> factory,
             IMarketDataService marketData,

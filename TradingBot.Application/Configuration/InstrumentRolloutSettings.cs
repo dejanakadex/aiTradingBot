@@ -12,6 +12,8 @@ namespace TradingBot.Application.Configuration
         public decimal MaximumAverageEntrySlippageBps { get; set; } = 3m;
         public int MaximumAverageFillLatencyMilliseconds { get; set; } = 2500;
         public int MaximumRecentQualityIncidents { get; set; } = 0;
+        public int MinimumFinalBarsPerTimeframe { get; set; } = 50;
+        public int MinimumCompleteLabelsPerStrategy { get; set; } = 100;
         public bool AutoAdvanceToShadow { get; set; } = true;
         public bool AutoAdvanceToPaper { get; set; } = true;
         public bool AutoSuspend { get; set; } = true;
@@ -28,6 +30,8 @@ namespace TradingBot.Application.Configuration
             if (MaximumAverageEntrySlippageBps < 0m) errors.Add("MaximumAverageEntrySlippageBps cannot be negative.");
             if (MaximumAverageFillLatencyMilliseconds < 1) errors.Add("MaximumAverageFillLatencyMilliseconds must be positive.");
             if (MaximumRecentQualityIncidents < 0) errors.Add("MaximumRecentQualityIncidents cannot be negative.");
+            if (MinimumFinalBarsPerTimeframe < 1) errors.Add("MinimumFinalBarsPerTimeframe must be positive.");
+            if (MinimumCompleteLabelsPerStrategy < 1) errors.Add("MinimumCompleteLabelsPerStrategy must be positive.");
             return errors;
         }
     }
