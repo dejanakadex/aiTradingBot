@@ -144,6 +144,29 @@ below to compile and test the real adapter in an environment where the official 
 - Research calibration uses a versioned `calibration-v1` isotonic map and defaults to at least 100 pre-holdout observations, three completed folds and 20 observations per initial calibration bin. `ResearchCalibration__MaximumStableThresholdRange`, `StableThresholdTolerance`, `MinimumFoldAgreementRatio` and baseline-degradation settings control the fail-closed approval gate. Any change creates a different calibration fingerprint; approval requires the exact output SHA-256, reviewer and reason.
 - Signal arbitration defaults to conflict policy `Reject`, permits same-direction scale-in by different strategies, rejects duplicate active allocations from the same strategy and limits active allocations per instrument to three. Override with `SignalArbitration__ConflictPolicy`, `SignalArbitration__AllowSameDirectionScaleIn`, `SignalArbitration__RejectSameStrategyWhileActive`, `SignalArbitration__MaximumActiveAllocationsPerInstrument`, `SignalArbitration__IntentTimeoutSeconds` and `SignalArbitration__StrategyPriorities__<strategy-id>`. A credential-free example is in `TradingBot.Web/signal-arbitration.example.json`.
 - Numerical modeling defaults to local approved-model scoring in the entry path. `NumericalModel__UseApprovedModelForEntry`, LightGBM hyperparameters, minimum sample/selection counts, required baseline improvements and candidate probability thresholds are configurable. The model verifies its frozen evaluation input before training; its final probability cutoff comes from temporal validation. `NumericalModel__PlanningTargetMoveBps` is a separate entry-planning assumption, not an individual prediction inferred from historical mean returns. A credential-free example is in `TradingBot.Web/numerical-model.example.json`. Keep the default enabled for production; disabling it restores the legacy network LLM path.
+- `NumericalModel__CacheRefreshSeconds` (default 1) controls how often the local inference cache checks the approved model identity in SQLite; unchanged model artifacts stay loaded. Approval and rollback within the process invalidate the cache immediately. Prediction checks the exact instrument, strategy, feature, pattern and current label configuration.
+
+### Local model operations
+
+`TradingBot.ModelOps` runs research/model commands without starting the Web host or broker workers. Run it from the repository root against an explicitly selected existing SQLite database. Review the model snapshot, holdout metrics and `outputSha256` before approving or rolling back. Keep the same runtime configuration or pass `--config` to every command.
+
+```powershell
+$dbPath = 'C:\absolute\path\to\trading.db'
+$evaluationId = '<evaluation-guid-from-evaluate>'
+$candidateId = '<candidate-model-guid-from-train>'
+$previousId = '<previous-model-guid-from-list>'
+$candidateHash = '<candidate-output-sha256-from-show>'
+$previousHash = '<previous-output-sha256-from-show>'
+dotnet run --project TradingBot.ModelOps -- migrate --db $dbPath
+dotnet run --project TradingBot.ModelOps -- evaluate --db $dbPath --instrument-id US-STK-SPY-SMART --strategy-id deterministic-patterns --horizon-seconds 60 --from 2026-01-01T00:00:00Z --to 2026-09-30T00:00:00Z
+dotnet run --project TradingBot.ModelOps -- train --db $dbPath --evaluation-id $evaluationId
+dotnet run --project TradingBot.ModelOps -- compare --db $dbPath --left $previousId --right $candidateId
+dotnet run --project TradingBot.ModelOps -- approve --db $dbPath --model-id $candidateId --reviewer 'operator' --reason 'Reviewed holdout evidence' --sha256 $candidateHash
+dotnet run --project TradingBot.ModelOps -- history --db $dbPath --model-id $candidateId
+dotnet run --project TradingBot.ModelOps -- rollback --db $dbPath --model-id $previousId --reviewer 'operator' --reason 'Revert after review' --sha256 $previousHash
+```
+
+`reject` uses the same arguments as `approve`. `list` and `show --model-id` display stored model results; `compare` requires the same instrument, strategy, horizon and pipeline versions. Use `--replay-run-id` with `evaluate` to select replay candidates. Back up and review the real operational database before running `migrate`; this step was verified only on a disposable SQLite database.
 
 ### IBKR build prerequisite
 

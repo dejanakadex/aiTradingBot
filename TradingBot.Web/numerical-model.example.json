@@ -11,6 +11,8 @@
     "MinimumHoldoutSelections": 20,
     "MinimumWalkForwardExpectancyImprovementBps": 0.25,
     "MinimumHoldoutExpectancyImprovementBps": 0.0,
+    "PlanningTargetMoveBps": 30.0,
+    "CacheRefreshSeconds": 1,
     "ProbabilityThresholds": [0.50, 0.55, 0.60, 0.65, 0.70, 0.75]
   }
 }

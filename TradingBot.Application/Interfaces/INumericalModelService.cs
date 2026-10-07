@@ -6,6 +6,8 @@ namespace TradingBot.Application.Interfaces
     {
         Task<NumericalModelSnapshot> TrainAsync(NumericalModelTrainingRequest request, CancellationToken cancellationToken = default);
         Task<NumericalModelSnapshot> DecideAsync(Guid id, NumericalModelDecisionRequest request, CancellationToken cancellationToken = default);
+        Task<NumericalModelSnapshot> RollbackAsync(Guid id, NumericalModelRollbackRequest request, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<NumericalModelDecisionSnapshot>> GetDecisionHistoryAsync(Guid id, CancellationToken cancellationToken = default);
         Task<NumericalModelSnapshot?> GetAsync(Guid id, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<NumericalModelSnapshot>> GetAllAsync(int count = 50, CancellationToken cancellationToken = default);
         Task<NumericalModelPrediction> PredictAsync(NumericalModelPredictionRequest request, CancellationToken cancellationToken = default);

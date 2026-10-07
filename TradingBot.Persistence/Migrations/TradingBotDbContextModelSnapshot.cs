@@ -905,6 +905,25 @@ namespace TradingBot.Persistence.Migrations
                     b.ToTable("MarketSnapshots");
                 });
 
+            modelBuilder.Entity("TradingBot.Persistence.NumericalModelDecisionRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<string>("Action").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("DecidedAtUtc").HasColumnType("TEXT");
+                    b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("ModelId").HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ReviewedOutputSha256").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Reviewer").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("StatusAfter").HasColumnType("INTEGER");
+                    b.Property<int>("StatusBefore").HasColumnType("INTEGER");
+                    b.Property<string>("StrategyId").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("ModelId", "DecidedAtUtc");
+                    b.HasIndex("InstrumentId", "StrategyId", "DecidedAtUtc");
+                    b.ToTable("NumericalModelDecisionRecords");
+                });
+
             modelBuilder.Entity("TradingBot.Persistence.NumericalModelRecord", b =>
                 {
                     b.Property<Guid>("Id").HasColumnType("TEXT");

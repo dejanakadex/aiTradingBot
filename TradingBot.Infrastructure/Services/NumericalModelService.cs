@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.ML;
@@ -22,12 +23,20 @@ namespace TradingBot.Infrastructure.Services
         private readonly IDbContextFactory<TradingBotDbContext> _dbFactory;
         private readonly NumericalModelSettings _settings;
         private readonly IClock _clock;
+        private readonly string _currentLabelVersion;
+        private readonly string _currentFeatureVersion;
+        private readonly ConcurrentDictionary<(string InstrumentId, string StrategyId), CachedModel> _cache = new();
+        private readonly SemaphoreSlim _cacheLoadLock = new(1, 1);
+        private long _cacheEpoch;
 
-        public NumericalModelService(IDbContextFactory<TradingBotDbContext> dbFactory, IOptions<NumericalModelSettings> settings, IClock clock)
+        public NumericalModelService(IDbContextFactory<TradingBotDbContext> dbFactory, IOptions<NumericalModelSettings> settings, IClock clock,
+            IOptions<CandidateLabelingSettings>? labelSettings = null, IOptions<CanonicalFeatureSettings>? featureSettings = null)
         {
             _dbFactory = dbFactory;
             _settings = settings.Value;
             _clock = clock;
+            _currentLabelVersion = CandidateLabelVersion.Create(labelSettings?.Value ?? new CandidateLabelingSettings());
+            _currentFeatureVersion = new FeatureEngine(featureSettings?.Value ?? new CanonicalFeatureSettings()).FeatureVersion;
         }
 
         public async Task<NumericalModelSnapshot> TrainAsync(NumericalModelTrainingRequest request, CancellationToken cancellationToken = default)
@@ -39,7 +48,6 @@ namespace TradingBot.Infrastructure.Services
                 || !evaluation.EvaluationVersion.StartsWith(ResearchEvaluationVersion.Contract + "+config-", StringComparison.Ordinal))
                 throw new InvalidDataException("Model training requires current evaluation and covered-label contracts; legacy horizon-return labels cannot train a new model.");
             var existing = await db.NumericalModelRecords.AsNoTracking().SingleOrDefaultAsync(x => x.EvaluationRunId == evaluation.Id, cancellationToken).ConfigureAwait(false);
-            if (existing != null) return ToSnapshot(existing);
 
             var evaluationQuery = db.CandidateLabelRecords.AsNoTracking()
                 .Where(x => x.HorizonSeconds == evaluation.HorizonSeconds && x.Status == CandidateLabelStatus.Complete
@@ -71,6 +79,12 @@ namespace TradingBot.Infrastructure.Services
                 ToUtc(evaluation.FromUtc), ToUtc(evaluation.ToUtc));
             if (!string.Equals(evaluation.InputSha256, evaluationInputHash, StringComparison.Ordinal))
                 throw new InvalidOperationException("Evaluation input changed after the frozen run; create a new evaluation before model training.");
+            if (existing != null)
+            {
+                if (existing.OutputSha256 != OutputHash(existing))
+                    throw new InvalidDataException("Existing model artifact failed hash verification.");
+                return ToSnapshot(existing);
+            }
 
             var query = db.CandidateLabelRecords.AsNoTracking()
                 .Where(x => x.HorizonSeconds == evaluation.HorizonSeconds
@@ -177,39 +191,159 @@ namespace TradingBot.Infrastructure.Services
             if (!string.Equals(record.OutputSha256, request.ExpectedOutputSha256, StringComparison.Ordinal) || record.OutputSha256 != OutputHash(record))
                 throw new InvalidDataException("Model output hash does not match the reviewed artifact.");
             if (request.Approve && !record.ApprovalReady) throw new InvalidOperationException($"Model did not beat baseline gates: {string.Join(" ", Deserialize<string[]>(record.ApprovalReasonsJson))}");
+            if (request.Approve) ValidateRuntimeContract(record, record.FeatureVersion);
+            var decidedAt = ToUtc(_clock.UtcNow);
             if (request.Approve)
             {
                 var previous = await db.NumericalModelRecords.Where(x => x.Id != id && x.InstrumentId == record.InstrumentId && x.StrategyId == record.StrategyId && x.Status == NumericalModelStatus.Approved).ToArrayAsync(cancellationToken).ConfigureAwait(false);
-                foreach (var item in previous) item.Status = NumericalModelStatus.Superseded;
+                foreach (var item in previous)
+                {
+                    AddDecision(db, item, NumericalModelStatus.Superseded, "Superseded", request.Reviewer.Trim(), reason, decidedAt);
+                    item.Status = NumericalModelStatus.Superseded;
+                }
             }
+            AddDecision(db, record, request.Approve ? NumericalModelStatus.Approved : NumericalModelStatus.Rejected,
+                request.Approve ? "Approve" : "Reject", request.Reviewer.Trim(), reason, decidedAt);
             record.Status = request.Approve ? NumericalModelStatus.Approved : NumericalModelStatus.Rejected;
-            record.Reviewer = request.Reviewer.Trim(); record.DecisionReason = reason; record.DecidedAtUtc = ToUtc(_clock.UtcNow);
+            record.Reviewer = request.Reviewer.Trim(); record.DecisionReason = reason; record.DecidedAtUtc = decidedAt;
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _cacheEpoch);
+            _cache.TryRemove((record.InstrumentId, record.StrategyId), out _);
             return ToSnapshot(record);
+        }
+
+        public async Task<NumericalModelSnapshot> RollbackAsync(Guid id, NumericalModelRollbackRequest request, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            var reviewer = request.Reviewer?.Trim() ?? string.Empty;
+            var reason = request.Reason?.Trim() ?? string.Empty;
+            if (reviewer.Length == 0 || reason.Length < 10) throw new ArgumentException("Reviewer and a rollback reason of at least 10 characters are required.");
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            var target = await db.NumericalModelRecords.SingleOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException($"Numerical model '{id}' was not found.");
+            if (target.Status != NumericalModelStatus.Superseded || !target.ApprovalReady)
+                throw new InvalidOperationException("Rollback requires a previously approved, superseded model that passed approval gates.");
+            if (!string.Equals(target.OutputSha256, request.ExpectedOutputSha256, StringComparison.Ordinal)
+                || target.OutputSha256 != OutputHash(target))
+                throw new InvalidDataException("Rollback target hash does not match the reviewed artifact.");
+            ValidateRuntimeContract(target, target.FeatureVersion);
+            var current = await db.NumericalModelRecords.SingleOrDefaultAsync(x => x.InstrumentId == target.InstrumentId
+                && x.StrategyId == target.StrategyId && x.Status == NumericalModelStatus.Approved, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("No current approved model exists to replace by rollback.");
+            var decidedAt = ToUtc(_clock.UtcNow);
+            AddDecision(db, current, NumericalModelStatus.Superseded, "SupersededByRollback", reviewer, reason, decidedAt);
+            AddDecision(db, target, NumericalModelStatus.Approved, "Rollback", reviewer, reason, decidedAt);
+            current.Status = NumericalModelStatus.Superseded;
+            target.Status = NumericalModelStatus.Approved;
+            target.Reviewer = reviewer;
+            target.DecisionReason = reason;
+            target.DecidedAtUtc = decidedAt;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _cacheEpoch);
+            _cache.TryRemove((target.InstrumentId, target.StrategyId), out _);
+            return ToSnapshot(target);
+        }
+
+        public async Task<IReadOnlyList<NumericalModelDecisionSnapshot>> GetDecisionHistoryAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var rows = await db.NumericalModelDecisionRecords.AsNoTracking().Where(x => x.ModelId == id)
+                .OrderBy(x => x.DecidedAtUtc).ThenBy(x => x.Id).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            if (rows.Length == 0 && !await db.NumericalModelRecords.AsNoTracking()
+                .AnyAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false))
+                throw new KeyNotFoundException($"Numerical model '{id}' was not found.");
+            return rows.Select(x => new NumericalModelDecisionSnapshot(x.Id, x.ModelId, x.InstrumentId, x.StrategyId,
+                x.StatusBefore, x.StatusAfter, x.Action, x.Reviewer, x.Reason, x.ReviewedOutputSha256, x.DecidedAtUtc)).ToArray();
         }
 
         public async Task<NumericalModelPrediction> PredictAsync(NumericalModelPredictionRequest request, CancellationToken cancellationToken = default)
         {
-            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-            var record = await db.NumericalModelRecords.AsNoTracking().Where(x => x.Status == NumericalModelStatus.Approved && x.InstrumentId == request.InstrumentId && x.StrategyId == request.StrategyId)
-                .OrderByDescending(x => x.ModelVersion).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidOperationException("No manually approved numerical model matches the instrument and strategy.");
-            if (!record.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
-                || record.ModelVersionTag != "numerical-model-v2")
-                throw new InvalidOperationException("Approved model uses a legacy label or model contract and must be retrained.");
-            if (record.OutputSha256 != OutputHash(record)) throw new InvalidDataException("Approved model artifact failed hash verification.");
-            if (record.FeatureVersion != request.FeatureVersion) throw new InvalidOperationException("Runtime feature version does not match the approved model.");
-            var ml = new MLContext(seed: _settings.RandomSeed);
-            using var stream = new MemoryStream(record.ModelArtifact, writable: false);
-            var model = ml.Model.Load(stream, out _);
-            var engine = ml.Model.CreatePredictionEngine<ModelRow, ModelPrediction>(model);
+            ArgumentNullException.ThrowIfNull(request);
+            if (string.IsNullOrWhiteSpace(request.InstrumentId) || string.IsNullOrWhiteSpace(request.StrategyId))
+                throw new ArgumentException("Instrument and strategy IDs are required.", nameof(request));
+            var cached = await GetCachedModelAsync((request.InstrumentId, request.StrategyId), cancellationToken).ConfigureAwait(false);
+            var record = cached.Record;
+            ValidateRuntimeContract(record, request.FeatureVersion);
+            var engine = cached.Engines.TryTake(out var available)
+                ? available
+                : cached.Ml.Model.CreatePredictionEngine<ModelRow, ModelPrediction>(cached.Model);
             var row = FromRequest(request);
-            var probability = (decimal)engine.Predict(row).Probability;
+            decimal probability;
+            try { probability = (decimal)engine.Predict(row).Probability; }
+            finally { cached.Engines.Add(engine); }
             var eligible = probability >= record.ProbabilityThreshold;
-            var historicalSelectedNetReturn = Deserialize<NumericalModelMetrics>(record.CandidateHoldoutJson).ExpectancyBps;
-            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold, historicalSelectedNetReturn, record.HorizonSeconds, eligible,
+            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold,
+                cached.HistoricalSelectedNetReturnBps, record.HorizonSeconds, eligible,
                 eligible ? "Approved local model probability passed the threshold." : "Local model probability is below the approved threshold.");
+        }
+
+        private async Task<CachedModel> GetCachedModelAsync((string InstrumentId, string StrategyId) key, CancellationToken cancellationToken)
+        {
+            var now = ToUtc(_clock.UtcNow);
+            if (_cache.TryGetValue(key, out var hit) && hit.Epoch == Interlocked.Read(ref _cacheEpoch)
+                && hit.RefreshAfterUtc > now) return hit;
+            await _cacheLoadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                now = ToUtc(_clock.UtcNow);
+                var epoch = Interlocked.Read(ref _cacheEpoch);
+                if (_cache.TryGetValue(key, out hit) && hit.Epoch == epoch && hit.RefreshAfterUtc > now) return hit;
+                // A failed refresh never serves a stale approved model.
+                _cache.TryRemove(key, out _);
+                await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+                var identities = await db.NumericalModelRecords.AsNoTracking()
+                    .Where(x => x.Status == NumericalModelStatus.Approved && x.InstrumentId == key.InstrumentId && x.StrategyId == key.StrategyId)
+                    .Select(x => new { x.Id, x.OutputSha256 })
+                    .Take(2).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+                if (identities.Length != 1) throw new InvalidOperationException("Exactly one approved numerical model must match the instrument and strategy.");
+                if (hit != null && hit.Epoch == epoch && hit.Record.Id == identities[0].Id
+                    && hit.Record.OutputSha256 == identities[0].OutputSha256)
+                {
+                    hit.Extend(now.AddSeconds(_settings.CacheRefreshSeconds));
+                    _cache[key] = hit;
+                    return hit;
+                }
+                var record = await db.NumericalModelRecords.AsNoTracking().SingleAsync(x => x.Id == identities[0].Id
+                    && x.Status == NumericalModelStatus.Approved, cancellationToken).ConfigureAwait(false);
+                ValidateRuntimeContract(record, record.FeatureVersion);
+                if (record.OutputSha256 != OutputHash(record)) throw new InvalidDataException("Approved model artifact failed hash verification.");
+                var ml = new MLContext(seed: _settings.RandomSeed);
+                using var stream = new MemoryStream(record.ModelArtifact, writable: false);
+                var model = ml.Model.Load(stream, out _);
+                var historicalSelectedNetReturn = Deserialize<NumericalModelMetrics>(record.CandidateHoldoutJson).ExpectancyBps;
+                var loaded = new CachedModel(record, ml, model, historicalSelectedNetReturn,
+                    now.AddSeconds(_settings.CacheRefreshSeconds), epoch);
+                _cache[key] = loaded;
+                return loaded;
+            }
+            finally { _cacheLoadLock.Release(); }
+        }
+
+        private void ValidateRuntimeContract(NumericalModelRecord record, string featureVersion)
+        {
+            if (record.ModelVersionTag != "numerical-model-v2"
+                || record.PatternVersion != PipelineContractVersions.Patterns
+                || record.LabelVersion != _currentLabelVersion)
+                throw new InvalidOperationException("Model contract differs from the current pattern or label configuration; retrain and approve a compatible model.");
+            if (record.FeatureVersion != _currentFeatureVersion
+                && !record.FeatureVersion.StartsWith(_currentFeatureVersion + "+short-", StringComparison.Ordinal))
+                throw new InvalidOperationException("Model feature contract differs from the current feature configuration.");
+            if (record.FeatureVersion != featureVersion)
+                throw new InvalidOperationException("Runtime feature version does not match the approved model.");
+        }
+
+        private static void AddDecision(TradingBotDbContext db, NumericalModelRecord model, NumericalModelStatus after,
+            string action, string reviewer, string reason, DateTime decidedAt)
+        {
+            db.NumericalModelDecisionRecords.Add(new NumericalModelDecisionRecord
+            {
+                ModelId = model.Id, InstrumentId = model.InstrumentId, StrategyId = model.StrategyId,
+                StatusBefore = model.Status, StatusAfter = after, Action = action, Reviewer = reviewer,
+                Reason = reason, ReviewedOutputSha256 = model.OutputSha256, DecidedAtUtc = decidedAt
+            });
         }
 
         public async Task<NumericalModelSnapshot?> GetAsync(Guid id, CancellationToken cancellationToken = default)
@@ -342,5 +476,19 @@ namespace TradingBot.Infrastructure.Services
             [ColumnName("Probability")] public float Probability { get; set; }
         }
         private sealed record ScoredObservation(ModelObservation Observation, decimal Probability);
+
+        private sealed class CachedModel(NumericalModelRecord record, MLContext ml, ITransformer model,
+            decimal historicalSelectedNetReturnBps, DateTime refreshAfterUtc, long epoch)
+        {
+            public NumericalModelRecord Record { get; } = record;
+            public MLContext Ml { get; } = ml;
+            public ITransformer Model { get; } = model;
+            public decimal HistoricalSelectedNetReturnBps { get; } = historicalSelectedNetReturnBps;
+            public long Epoch { get; } = epoch;
+            private long _refreshAfterTicks = refreshAfterUtc.Ticks;
+            public DateTime RefreshAfterUtc => new(Interlocked.Read(ref _refreshAfterTicks), DateTimeKind.Utc);
+            public void Extend(DateTime untilUtc) => Interlocked.Exchange(ref _refreshAfterTicks, untilUtc.Ticks);
+            public ConcurrentBag<PredictionEngine<ModelRow, ModelPrediction>> Engines { get; } = new();
+        }
     }
 }

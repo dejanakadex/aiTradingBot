@@ -49,6 +49,7 @@ namespace TradingBot.Persistence
         public DbSet<ScalpingExecutionDecisionRecord> ScalpingExecutionDecisionRecords { get; set; }
         public DbSet<InstrumentRolloutEvaluationRecord> InstrumentRolloutEvaluationRecords { get; set; }
         public DbSet<NumericalModelRecord> NumericalModelRecords { get; set; }
+        public DbSet<NumericalModelDecisionRecord> NumericalModelDecisionRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -199,6 +200,13 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.ModelVersion }).IsUnique();
                 b.HasIndex(x => x.Status);
                 b.HasIndex(x => x.CreatedAtUtc);
+            });
+
+            modelBuilder.Entity<NumericalModelDecisionRecord>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => new { x.ModelId, x.DecidedAtUtc });
+                b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.DecidedAtUtc });
             });
 
             modelBuilder.Entity<InstrumentRegistryRecord>(b =>

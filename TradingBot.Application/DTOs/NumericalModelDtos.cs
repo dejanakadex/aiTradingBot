@@ -4,6 +4,10 @@ namespace TradingBot.Application.DTOs
 {
     public sealed record NumericalModelTrainingRequest(Guid EvaluationRunId);
     public sealed record NumericalModelDecisionRequest(bool Approve, string Reviewer, string Reason, string ExpectedOutputSha256);
+    public sealed record NumericalModelRollbackRequest(string Reviewer, string Reason, string ExpectedOutputSha256);
+    public sealed record NumericalModelDecisionSnapshot(long Id, Guid ModelId, string InstrumentId, string StrategyId,
+        NumericalModelStatus StatusBefore, NumericalModelStatus StatusAfter, string Action, string Reviewer,
+        string Reason, string ReviewedOutputSha256, DateTime DecidedAtUtc);
     public sealed record NumericalModelMetrics(int SampleCount, int SelectedCount, decimal WinRate, decimal ExpectancyBps, decimal NetProfitBps, decimal MaximumDrawdownBps);
     public sealed record NumericalModelSnapshot(
         Guid Id, int ModelVersion, NumericalModelStatus Status, Guid EvaluationRunId, string InstrumentId, string StrategyId,

@@ -510,6 +510,8 @@ namespace TradingBot.Tests
 
             public Task<NumericalModelSnapshot> TrainAsync(NumericalModelTrainingRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<NumericalModelSnapshot> DecideAsync(Guid id, NumericalModelDecisionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<NumericalModelSnapshot> RollbackAsync(Guid id, NumericalModelRollbackRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public Task<IReadOnlyList<NumericalModelDecisionSnapshot>> GetDecisionHistoryAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<NumericalModelSnapshot?> GetAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public Task<IReadOnlyList<NumericalModelSnapshot>> GetAllAsync(int count = 50, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         }

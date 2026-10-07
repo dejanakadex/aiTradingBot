@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradingBot.Infrastructure",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradingBot.Tests", "TradingBot.Tests\TradingBot.Tests.csproj", "{10F7314A-E242-402B-B382-6806B66B0044}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradingBot.ModelOps", "TradingBot.ModelOps\TradingBot.ModelOps.csproj", "{56645741-BDD5-4445-A704-BAD9EDF48B5F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{10F7314A-E242-402B-B382-6806B66B0044}.Release|x64.Build.0 = Release|Any CPU
 		{10F7314A-E242-402B-B382-6806B66B0044}.Release|x86.ActiveCfg = Release|Any CPU
 		{10F7314A-E242-402B-B382-6806B66B0044}.Release|x86.Build.0 = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|x64.Build.0 = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Debug|x86.Build.0 = Debug|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|x64.ActiveCfg = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|x64.Build.0 = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|x86.ActiveCfg = Release|Any CPU
+		{56645741-BDD5-4445-A704-BAD9EDF48B5F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
