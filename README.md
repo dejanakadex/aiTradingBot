@@ -7,6 +7,7 @@ AI-assisted trading bot (layered .NET 10 LTS solution).
 The solution includes an event-driven analysis/strategy/risk pipeline, conditional IBKR
 integration, exit management, EF Core persistence (SQLite), and a Blazor dashboard.
 The initial exit profile is a fixed BUY/stop/target bracket; the trailing profile remains selectable. A persisted deadline from the first fill is checked every second without market data. Paper order behavior still requires an actual IBKR paper end-to-end test before it is considered verified.
+The local end-to-end suite drives onboarding through protected exit with SQLite and a deterministic fake broker, including stop, target, timer, partial fill, rejection, disconnect, restart and simultaneous multi-instrument reservation scenarios. It verifies durable order/allocation/audit state and released capacity after closure; it does not substitute for the IBKR paper test.
 
 ## Review and development plan
 

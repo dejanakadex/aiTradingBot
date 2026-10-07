@@ -471,7 +471,8 @@ namespace TradingBot.Infrastructure.Services
                     await SubmitAfterExitCancellationsAsync(db, record, cancellationToken).ConfigureAwait(false);
                 }
                 else if (IsCancelled(status.Status)
-                    && (record.ProtectiveStopBrokerOrderId == brokerOrderId || record.TakeProfitBrokerOrderId == brokerOrderId))
+                    && (record.ProtectiveStopBrokerOrderId == brokerOrderId || record.TakeProfitBrokerOrderId == brokerOrderId)
+                    && record.FilledQuantity > record.ExitedQuantity)
                 {
                     await MarkFaultedAsync(db, record, "Protective child was cancelled while the position remains open; broker reconciliation required.", cancellationToken).ConfigureAwait(false);
                 }
@@ -547,7 +548,8 @@ namespace TradingBot.Infrastructure.Services
                 }
             }
             if (status.FilledQuantity <= 0m) return;
-            if (status.FilledQuantity <= record.FilledQuantity && record.ProtectedQuantity >= status.FilledQuantity) return;
+            if (status.FilledQuantity <= record.FilledQuantity
+                && (record.ProtectedQuantity >= status.FilledQuantity || IsCancelled(status.Status))) return;
 
             var averageEntry = status.AverageFillPrice ?? record.InitialEntryPrice;
             if (averageEntry > 0m && record.FilledQuantity == 0m)

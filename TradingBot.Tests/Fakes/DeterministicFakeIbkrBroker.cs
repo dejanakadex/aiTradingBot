@@ -15,12 +15,15 @@ namespace TradingBot.Tests.Fakes
         IIbkrConnectionService,
         IAccountService,
         IPositionService,
-        IOrderExecutionService
+        IOrderExecutionService,
+        IOrderModificationService
     {
         private readonly object _sync = new();
         private readonly List<OrderStatusDto> _openOrders = new();
         private readonly List<OrderStatusDto> _allOrders = new();
         private readonly List<OrderRequestDto> _submittedRequests = new();
+        private readonly Dictionary<string, OrderRequestDto> _requestsByOrderId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<OrderStatusDto> _pendingCancellationCallbacks = new();
         private readonly List<OrderStatusDto> _executions = new();
         private readonly Dictionary<string, PositionDto> _positions = new(StringComparer.OrdinalIgnoreCase);
         private int _nextOrderId = 1;
@@ -40,6 +43,7 @@ namespace TradingBot.Tests.Fakes
         public decimal BuyingPower { get; set; } = 100000m;
         public decimal MarginRequirement { get; set; }
         public FakeBrokerScenario Scenario { get; set; } = new();
+        public bool DeferCancellationCallbacks { get; set; }
         public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
         public bool IsConnected => Status == ConnectionStatus.Connected;
         public IReadOnlyList<OrderRequestDto> SubmittedRequests
@@ -176,6 +180,7 @@ namespace TradingBot.Tests.Fakes
             lock (_sync)
             {
                 _submittedRequests.Add(request);
+                _requestsByOrderId.Add(orderId, request);
                 _allOrders.Add(accepted);
                 _openOrders.Add(accepted);
             }
@@ -217,6 +222,58 @@ namespace TradingBot.Tests.Fakes
             return accepted;
         }
 
+        public async Task<OrderStatusDto> FillOpenOrderAsync(string orderId, decimal quantity, decimal price)
+        {
+            OrderStatusDto current;
+            OrderRequestDto request;
+            lock (_sync)
+            {
+                current = _openOrders.Single(x => x.BrokerOrderId == orderId);
+                request = _requestsByOrderId[orderId];
+            }
+            if (quantity <= 0m || quantity > current.RemainingQuantity || price <= 0m)
+                throw new ArgumentOutOfRangeException(nameof(quantity), "Fill must be positive and within the open quantity.");
+            ApplyPosition(request, quantity, price);
+            var filled = current.FilledQuantity + quantity;
+            var remaining = current.RemainingQuantity - quantity;
+            var average = ((current.FilledQuantity * (current.AverageFillPrice ?? 0m)) + quantity * price) / filled;
+            var executionId = $"EXEC-{_nextExecutionId++:000000}";
+            var status = BuildStatus(orderId, request, remaining == 0m ? "Filled" : "PartiallyFilled",
+                filled, remaining, average, price, executionId, "Fake broker controlled fill.", quantity);
+            ReplaceOpenOrder(status, keepOpen: remaining > 0m);
+            lock (_sync) _executions.Add(status);
+            await RaiseOrderStatusAsync(status).ConfigureAwait(false);
+            await RaiseFillAsync(status).ConfigureAwait(false);
+            return status;
+        }
+
+        public Task<OrderStatusDto> ModifyOrderAsync(string brokerOrderId, OrderRequestDto request, CancellationToken cancellationToken = default)
+        {
+            OrderStatusDto current;
+            lock (_sync)
+            {
+                current = _openOrders.Single(x => x.BrokerOrderId == brokerOrderId);
+                if (request.Quantity < current.FilledQuantity)
+                    throw new InvalidOperationException("Modified quantity cannot be below filled quantity.");
+                _requestsByOrderId[brokerOrderId] = request;
+            }
+            var updated = BuildStatus(brokerOrderId, request, "Submitted", current.FilledQuantity,
+                request.Quantity - current.FilledQuantity, current.AverageFillPrice, null, null, "Fake broker modification accepted.");
+            ReplaceOpenOrder(updated, keepOpen: updated.RemainingQuantity > 0m);
+            return Task.FromResult(updated);
+        }
+
+        public async Task PublishPendingCancellationsAsync()
+        {
+            OrderStatusDto[] callbacks;
+            lock (_sync)
+            {
+                callbacks = _pendingCancellationCallbacks.ToArray();
+                _pendingCancellationCallbacks.Clear();
+            }
+            foreach (var status in callbacks) await RaiseOrderStatusAsync(status).ConfigureAwait(false);
+        }
+
         public async Task<bool> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
         {
             OrderStatusDto? cancelled = null;
@@ -244,7 +301,11 @@ namespace TradingBot.Tests.Fakes
 
             if (cancelled != null)
             {
-                await RaiseOrderStatusAsync(cancelled).ConfigureAwait(false);
+                if (DeferCancellationCallbacks)
+                {
+                    lock (_sync) _pendingCancellationCallbacks.Add(cancelled);
+                }
+                else await RaiseOrderStatusAsync(cancelled).ConfigureAwait(false);
                 return true;
             }
 
@@ -376,8 +437,19 @@ namespace TradingBot.Tests.Fakes
         }
 
         private Task RaiseConnectionAsync() => ConnectionStatusChanged?.Invoke(Status) ?? Task.CompletedTask;
-        private Task RaiseOrderStatusAsync(OrderStatusDto status) => OrderStatusUpdated?.Invoke(status) ?? Task.CompletedTask;
-        private Task RaiseFillAsync(OrderStatusDto status) => OrderFilled?.Invoke(status) ?? Task.CompletedTask;
+        private async Task RaiseOrderStatusAsync(OrderStatusDto status)
+        {
+            if (OrderStatusUpdated == null) return;
+            foreach (Func<OrderStatusDto, Task> handler in OrderStatusUpdated.GetInvocationList())
+                await handler(status).ConfigureAwait(false);
+        }
+
+        private async Task RaiseFillAsync(OrderStatusDto status)
+        {
+            if (OrderFilled == null) return;
+            foreach (Func<OrderStatusDto, Task> handler in OrderFilled.GetInvocationList())
+                await handler(status).ConfigureAwait(false);
+        }
 
         private static bool IsRejectBehavior(FakeBrokerOrderBehavior behavior)
         {

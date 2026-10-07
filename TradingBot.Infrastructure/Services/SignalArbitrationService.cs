@@ -311,6 +311,7 @@ namespace TradingBot.Infrastructure.Services
         {
             var brokerOrderId = status.BrokerOrderId ?? status.OrderId;
             if (string.IsNullOrWhiteSpace(brokerOrderId) || status.FilledQuantity <= 0m) return;
+            Guid? completedReservationId = null;
             await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
@@ -333,12 +334,17 @@ namespace TradingBot.Infrastructure.Services
                 }
                 else
                 {
-                    var exited = await db.VirtualAllocationOrderRecords.Where(x => x.ArbitrationId == record.Id && !x.IsEntry).SumAsync(x => x.FilledQuantity).ConfigureAwait(false);
+                    // Include the current tracked fill; a SQL aggregate would read its previous persisted value.
+                    var exitOrders = await db.VirtualAllocationOrderRecords
+                        .Where(x => x.ArbitrationId == record.Id && !x.IsEntry)
+                        .ToListAsync().ConfigureAwait(false);
+                    var exited = exitOrders.Sum(x => x.FilledQuantity);
                     record.ExitedQuantity = Math.Min(record.FilledQuantity, exited);
-                    if (exited >= record.FilledQuantity && record.FilledQuantity > 0m)
+                    if (exited >= record.FilledQuantity && record.FilledQuantity > 0m && record.Status != SignalArbitrationStatus.Closed)
                     {
                         AddAudit(db, record.Id, record.Status, SignalArbitrationStatus.Closed, "Virtual allocation fully exited.", _clock.UtcNow);
                         record.Status = SignalArbitrationStatus.Closed;
+                        completedReservationId = record.ReservationId;
                     }
                 }
                 record.UpdatedAtUtc = _clock.UtcNow;
@@ -352,6 +358,10 @@ namespace TradingBot.Infrastructure.Services
             finally
             {
                 _gate.Release();
+            }
+            if (completedReservationId.HasValue)
+            {
+                await _portfolioRisk.ReleaseAsync(completedReservationId.Value, "Virtual allocation fully exited.").ConfigureAwait(false);
             }
         }
 

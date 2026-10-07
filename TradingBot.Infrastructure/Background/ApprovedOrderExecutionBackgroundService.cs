@@ -108,7 +108,7 @@ namespace TradingBot.Infrastructure.Background
             }
         }
 
-        private async Task ExecutePlanAsync(ApprovedTradePlan plan, CancellationToken cancellationToken)
+        internal async Task ExecutePlanAsync(ApprovedTradePlan plan, CancellationToken cancellationToken)
         {
             if (_statusService.Current.State != TradingEngineState.Ready || !_statusService.Current.TradingEnabled || !_tradingSettings.Enabled)
             {
