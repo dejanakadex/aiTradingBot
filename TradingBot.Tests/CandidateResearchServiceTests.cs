@@ -83,6 +83,9 @@ namespace TradingBot.Tests
             Assert.Equal(CandidateLabelStatus.Complete, label.Status);
             Assert.Equal(TargetStopOutcome.TargetFirst, label.TargetStopOutcome);
             Assert.True(label.NetReturnBps < label.GrossReturnBps);
+            Assert.NotEmpty(label.InputSha256);
+            Assert.Equal(64, label.InputSha256.Length);
+            Assert.NotNull(label.HorizonGrossReturnBps);
         }
 
         [Fact]

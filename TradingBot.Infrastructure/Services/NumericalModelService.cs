@@ -11,6 +11,7 @@ using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Domain.Enums;
+using TradingBot.Domain.Models;
 using TradingBot.Persistence;
 
 namespace TradingBot.Infrastructure.Services
@@ -34,12 +35,46 @@ namespace TradingBot.Infrastructure.Services
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var evaluation = await db.ResearchEvaluationRunRecords.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.EvaluationRunId, cancellationToken).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Research evaluation '{request.EvaluationRunId}' was not found.");
+            if (!evaluation.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+                || !evaluation.EvaluationVersion.StartsWith(ResearchEvaluationVersion.Contract + "+config-", StringComparison.Ordinal))
+                throw new InvalidDataException("Model training requires current evaluation and covered-label contracts; legacy horizon-return labels cannot train a new model.");
             var existing = await db.NumericalModelRecords.AsNoTracking().SingleOrDefaultAsync(x => x.EvaluationRunId == evaluation.Id, cancellationToken).ConfigureAwait(false);
             if (existing != null) return ToSnapshot(existing);
 
+            var evaluationQuery = db.CandidateLabelRecords.AsNoTracking()
+                .Where(x => x.HorizonSeconds == evaluation.HorizonSeconds && x.Status == CandidateLabelStatus.Complete
+                    && x.GrossReturnBps.HasValue && x.EstimatedCostBps.HasValue && x.NetReturnBps.HasValue
+                    && x.MaximumFavorableExcursionBps.HasValue && x.MaximumAdverseExcursionBps.HasValue
+                    && x.ResearchCandidate.EvaluatedAtUtc >= evaluation.FromUtc && x.WindowEndUtc <= evaluation.ToUtc);
+            evaluationQuery = evaluation.ReplayRunId.HasValue
+                ? evaluationQuery.Where(x => x.ResearchCandidate.ReplayRunId == evaluation.ReplayRunId)
+                : evaluationQuery.Where(x => x.ResearchCandidate.ReplayRunId == null);
+            if (!string.IsNullOrWhiteSpace(evaluation.InstrumentId))
+                evaluationQuery = evaluationQuery.Where(x => x.ResearchCandidate.InstrumentId == evaluation.InstrumentId);
+            if (!string.IsNullOrWhiteSpace(evaluation.StrategyId))
+                evaluationQuery = evaluationQuery.Where(x => x.ResearchCandidate.StrategyId == evaluation.StrategyId);
+            var evaluationRows = await evaluationQuery.OrderBy(x => x.ResearchCandidate.EvaluatedAtUtc)
+                .ThenBy(x => x.ResearchCandidate.CandidateKey)
+                .Select(x => new ResearchEvaluationObservation(
+                    x.ResearchCandidateId, x.ResearchCandidate.CandidateKey, x.ResearchCandidate.InstrumentId,
+                    x.ResearchCandidate.StrategyId, x.ResearchCandidate.PatternType, x.ResearchCandidate.Direction,
+                    x.ResearchCandidate.Timeframe, x.ResearchCandidate.EvaluatedAtUtc, x.WindowEndUtc,
+                    x.ResearchCandidate.Confidence, x.ResearchCandidate.Outcome, x.ResearchCandidate.MarketRegime,
+                    x.ResearchCandidate.NormalizedLiquidity, x.GrossReturnBps!.Value, x.EstimatedCostBps!.Value,
+                    x.NetReturnBps!.Value, x.MaximumFavorableExcursionBps!.Value, x.MaximumAdverseExcursionBps!.Value,
+                    x.TargetStopOutcome, x.ResearchCandidate.FeatureVersion, x.ResearchCandidate.PatternVersion,
+                    x.LabelVersion, x.InputSha256))
+                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            var evaluationRequest = new ResearchEvaluationRequest(evaluation.HorizonSeconds, evaluation.FromUtc,
+                evaluation.ToUtc, evaluation.ReplayRunId, evaluation.InstrumentId, evaluation.StrategyId);
+            var evaluationInputHash = ResearchEvaluationService.ComputeInputHash(evaluationRows, evaluationRequest,
+                ToUtc(evaluation.FromUtc), ToUtc(evaluation.ToUtc));
+            if (!string.Equals(evaluation.InputSha256, evaluationInputHash, StringComparison.Ordinal))
+                throw new InvalidOperationException("Evaluation input changed after the frozen run; create a new evaluation before model training.");
+
             var query = db.CandidateLabelRecords.AsNoTracking()
                 .Where(x => x.HorizonSeconds == evaluation.HorizonSeconds
-                    && (x.Status == CandidateLabelStatus.Complete || x.Status == CandidateLabelStatus.Ambiguous)
+                    && x.Status == CandidateLabelStatus.Complete
                     && x.NetReturnBps.HasValue && x.ResearchCandidate.Outcome != ResearchCandidateOutcome.Rejected
                     && x.ResearchCandidate.EvaluatedAtUtc >= evaluation.FromUtc && x.WindowEndUtc <= evaluation.ToUtc);
             query = evaluation.ReplayRunId.HasValue
@@ -52,11 +87,18 @@ namespace TradingBot.Infrastructure.Services
                 {
                     x.ResearchCandidateId, x.ResearchCandidate.CandidateKey, x.ResearchCandidate.EvaluatedAtUtc, LabelWindowEndUtc = x.WindowEndUtc,
                     x.ResearchCandidate.Confidence, x.ResearchCandidate.PatternType, x.ResearchCandidate.Direction, x.ResearchCandidate.Timeframe,
-                    x.ResearchCandidate.NormalizedLiquidity, x.ResearchCandidate.NormalizedVolatility, NetReturnBps = x.NetReturnBps!.Value
+                    x.ResearchCandidate.NormalizedLiquidity, x.ResearchCandidate.NormalizedVolatility,
+                    x.ResearchCandidate.FeatureVersion, x.ResearchCandidate.PatternVersion, x.LabelVersion,
+                    x.InputSha256, NetReturnBps = x.NetReturnBps!.Value
                 }).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            if (sourceRows.Any(x => string.IsNullOrWhiteSpace(x.InputSha256)
+                || x.FeatureVersion != evaluation.FeatureVersion || x.PatternVersion != evaluation.PatternVersion
+                || x.LabelVersion != evaluation.LabelVersion))
+                throw new InvalidDataException("Model training requires frozen label input hashes and the exact evaluated pipeline versions.");
             var rows = sourceRows.Select(x => new ModelObservation
             {
                 CandidateId = x.ResearchCandidateId, CandidateKey = x.CandidateKey, EvaluatedAtUtc = x.EvaluatedAtUtc, LabelWindowEndUtc = x.LabelWindowEndUtc,
+                LabelInputSha256 = x.InputSha256,
                 PatternConfidence = (float)x.Confidence, PatternType = (float)x.PatternType, Direction = (float)x.Direction, Timeframe = (float)x.Timeframe,
                 NormalizedLiquidity = (float)(x.NormalizedLiquidity ?? 0m), NormalizedVolatility = (float)(x.NormalizedVolatility ?? 0m),
                 HourSin = (float)Math.Sin(2d * Math.PI * x.EvaluatedAtUtc.Hour / 24d), HourCos = (float)Math.Cos(2d * Math.PI * x.EvaluatedAtUtc.Hour / 24d),
@@ -72,6 +114,7 @@ namespace TradingBot.Infrastructure.Services
             var folds = JsonSerializer.Deserialize<TradingBot.Domain.Models.WalkForwardFoldResult[]>(evaluation.FoldsJson, JsonOptions) ?? [];
             var baselineWfSelected = new List<ModelObservation>();
             var candidateWfSelected = new List<ModelObservation>();
+            var validationScores = new List<ScoredObservation>();
             foreach (var fold in folds.Where(x => x.SelectedConfidenceThreshold.HasValue))
             {
                 var training = rows.Where(x => x.EvaluatedAtUtc >= xDate(fold.TrainingFromUtc) && x.LabelWindowEndUtc <= xDate(fold.TrainingToUtc)).ToArray();
@@ -81,13 +124,16 @@ namespace TradingBot.Infrastructure.Services
                 var (model, _) = Train(training);
                 var trainingScores = Score(model, training);
                 var threshold = SelectThreshold(trainingScores);
-                candidateWfSelected.AddRange(Score(model, validation).Where(x => x.Probability >= threshold).Select(x => x.Observation));
+                var foldValidationScores = Score(model, validation);
+                validationScores.AddRange(foldValidationScores);
+                candidateWfSelected.AddRange(foldValidationScores.Where(x => x.Probability >= threshold).Select(x => x.Observation));
             }
             if (candidateWfSelected.Count < _settings.MinimumValidationSelections)
                 throw new InvalidOperationException("Walk-forward folds did not produce enough candidate model selections.");
 
             var (finalModel, finalSchema) = Train(preHoldout);
-            var probabilityThreshold = SelectThreshold(Score(finalModel, preHoldout));
+            // The deployed cutoff is selected from out-of-sample fold predictions, never from fitted training scores.
+            var probabilityThreshold = SelectThreshold(validationScores.GroupBy(x => x.Observation.CandidateId).Select(group => group.First()));
             var candidateHoldoutSelected = Score(finalModel, holdout).Where(x => x.Probability >= probabilityThreshold).Select(x => x.Observation).ToArray();
             var baselineHoldoutSelected = holdout.Where(x => x.PatternConfidence >= (float)evaluation.SelectedConfidenceThreshold).ToArray();
             var baselineWf = Metrics(baselineWfSelected);
@@ -99,14 +145,14 @@ namespace TradingBot.Infrastructure.Services
             using var artifact = new MemoryStream();
             new MLContext(seed: _settings.RandomSeed).Model.Save(finalModel, finalSchema, artifact);
             var artifactBytes = artifact.ToArray();
-            var inputHash = Hash(string.Join('\n', rows.Select(x => $"{x.CandidateId}|{x.CandidateKey}|{x.EvaluatedAtUtc:O}|{x.PatternConfidence:R}|{x.NormalizedLiquidity:R}|{x.NormalizedVolatility:R}|{x.NetReturnBps.ToString(CultureInfo.InvariantCulture)}")));
+            var inputHash = Hash(string.Join('\n', rows.Select(x => $"{x.CandidateId}|{x.CandidateKey}|{x.EvaluatedAtUtc:O}|{x.PatternConfidence:R}|{x.NormalizedLiquidity:R}|{x.NormalizedVolatility:R}|{x.NetReturnBps.ToString(CultureInfo.InvariantCulture)}|{x.LabelInputSha256}")));
             var version = await db.NumericalModelRecords.Where(x => x.InstrumentId == evaluation.InstrumentId && x.StrategyId == evaluation.StrategyId)
                 .Select(x => (int?)x.ModelVersion).MaxAsync(cancellationToken).ConfigureAwait(false) ?? 0;
             var record = new NumericalModelRecord
             {
                 Id = Guid.NewGuid(), ModelVersion = version + 1, Status = NumericalModelStatus.Draft, EvaluationRunId = evaluation.Id,
                 InstrumentId = evaluation.InstrumentId, StrategyId = evaluation.StrategyId, HorizonSeconds = evaluation.HorizonSeconds,
-                Algorithm = "ML.NET LightGBM binary classification", ModelVersionTag = "numerical-model-v1",
+                Algorithm = "ML.NET LightGBM binary classification", ModelVersionTag = "numerical-model-v2",
                 FeatureVersion = evaluation.FeatureVersion, PatternVersion = evaluation.PatternVersion, LabelVersion = evaluation.LabelVersion,
                 ProbabilityThreshold = probabilityThreshold, BaselineWalkForwardJson = Serialize(baselineWf), CandidateWalkForwardJson = Serialize(candidateWf),
                 BaselineHoldoutJson = Serialize(baselineHoldout), CandidateHoldoutJson = Serialize(candidateHoldout),
@@ -149,6 +195,9 @@ namespace TradingBot.Infrastructure.Services
             var record = await db.NumericalModelRecords.AsNoTracking().Where(x => x.Status == NumericalModelStatus.Approved && x.InstrumentId == request.InstrumentId && x.StrategyId == request.StrategyId)
                 .OrderByDescending(x => x.ModelVersion).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("No manually approved numerical model matches the instrument and strategy.");
+            if (!record.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+                || record.ModelVersionTag != "numerical-model-v2")
+                throw new InvalidOperationException("Approved model uses a legacy label or model contract and must be retrained.");
             if (record.OutputSha256 != OutputHash(record)) throw new InvalidDataException("Approved model artifact failed hash verification.");
             if (record.FeatureVersion != request.FeatureVersion) throw new InvalidOperationException("Runtime feature version does not match the approved model.");
             var ml = new MLContext(seed: _settings.RandomSeed);
@@ -158,8 +207,8 @@ namespace TradingBot.Infrastructure.Services
             var row = FromRequest(request);
             var probability = (decimal)engine.Predict(row).Probability;
             var eligible = probability >= record.ProbabilityThreshold;
-            var expectedNetReturn = Deserialize<NumericalModelMetrics>(record.CandidateHoldoutJson).ExpectancyBps;
-            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold, expectedNetReturn, record.HorizonSeconds, eligible,
+            var historicalSelectedNetReturn = Deserialize<NumericalModelMetrics>(record.CandidateHoldoutJson).ExpectancyBps;
+            return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold, historicalSelectedNetReturn, record.HorizonSeconds, eligible,
                 eligible ? "Approved local model probability passed the threshold." : "Local model probability is below the approved threshold.");
         }
 
@@ -246,17 +295,23 @@ namespace TradingBot.Infrastructure.Services
             Deserialize<NumericalModelMetrics>(x.BaselineWalkForwardJson), Deserialize<NumericalModelMetrics>(x.CandidateWalkForwardJson),
             Deserialize<NumericalModelMetrics>(x.BaselineHoldoutJson), Deserialize<NumericalModelMetrics>(x.CandidateHoldoutJson), x.ApprovalReady,
             Deserialize<string[]>(x.ApprovalReasonsJson), x.InputSha256, x.OutputSha256, x.CreatedAtUtc, x.DecidedAtUtc);
-        private static string OutputHash(NumericalModelRecord x) => Hash($"{x.InputSha256}|{x.ModelVersionTag}|{x.ProbabilityThreshold.ToString(CultureInfo.InvariantCulture)}|{x.BaselineWalkForwardJson}|{x.CandidateWalkForwardJson}|{x.BaselineHoldoutJson}|{x.CandidateHoldoutJson}|{Convert.ToHexString(SHA256.HashData(x.ModelArtifact))}");
+        private static string OutputHash(NumericalModelRecord x) => Hash($"{x.InputSha256}|{x.ModelVersionTag}|{x.FeatureVersion}|{x.PatternVersion}|{x.LabelVersion}|{x.ProbabilityThreshold.ToString(CultureInfo.InvariantCulture)}|{x.BaselineWalkForwardJson}|{x.CandidateWalkForwardJson}|{x.BaselineHoldoutJson}|{x.CandidateHoldoutJson}|{Convert.ToHexString(SHA256.HashData(x.ModelArtifact))}");
         private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);
         private static T Deserialize<T>(string value) => JsonSerializer.Deserialize<T>(value, JsonOptions) ?? throw new InvalidDataException($"Persisted {typeof(T).Name} payload is invalid.");
         private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
         private static DateTime xDate(DateTime value) => ToUtc(value);
-        private static DateTime ToUtc(DateTime value) => value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
+        private static DateTime ToUtc(DateTime value) => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            _ => value.ToUniversalTime()
+        };
 
         private sealed class ModelObservation
         {
             public long CandidateId { get; set; }
             public string CandidateKey { get; set; } = string.Empty;
+            public string LabelInputSha256 { get; set; } = string.Empty;
             public DateTime EvaluatedAtUtc { get; set; }
             public DateTime LabelWindowEndUtc { get; set; }
             public float PatternConfidence { get; set; }

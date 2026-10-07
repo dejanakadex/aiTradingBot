@@ -50,6 +50,30 @@ namespace TradingBot.Tests
             Assert.Equal(3L, Convert.ToInt64(await columnCommand.ExecuteScalarAsync()));
         }
 
+        [Fact]
+        public async Task LegacyLabelsCannotEnterNewEvaluation()
+        {
+            await using var harness = await Harness.CreateAsync();
+            await harness.ChangeFirstLabelAsync(label => label.LabelVersion = "labels-v1+config-legacy");
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => harness.Service.RunAsync(
+                new ResearchEvaluationRequest(60, StartUtc, StartUtc.AddDays(30))));
+        }
+
+        [Fact]
+        public async Task LabelDatasetFingerprintChangesEvaluationIdentity()
+        {
+            await using var harness = await Harness.CreateAsync();
+            var request = new ResearchEvaluationRequest(60, StartUtc, StartUtc.AddDays(30));
+            var first = await harness.Service.RunAsync(request);
+            await harness.ChangeFirstLabelAsync(label => label.InputSha256 = "changed-input");
+
+            var second = await harness.Service.RunAsync(request);
+
+            Assert.NotEqual(first.Id, second.Id);
+            Assert.NotEqual(first.InputSha256, second.InputSha256);
+        }
+
         private sealed class Harness : IAsyncDisposable
         {
             private readonly SqliteConnection _connection;
@@ -62,6 +86,15 @@ namespace TradingBot.Tests
             }
 
             public IResearchEvaluationService Service { get; }
+
+            public async Task ChangeFirstLabelAsync(Action<CandidateLabelRecord> change)
+            {
+                var factory = _provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>();
+                await using var db = await factory.CreateDbContextAsync();
+                var label = await db.CandidateLabelRecords.OrderBy(x => x.Id).FirstAsync();
+                change(label);
+                await db.SaveChangesAsync();
+            }
 
             public static async Task<Harness> CreateAsync()
             {
@@ -106,7 +139,7 @@ namespace TradingBot.Tests
                                 EvaluatedAtUtc = StartUtc.AddDays(day).AddMinutes(sample), ReferencePrice = 100m,
                                 Confidence = highConfidence ? 0.9m : 0.5m, Outcome = ResearchCandidateOutcome.Accepted,
                                 DecisionStage = "PatternDetected", FeatureVersion = "features-test", PatternVersion = "patterns-test",
-                                LabelVersion = "labels-test", MarketRegime = MarketRegime.Trending.ToString(), NormalizedLiquidity = 1.5m,
+                                LabelVersion = "labels-v2+config-test", MarketRegime = MarketRegime.Trending.ToString(), NormalizedLiquidity = 1.5m,
                                 HardConditionsJson = "[]", ScoreComponentsJson = "[]", ReasonsJson = "[]", MetadataJson = "{}",
                                 CreatedAtUtc = StartUtc, UpdatedAtUtc = StartUtc
                             };
@@ -118,7 +151,7 @@ namespace TradingBot.Tests
                                 ObservationCount = 1, EntryPrice = 100m, ExitPrice = 100m,
                                 MaximumFavorableExcursionBps = 12m, MaximumAdverseExcursionBps = 8m,
                                 GrossReturnBps = net + 2m, EstimatedCostBps = 2m, NetReturnBps = net,
-                                ReasonsJson = "[]", LabelVersion = "labels-test", CalculatedAtUtc = StartUtc.AddDays(31)
+                                ReasonsJson = "[]", LabelVersion = "labels-v2+config-test", InputSha256 = $"input-{id}", CalculatedAtUtc = StartUtc.AddDays(31)
                             });
                             db.ResearchCandidateRecords.Add(candidate);
                             id++;

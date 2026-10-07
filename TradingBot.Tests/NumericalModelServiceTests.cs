@@ -46,6 +46,29 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task LegacyHorizonReturnEvaluationCannotTrainModel()
+        {
+            await using var harness = CreateHarness();
+            var evaluationId = await harness.SeedEvaluationAndLabelsAsync();
+            await harness.MarkEvaluationLegacyAsync(evaluationId);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                harness.Service.TrainAsync(new NumericalModelTrainingRequest(evaluationId)));
+        }
+
+        [Fact]
+        public async Task ChangedLabelAfterEvaluationCannotTrainModel()
+        {
+            await using var harness = CreateHarness();
+            var evaluationId = await harness.SeedEvaluationAndLabelsAsync();
+            await harness.ChangeOneLabelAsync();
+
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                harness.Service.TrainAsync(new NumericalModelTrainingRequest(evaluationId)));
+            Assert.Contains("input changed", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
         public void InvalidModelConfiguration_IsReported()
         {
             var settings = new NumericalModelSettings { LearningRate = 0, ProbabilityThresholds = [0m] };
@@ -76,6 +99,22 @@ namespace TradingBot.Tests
             private SimpleFactory Factory { get; }
             public NumericalModelService Service { get; }
 
+            public async Task MarkEvaluationLegacyAsync(Guid evaluationId)
+            {
+                await using var db = Factory.CreateDbContext();
+                var evaluation = await db.ResearchEvaluationRunRecords.SingleAsync(x => x.Id == evaluationId);
+                evaluation.LabelVersion = "labels-v1+config-legacy";
+                await db.SaveChangesAsync();
+            }
+
+            public async Task ChangeOneLabelAsync()
+            {
+                await using var db = Factory.CreateDbContext();
+                var label = await db.CandidateLabelRecords.OrderBy(x => x.Id).FirstAsync();
+                label.NetReturnBps += 1m;
+                await db.SaveChangesAsync();
+            }
+
             public async Task<Guid> SeedEvaluationAndLabelsAsync()
             {
                 var evaluationId = Guid.NewGuid();
@@ -86,7 +125,7 @@ namespace TradingBot.Tests
                     Id = evaluationId, RunKey = Guid.NewGuid().ToString("N"), InstrumentId = "US-STK-SPY-SMART", StrategyId = "deterministic-patterns",
                     HorizonSeconds = 60, FromUtc = StartUtc, ToUtc = StartUtc.AddDays(9), HoldoutStartUtc = StartUtc.AddDays(7),
                     SourceCandidateCount = 160, EligibleCandidateCount = 160, WalkForwardFoldCount = 1, SelectedConfidenceThreshold = 0.5m,
-                    SelectionReason = "test", EvaluationVersion = "evaluation-v1", FeatureVersion = "features-v2", PatternVersion = "patterns-v2", LabelVersion = "labels-v1",
+                    SelectionReason = "test", EvaluationVersion = "evaluation-v2+config-test", FeatureVersion = "features-v2", PatternVersion = "patterns-v2", LabelVersion = "labels-v2+config-test",
                     InputSha256 = "test", OutputSha256 = "test", PreHoldoutMetricsJson = "{}", WalkForwardMetricsJson = "{}", HoldoutMetricsJson = "{}",
                     PreHoldoutThresholdsJson = "[]", FoldsJson = JsonSerializer.Serialize(new[] { fold }), CostSensitivityJson = "[]", SegmentsJson = "[]",
                     CreatedAtUtc = StartUtc.AddDays(9), CompletedAtUtc = StartUtc.AddDays(9)
@@ -102,7 +141,7 @@ namespace TradingBot.Tests
                         StrategyId = "deterministic-patterns", PatternType = PatternType.BreakoutAndRetest, Direction = TradeDirection.Long,
                         Timeframe = Timeframe.OneMinute, EvaluatedAtUtc = times[i], ReferencePrice = 100m, Confidence = 0.7m,
                         Outcome = ResearchCandidateOutcome.Accepted, DecisionStage = "test", FeatureVersion = "features-v2", PatternVersion = "patterns-v2",
-                        LabelVersion = "labels-v1", MarketRegime = "Trending", NormalizedLiquidity = winning ? 2m : 0.2m, NormalizedVolatility = 0.2m,
+                        LabelVersion = "labels-v2+config-test", MarketRegime = "Trending", NormalizedLiquidity = winning ? 2m : 0.2m, NormalizedVolatility = 0.2m,
                         HardConditionsJson = "[]", ScoreComponentsJson = "[]", ReasonsJson = "[]", MetadataJson = "{}", CreatedAtUtc = times[i], UpdatedAtUtc = times[i]
                     };
                     candidate.Labels.Add(new CandidateLabelRecord
@@ -111,10 +150,26 @@ namespace TradingBot.Tests
                         WindowStartUtc = times[i], WindowEndUtc = times[i].AddMinutes(1), ObservationCount = 10, EntryPrice = 100m, ExitPrice = winning ? 100.1m : 99.9m,
                         MaximumFavorableExcursionBps = winning ? 10m : 2m, MaximumAdverseExcursionBps = winning ? 2m : 10m,
                         GrossReturnBps = winning ? 12m : -8m, EstimatedCostBps = 2m, NetReturnBps = winning ? 10m : -10m,
-                        ReasonsJson = "[]", LabelVersion = "labels-v1", CalculatedAtUtc = times[i].AddMinutes(1)
+                        ReasonsJson = "[]", LabelVersion = "labels-v2+config-test", InputSha256 = $"input-{i}", CalculatedAtUtc = times[i].AddMinutes(1)
                     });
                     db.ResearchCandidateRecords.Add(candidate);
                 }
+                await db.SaveChangesAsync();
+                var storedLabels = await db.CandidateLabelRecords.AsNoTracking()
+                    .Include(x => x.ResearchCandidate).ToArrayAsync();
+                var hashRows = storedLabels.Select(x => new ResearchEvaluationObservation(
+                    x.ResearchCandidateId, x.ResearchCandidate.CandidateKey, x.ResearchCandidate.InstrumentId,
+                    x.ResearchCandidate.StrategyId, x.ResearchCandidate.PatternType, x.ResearchCandidate.Direction,
+                    x.ResearchCandidate.Timeframe, x.ResearchCandidate.EvaluatedAtUtc, x.WindowEndUtc,
+                    x.ResearchCandidate.Confidence, x.ResearchCandidate.Outcome, x.ResearchCandidate.MarketRegime,
+                    x.ResearchCandidate.NormalizedLiquidity, x.GrossReturnBps!.Value, x.EstimatedCostBps!.Value,
+                    x.NetReturnBps!.Value, x.MaximumFavorableExcursionBps!.Value, x.MaximumAdverseExcursionBps!.Value,
+                    x.TargetStopOutcome, x.ResearchCandidate.FeatureVersion, x.ResearchCandidate.PatternVersion,
+                    x.LabelVersion, x.InputSha256)).ToArray();
+                var evaluation = await db.ResearchEvaluationRunRecords.SingleAsync(x => x.Id == evaluationId);
+                evaluation.InputSha256 = ResearchEvaluationService.ComputeInputHash(hashRows,
+                    new ResearchEvaluationRequest(60, StartUtc, StartUtc.AddDays(9), null,
+                        "US-STK-SPY-SMART", "deterministic-patterns"), StartUtc, StartUtc.AddDays(9));
                 await db.SaveChangesAsync();
                 return evaluationId;
             }

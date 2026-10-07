@@ -176,7 +176,7 @@ namespace TradingBot.Infrastructure.Services
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var query = db.ResearchCandidateRecords
                 .Include(item => item.Labels)
-                .Where(item => item.Labels.Any(label => label.Status == CandidateLabelStatus.Pending && label.WindowEndUtc <= maturityCutoff));
+                .Where(item => item.Labels.Any(label => label.Status == CandidateLabelStatus.Pending && label.LabelVersion == LabelVersion && label.WindowEndUtc <= maturityCutoff));
             if (replayRunId.HasValue) query = query.Where(item => item.ReplayRunId == replayRunId);
             else query = query.Where(item => item.ReplayRunId == null);
             var candidates = await query.OrderBy(item => item.EvaluatedAtUtc).ThenBy(item => item.Id)
@@ -186,7 +186,7 @@ namespace TradingBot.Infrastructure.Services
             foreach (var candidate in candidates)
             {
                 var matured = candidate.Labels
-                    .Where(label => label.Status == CandidateLabelStatus.Pending && label.WindowEndUtc <= maturityCutoff)
+                    .Where(label => label.Status == CandidateLabelStatus.Pending && label.LabelVersion == LabelVersion && label.WindowEndUtc <= maturityCutoff)
                     .OrderBy(label => label.HorizonSeconds).ToArray();
                 if (matured.Length == 0) continue;
                 var records = await _datasetStore.ReadAsync(new DatasetQuery(
@@ -200,7 +200,11 @@ namespace TradingBot.Infrastructure.Services
                 {
                     var result = _calculator.Calculate(candidate.Direction, candidate.ReferencePrice,
                         candidate.EvaluatedAtUtc, label.WindowEndUtc, asOf, prices, spreads);
-                    Apply(label, result, asOf);
+                    var input = records.Where(item => item.EventTimeUtc > candidate.EvaluatedAtUtc
+                        && item.EventTimeUtc <= label.WindowEndUtc)
+                        .OrderBy(item => item.EventTimeUtc).ThenBy(item => item.ReceivedTimeUtc)
+                        .ThenBy(item => item.EventId, StringComparer.Ordinal).ToArray();
+                    Apply(label, result, asOf, DeterministicReplayService.ComputeInputHash(input));
                     calculated++;
                 }
                 candidate.UpdatedAtUtc = ToUtc(_clock.UtcNow);
@@ -233,12 +237,15 @@ namespace TradingBot.Infrastructure.Services
             return records.Select(ToSnapshot).ToArray();
         }
 
-        private void Apply(CandidateLabelRecord label, CandidateLabelCalculation result, DateTime calculatedAtUtc)
+        private void Apply(CandidateLabelRecord label, CandidateLabelCalculation result, DateTime calculatedAtUtc, string inputSha256)
         {
             label.Status = result.Status;
             label.TargetStopOutcome = result.TargetStopOutcome;
             label.ObservationCount = result.ObservationCount;
             label.ExitPrice = result.ExitPrice;
+            label.HorizonExitPrice = result.HorizonExitPrice;
+            label.HorizonGrossReturnBps = result.HorizonGrossReturnBps;
+            label.InputSha256 = inputSha256;
             label.MaximumFavorableExcursionBps = result.MaximumFavorableExcursionBps;
             label.MaximumAdverseExcursionBps = result.MaximumAdverseExcursionBps;
             label.GrossReturnBps = result.GrossReturnBps;
@@ -254,7 +261,7 @@ namespace TradingBot.Infrastructure.Services
         }
 
         private static IReadOnlyList<CandidatePriceObservation> CreatePriceObservations(IEnumerable<MarketDatasetRecord> records) => records
-            .Where(item => item.CanPersist)
+            .Where(item => item.CanPersist && item.IsFinal && item.QualityStatus.Equals("Healthy", StringComparison.OrdinalIgnoreCase))
             .Select(item => item.DataType.Trim().ToLowerInvariant() switch
             {
                 "trade" when item.Price is > 0m => new CandidatePriceObservation(item.EventTimeUtc, item.Price.Value, item.Price.Value, item.Price.Value, item.EventId),
@@ -268,7 +275,7 @@ namespace TradingBot.Infrastructure.Services
             decimal? bid = null;
             decimal? ask = null;
             var result = new List<CandidateSpreadObservation>();
-            foreach (var item in records.Where(item => item.CanPersist).OrderBy(item => item.EventTimeUtc).ThenBy(item => item.ReceivedTimeUtc).ThenBy(item => item.EventId, StringComparer.Ordinal))
+            foreach (var item in records.Where(item => item.CanPersist && item.IsFinal && item.QualityStatus.Equals("Healthy", StringComparison.OrdinalIgnoreCase)).OrderBy(item => item.EventTimeUtc).ThenBy(item => item.ReceivedTimeUtc).ThenBy(item => item.EventId, StringComparer.Ordinal))
             {
                 if (item.DataType.Equals("bid", StringComparison.OrdinalIgnoreCase) && item.Price is > 0m) bid = item.Price;
                 if (item.DataType.Equals("ask", StringComparison.OrdinalIgnoreCase) && item.Price is > 0m) ask = item.Price;
@@ -295,6 +302,7 @@ namespace TradingBot.Infrastructure.Services
         private static CandidateLabelSnapshot ToSnapshot(CandidateLabelRecord item) => new(
             item.Id, item.ResearchCandidateId, item.HorizonSeconds, item.Status, item.TargetStopOutcome,
             item.WindowStartUtc, item.WindowEndUtc, item.ObservationCount, item.EntryPrice, item.ExitPrice,
+            item.HorizonExitPrice, item.HorizonGrossReturnBps, item.InputSha256,
             item.MaximumFavorableExcursionBps, item.MaximumAdverseExcursionBps, item.GrossReturnBps,
             item.EstimatedCostBps, item.NetReturnBps, item.ObservedSpreadBps, item.MaximumEventTimeUtc,
             item.ReasonsJson, item.LabelVersion, item.CalculatedAtUtc);

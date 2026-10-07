@@ -214,7 +214,7 @@ namespace TradingBot.Tests
                             EvaluatedAtUtc = StartUtc.AddDays(day).AddMinutes(sample), ReferencePrice = 100m,
                             Confidence = highConfidence ? 0.9m : 0.5m, Outcome = ResearchCandidateOutcome.Accepted,
                             DecisionStage = "PatternDetected", FeatureVersion = "features-test", PatternVersion = "patterns-test",
-                            LabelVersion = "labels-test", MarketRegime = MarketRegime.Trending.ToString(), NormalizedLiquidity = 1.5m,
+                            LabelVersion = "labels-v2+config-test", MarketRegime = MarketRegime.Trending.ToString(), NormalizedLiquidity = 1.5m,
                             HardConditionsJson = "[]", ScoreComponentsJson = "[]", ReasonsJson = "[]", MetadataJson = "{}",
                             CreatedAtUtc = StartUtc, UpdatedAtUtc = StartUtc
                         };
@@ -226,7 +226,7 @@ namespace TradingBot.Tests
                             ObservationCount = 1, EntryPrice = 100m, ExitPrice = 100m,
                             MaximumFavorableExcursionBps = 12m, MaximumAdverseExcursionBps = 8m,
                             GrossReturnBps = net + 2m, EstimatedCostBps = 2m, NetReturnBps = net,
-                            ReasonsJson = "[]", LabelVersion = "labels-test", CalculatedAtUtc = StartUtc.AddDays(31)
+                            ReasonsJson = "[]", LabelVersion = "labels-v2+config-test", InputSha256 = $"input-{id}", CalculatedAtUtc = StartUtc.AddDays(31)
                         });
                         db.ResearchCandidateRecords.Add(candidate);
                         id++;

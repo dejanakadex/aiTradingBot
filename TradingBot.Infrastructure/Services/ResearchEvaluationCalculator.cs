@@ -51,10 +51,9 @@ namespace TradingBot.Infrastructure.Services
             }
 
             var preThresholds = EvaluateThresholds(preHoldout);
-            var selected = SelectThreshold(preThresholds, _settings.MinimumTrainingSamples);
-            var finalPreSelected = ApplyThreshold(preHoldout, selected.ConfidenceThreshold);
             var folds = new List<WalkForwardFoldResult>();
             var walkForwardSelected = new List<ResearchEvaluationObservation>();
+            var walkForwardValidation = new List<ResearchEvaluationObservation>();
             var validationStart = from.AddDays(_settings.TrainingWindowDays);
             var foldNumber = 1;
             while (validationStart.AddDays(_settings.ValidationWindowDays) <= holdoutStart)
@@ -73,6 +72,7 @@ namespace TradingBot.Infrastructure.Services
                 }
                 else
                 {
+                    walkForwardValidation.AddRange(validation);
                     var foldSelection = SelectThreshold(EvaluateThresholds(training), _settings.MinimumTrainingSamples);
                     var trainingSelected = ApplyThreshold(training, foldSelection.ConfidenceThreshold);
                     var validationSelected = ApplyThreshold(validation, foldSelection.ConfidenceThreshold);
@@ -90,6 +90,8 @@ namespace TradingBot.Infrastructure.Services
             {
                 throw new InvalidOperationException("No walk-forward fold contains enough training and validation samples.");
             }
+            var selected = SelectThreshold(EvaluateThresholds(walkForwardValidation), _settings.MinimumValidationSamples);
+            var finalPreSelected = ApplyThreshold(preHoldout, selected.ConfidenceThreshold);
 
             var holdoutSelected = ApplyThreshold(holdout, selected.ConfidenceThreshold);
             var outOfSample = walkForwardSelected.Concat(holdoutSelected)
@@ -109,7 +111,7 @@ namespace TradingBot.Infrastructure.Services
                 PatternVersion = patternVersion,
                 LabelVersion = labelVersion,
                 SelectedConfidenceThreshold = selected.ConfidenceThreshold,
-                SelectionReason = selected.Reason,
+                SelectionReason = $"Walk-forward validation: {selected.Reason}",
                 PreHoldoutMetrics = CalculateMetrics(finalPreSelected),
                 WalkForwardMetrics = CalculateMetrics(walkForwardSelected),
                 HoldoutMetrics = CalculateMetrics(holdoutSelected),

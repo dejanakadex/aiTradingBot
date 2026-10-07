@@ -24,7 +24,8 @@ namespace TradingBot.Domain.Models
         TargetStopOutcome TargetStopOutcome,
         string FeatureVersion,
         string PatternVersion,
-        string LabelVersion);
+        string LabelVersion,
+        string LabelInputSha256 = "");
 
     public sealed record EvaluationMetrics(
         int SampleCount,

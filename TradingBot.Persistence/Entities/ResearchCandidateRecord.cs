@@ -49,6 +49,9 @@ namespace TradingBot.Persistence
         public int ObservationCount { get; set; }
         public decimal EntryPrice { get; set; }
         public decimal? ExitPrice { get; set; }
+        public decimal? HorizonExitPrice { get; set; }
+        public decimal? HorizonGrossReturnBps { get; set; }
+        public string InputSha256 { get; set; } = string.Empty;
         public decimal? MaximumFavorableExcursionBps { get; set; }
         public decimal? MaximumAdverseExcursionBps { get; set; }
         public decimal? GrossReturnBps { get; set; }

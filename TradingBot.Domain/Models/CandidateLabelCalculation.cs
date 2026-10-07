@@ -21,6 +21,8 @@ namespace TradingBot.Domain.Models
         public TargetStopOutcome TargetStopOutcome { get; init; }
         public int ObservationCount { get; init; }
         public decimal? ExitPrice { get; init; }
+        public decimal? HorizonExitPrice { get; init; }
+        public decimal? HorizonGrossReturnBps { get; init; }
         public decimal? MaximumFavorableExcursionBps { get; init; }
         public decimal? MaximumAdverseExcursionBps { get; init; }
         public decimal? GrossReturnBps { get; init; }

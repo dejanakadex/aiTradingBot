@@ -51,7 +51,7 @@ namespace TradingBot.Infrastructure.Services
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var query = db.CandidateLabelRecords.AsNoTracking()
                 .Where(label => label.HorizonSeconds == request.HorizonSeconds)
-                .Where(label => label.Status == CandidateLabelStatus.Complete || label.Status == CandidateLabelStatus.Ambiguous)
+                .Where(label => label.Status == CandidateLabelStatus.Complete)
                 .Where(label => label.GrossReturnBps.HasValue && label.EstimatedCostBps.HasValue && label.NetReturnBps.HasValue
                     && label.MaximumFavorableExcursionBps.HasValue && label.MaximumAdverseExcursionBps.HasValue);
             query = request.ReplayRunId.HasValue
@@ -95,13 +95,17 @@ namespace TradingBot.Infrastructure.Services
                     label.TargetStopOutcome,
                     label.ResearchCandidate.FeatureVersion,
                     label.ResearchCandidate.PatternVersion,
-                    label.LabelVersion))
+                    label.LabelVersion,
+                    label.InputSha256))
                 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
             if (rows.Length > _settings.MaximumCandidates)
             {
                 throw new InvalidOperationException($"Evaluation input exceeds the configured maximum of {_settings.MaximumCandidates} candidates; narrow the range or filter.");
             }
             if (rows.Length == 0) throw new InvalidOperationException("No completed candidate labels match the evaluation request.");
+            if (rows.Any(item => !item.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(item.LabelInputSha256)))
+                throw new InvalidDataException("Evaluation requires covered labels-v2 with frozen input hashes; regenerate legacy labels.");
 
             var from = requestedFrom ?? rows.Min(item => item.EvaluatedAtUtc);
             var to = requestedTo ?? rows.Max(item => item.LabelWindowEndUtc);
@@ -178,7 +182,7 @@ namespace TradingBot.Infrastructure.Services
             return record == null ? null : ToSnapshot(record);
         }
 
-        private static string ComputeInputHash(
+        internal static string ComputeInputHash(
             IEnumerable<ResearchEvaluationObservation> rows,
             ResearchEvaluationRequest request,
             DateTime fromUtc,
@@ -201,7 +205,8 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.MaximumFavorableExcursionBps.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.MaximumAdverseExcursionBps.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.TargetStopOutcome).Append('|').Append(item.FeatureVersion).Append('|')
-                    .Append(item.PatternVersion).Append('|').Append(item.LabelVersion).Append('\n');
+                    .Append(item.PatternVersion).Append('|').Append(item.LabelVersion).Append('|')
+                    .Append(item.LabelInputSha256).Append('\n');
             }
             return Hash(canonical.ToString());
         }

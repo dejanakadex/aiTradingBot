@@ -457,7 +457,7 @@ namespace TradingBot.Infrastructure.Background
             };
         }
 
-        private static (AiMarketAnalysisResult Analysis, AiTradeCriticResult Critic) BuildNumericalDecision(
+        private (AiMarketAnalysisResult Analysis, AiTradeCriticResult Critic) BuildNumericalDecision(
             MarketSnapshot snapshot,
             PatternCandidate pattern,
             MarketFeatures features,
@@ -465,7 +465,7 @@ namespace TradingBot.Infrastructure.Background
         {
             var currentPrice = snapshot.CurrentPrice!.Value;
             var estimatedCostBps = Math.Max(0m, features.SpreadBps ?? 0m);
-            var expectedGrossMovePercent = Math.Max(0.01m, (prediction.ExpectedNetReturnBps + estimatedCostBps) / 100m);
+            var expectedGrossMovePercent = (_numericalModelSettings?.PlanningTargetMoveBps ?? 30m) / 100m;
             var riskPercent = Math.Max(0.005m, expectedGrossMovePercent / 2m);
             var entryWidthBps = Math.Max(0.1m, estimatedCostBps);
             var confidence = Math.Clamp(prediction.Probability, 0m, 1m);
@@ -485,7 +485,7 @@ namespace TradingBot.Infrastructure.Background
                 EntryMin = currentPrice,
                 EntryMax = currentPrice * (1m + entryWidthBps / 10_000m),
                 InvalidationPrice = currentPrice * (1m - riskPercent / 100m),
-                Reason = $"Approved local model probability {prediction.Probability:0.####} passed threshold {prediction.Threshold:0.####}.",
+                Reason = $"Approved local model probability {prediction.Probability:0.####} passed threshold {prediction.Threshold:0.####}; target move is a configured planning assumption, not an individual earnings forecast.",
                 Model = model,
                 IsSafeFallback = false
             };

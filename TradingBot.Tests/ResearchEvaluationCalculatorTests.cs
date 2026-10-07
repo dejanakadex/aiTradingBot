@@ -82,6 +82,46 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public void ThresholdUsesValidationReturnsRatherThanEarlyTrainingReturns()
+        {
+            var baseline = BuildThirtyDays();
+            var modifiedTraining = baseline.Select(item => item.EvaluatedAtUtc < StartUtc.AddDays(10)
+                ? item with { GrossReturnBps = item.Confidence >= 0.8m ? -1_000m : 1_000m,
+                    NetReturnBps = item.Confidence >= 0.8m ? -1_002m : 998m }
+                : item).ToArray();
+            var calculator = new ResearchEvaluationCalculator(Settings());
+
+            var first = calculator.Calculate(baseline, StartUtc, StartUtc.AddDays(30));
+            var second = calculator.Calculate(modifiedTraining, StartUtc, StartUtc.AddDays(30));
+
+            Assert.Equal(first.SelectedConfidenceThreshold, second.SelectedConfidenceThreshold);
+            Assert.NotEqual(first.PreHoldoutThresholds.Single(x => x.ConfidenceThreshold == 0.8m).Metrics.ExpectancyBps,
+                second.PreHoldoutThresholds.Single(x => x.ConfidenceThreshold == 0.8m).Metrics.ExpectancyBps);
+        }
+
+        [Fact]
+        public void LabelsCrossingFoldOrHoldoutBoundaryArePurged()
+        {
+            var baseline = BuildThirtyDays();
+            var changed = baseline.Select(item => item.EvaluatedAtUtc.Date == StartUtc.AddDays(19).Date
+                    && item.EvaluatedAtUtc.TimeOfDay == StartUtc.TimeOfDay
+                    ? item with { LabelWindowEndUtc = StartUtc.AddDays(20).AddMinutes(1) }
+                    : item.EvaluatedAtUtc.Date == StartUtc.AddDays(24).Date
+                    && item.EvaluatedAtUtc.TimeOfDay == StartUtc.TimeOfDay
+                        ? item with { LabelWindowEndUtc = StartUtc.AddDays(25).AddMinutes(1) }
+                        : item).ToArray();
+            var calculator = new ResearchEvaluationCalculator(Settings());
+            var first = calculator.Calculate(baseline, StartUtc, StartUtc.AddDays(30));
+            var second = calculator.Calculate(changed, StartUtc, StartUtc.AddDays(30));
+
+            Assert.Equal(first.Folds.Single(x => x.ValidationFromUtc == StartUtc.AddDays(20)).TrainingSourceCount - 1,
+                second.Folds.Single(x => x.ValidationFromUtc == StartUtc.AddDays(20)).TrainingSourceCount);
+            Assert.Equal(first.PreHoldoutMetrics.SampleCount - 1, second.PreHoldoutMetrics.SampleCount);
+            Assert.DoesNotContain(second.HoldoutCandidateIds, id => id == changed.Single(x =>
+                x.EvaluatedAtUtc == StartUtc.AddDays(24)).CandidateId);
+        }
+
+        [Fact]
         public void ProducesCostStressAndAllRequiredSegmentDimensions()
         {
             var result = new ResearchEvaluationCalculator(Settings()).Calculate(BuildThirtyDays(), StartUtc, StartUtc.AddDays(30));

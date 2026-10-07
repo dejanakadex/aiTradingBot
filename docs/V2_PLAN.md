@@ -4,6 +4,8 @@ Status: **odobreno za implementaciju jednu točku po jednu**. Zajednički radni 
 
 Napredak 2026-09-30: završene su točke 1–18, uključujući portfolio risk, signal arbitration, trajni order/position lifecycle, finalni execution-grade scalping gate, mjerljivi shadow/paper rollout po instrumentu te walk-forward LightGBM model s lokalnom inferencijom u entry putu. Projekt koristi .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. Conditional IBKR adapter i dalje treba zasebno provjeriti sa službenim `CSharpAPI.dll`.
 
+Nastavak: točke 19–24 lokalno su implementirane i testirane; točka 25 ostaje djelomična research simulacija, a točka 26 dodaje pokrivene tick labele i vremensku evaluaciju s provjerom hashova. Stvarni IBKR paper end-to-end test još nije proveden. Detaljne granice su u [statusu implementacije](IMPLEMENTATION_STATUS.md).
+
 Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Operativni checkpointi vode se u [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
 ## Cilj i granice

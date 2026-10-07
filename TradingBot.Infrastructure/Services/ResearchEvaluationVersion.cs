@@ -7,7 +7,7 @@ namespace TradingBot.Infrastructure.Services
 {
     internal static class ResearchEvaluationVersion
     {
-        public const string Contract = "evaluation-v1";
+        public const string Contract = "evaluation-v2";
 
         public static string Create(ResearchEvaluationSettings settings)
         {

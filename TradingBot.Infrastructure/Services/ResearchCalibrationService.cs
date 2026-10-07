@@ -45,6 +45,9 @@ namespace TradingBot.Infrastructure.Services
             ArgumentNullException.ThrowIfNull(request);
             var evaluation = await _evaluationService.GetAsync(request.EvaluationRunId, cancellationToken).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Research evaluation '{request.EvaluationRunId}' was not found.");
+            if (!evaluation.EvaluationVersion.StartsWith(ResearchEvaluationVersion.Contract + "+config-", StringComparison.Ordinal)
+                || !evaluation.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal))
+                throw new InvalidDataException("Calibration requires the current evaluation and covered-label contracts.");
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var rows = await LoadObservationsAsync(db, evaluation, cancellationToken).ConfigureAwait(false);
             var evaluationInputHash = ComputeEvaluationInputHash(rows, evaluation);
@@ -322,7 +325,7 @@ namespace TradingBot.Infrastructure.Services
         {
             var query = db.CandidateLabelRecords.AsNoTracking()
                 .Where(label => label.HorizonSeconds == evaluation.HorizonSeconds)
-                .Where(label => label.Status == CandidateLabelStatus.Complete || label.Status == CandidateLabelStatus.Ambiguous)
+                .Where(label => label.Status == CandidateLabelStatus.Complete)
                 .Where(label => label.GrossReturnBps.HasValue && label.EstimatedCostBps.HasValue && label.NetReturnBps.HasValue
                     && label.MaximumFavorableExcursionBps.HasValue && label.MaximumAdverseExcursionBps.HasValue)
                 .Where(label => label.ResearchCandidate.EvaluatedAtUtc >= evaluation.FromUtc && label.WindowEndUtc <= evaluation.ToUtc);
@@ -361,7 +364,8 @@ namespace TradingBot.Infrastructure.Services
                     label.TargetStopOutcome,
                     label.ResearchCandidate.FeatureVersion,
                     label.ResearchCandidate.PatternVersion,
-                    label.LabelVersion))
+                    label.LabelVersion,
+                    label.InputSha256))
                 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -399,7 +403,8 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.MaximumFavorableExcursionBps.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.MaximumAdverseExcursionBps.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.TargetStopOutcome).Append('|').Append(item.FeatureVersion).Append('|')
-                    .Append(item.PatternVersion).Append('|').Append(item.LabelVersion).Append('\n');
+                    .Append(item.PatternVersion).Append('|').Append(item.LabelVersion).Append('|')
+                    .Append(item.LabelInputSha256).Append('\n');
             }
             return Hash(canonical.ToString());
         }

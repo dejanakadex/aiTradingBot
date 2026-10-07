@@ -13,6 +13,7 @@ namespace TradingBot.Application.Configuration
         public int MinimumHoldoutSelections { get; set; } = 20;
         public decimal MinimumWalkForwardExpectancyImprovementBps { get; set; } = 0.25m;
         public decimal MinimumHoldoutExpectancyImprovementBps { get; set; } = 0m;
+        public decimal PlanningTargetMoveBps { get; set; } = 30m;
         public decimal[] ProbabilityThresholds { get; set; } = [0.50m, 0.55m, 0.60m, 0.65m, 0.70m, 0.75m];
 
         public IReadOnlyList<string> GetValidationErrors()
@@ -26,6 +27,7 @@ namespace TradingBot.Application.Configuration
             if (MinimumTrainingSamples < 20) errors.Add("MinimumTrainingSamples must be at least 20.");
             if (MinimumValidationSelections < 1 || MinimumHoldoutSelections < 1) errors.Add("Minimum selection counts must be positive.");
             if (MinimumWalkForwardExpectancyImprovementBps < 0m || MinimumHoldoutExpectancyImprovementBps < 0m) errors.Add("Expectancy improvements cannot be negative.");
+            if (PlanningTargetMoveBps <= 0m) errors.Add("PlanningTargetMoveBps must be greater than zero.");
             if (ProbabilityThresholds is not { Length: > 0 } || ProbabilityThresholds.Any(x => x is <= 0m or >= 1m)) errors.Add("ProbabilityThresholds must contain values strictly between zero and one.");
             if ((ProbabilityThresholds ?? []).Distinct().Count() != (ProbabilityThresholds?.Length ?? 0)) errors.Add("ProbabilityThresholds cannot contain duplicates.");
             return errors;

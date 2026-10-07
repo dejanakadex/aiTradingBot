@@ -566,9 +566,11 @@ namespace TradingBot.Infrastructure.Services
                 canonical.Append(item.CandidateKey).Append('|').Append(label.HorizonSeconds).Append('|')
                     .Append(label.Status).Append('|').Append(label.TargetStopOutcome).Append('|')
                     .Append(Decimal(label.ExitPrice)).Append('|').Append(Decimal(label.MaximumFavorableExcursionBps)).Append('|')
+                    .Append(Decimal(label.HorizonExitPrice)).Append('|').Append(Decimal(label.HorizonGrossReturnBps)).Append('|')
                     .Append(Decimal(label.MaximumAdverseExcursionBps)).Append('|').Append(Decimal(label.GrossReturnBps)).Append('|')
                     .Append(Decimal(label.EstimatedCostBps)).Append('|').Append(Decimal(label.NetReturnBps)).Append('|')
-                    .Append(label.ReasonsJson).Append('|').Append(label.LabelVersion).Append('\n');
+                    .Append(label.ReasonsJson).Append('|').Append(label.LabelVersion).Append('|')
+                    .Append(label.InputSha256).Append('\n');
             }
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();
         }

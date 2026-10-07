@@ -1616,7 +1616,10 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<string>("FirstStopEventId").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("FirstTargetEventId").IsRequired().HasColumnType("TEXT");
                     b.Property<decimal?>("GrossReturnBps").HasColumnType("TEXT");
+                    b.Property<decimal?>("HorizonExitPrice").HasColumnType("TEXT");
+                    b.Property<decimal?>("HorizonGrossReturnBps").HasColumnType("TEXT");
                     b.Property<int>("HorizonSeconds").HasColumnType("INTEGER");
+                    b.Property<string>("InputSha256").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("LabelVersion").IsRequired().HasColumnType("TEXT");
                     b.Property<decimal?>("MaximumAdverseExcursionBps").HasColumnType("TEXT");
                     b.Property<DateTime?>("MaximumEventTimeUtc").HasColumnType("TEXT");
