@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
@@ -26,6 +27,9 @@ namespace TradingBot.Infrastructure.Services
         private readonly ReplaySettings _settings;
         private readonly ILogger<DeterministicReplayService> _logger;
         private readonly ICandidateResearchService? _candidateResearchService;
+        private readonly TradingSettings _tradingSettings;
+        private readonly ShortSignalSettings _shortSignalSettings;
+        private readonly ShortAggregateSettings _shortAggregateSettings;
         private readonly SemaphoreSlim _processingGate = new(1, 1);
 
         public DeterministicReplayService(
@@ -36,7 +40,10 @@ namespace TradingBot.Infrastructure.Services
             IClock clock,
             IOptions<ReplaySettings> settings,
             ILogger<DeterministicReplayService> logger,
-            ICandidateResearchService? candidateResearchService = null)
+            ICandidateResearchService? candidateResearchService = null,
+            IOptions<TradingSettings>? tradingSettings = null,
+            IOptions<ShortSignalSettings>? shortSignalSettings = null,
+            IOptions<ShortAggregateSettings>? shortAggregateSettings = null)
         {
             _datasetStore = datasetStore ?? throw new ArgumentNullException(nameof(datasetStore));
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -46,6 +53,9 @@ namespace TradingBot.Infrastructure.Services
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _candidateResearchService = candidateResearchService;
+            _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
+            _shortSignalSettings = shortSignalSettings?.Value ?? new ShortSignalSettings();
+            _shortAggregateSettings = shortAggregateSettings?.Value ?? new ShortAggregateSettings();
         }
 
         public async Task<ReplayRunSnapshot> StartAsync(
@@ -72,9 +82,11 @@ namespace TradingBot.Infrastructure.Services
             {
                 throw new InvalidOperationException("No market-data events exist in the requested dataset range.");
             }
-            if (!records.Any(item => item.DataType.Equals("bar", StringComparison.OrdinalIgnoreCase)))
+            var shortProfile = GetShortReplayInstrument(instrumentId, strategyId);
+            if (!records.Any(item => item.DataType.Equals("bar", StringComparison.OrdinalIgnoreCase))
+                && (shortProfile == null || !records.Any(item => item.DataType.Equals("trade", StringComparison.OrdinalIgnoreCase))))
             {
-                throw new InvalidOperationException("No bar events exist in the requested dataset range.");
+                throw new InvalidOperationException("Replay requires bar events or trade ticks with an enabled short-signal profile.");
             }
 
             var now = ToUtc(_clock.UtcNow);
@@ -92,7 +104,7 @@ namespace TradingBot.Infrastructure.Services
                 InputEventCount = records.Count,
                 MarketDataVersion = PipelineContractVersions.MarketData,
                 FeatureVersion = _featureEngine.FeatureVersion,
-                PatternVersion = _patternDetectorFactory.DetectorVersion,
+                PatternVersion = GetPatternVersion(instrumentId, strategyId),
                 StrategyVersion = PipelineContractVersions.Strategy,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -192,7 +204,7 @@ namespace TradingBot.Infrastructure.Services
             try
             {
                 var records = await ReadInputAsync(run.InstrumentId, run.FromUtc, run.ToUtc, cancellationToken).ConfigureAwait(false);
-                if (!run.PatternVersion.Equals(_patternDetectorFactory.DetectorVersion, StringComparison.Ordinal))
+                if (!run.PatternVersion.Equals(GetPatternVersion(run.InstrumentId, run.StrategyId), StringComparison.Ordinal))
                 {
                     throw new InvalidDataException("Pattern detector configuration changed after the replay run was created; start a new run with the new version.");
                 }
@@ -221,6 +233,14 @@ namespace TradingBot.Infrastructure.Services
                 var detector = _patternDetectorFactory.Create();
                 var histories = new Dictionary<Timeframe, List<DomainCandle>>();
                 var quoteState = new ReplayQuoteState();
+                var shortInstrument = GetShortReplayInstrument(run.InstrumentId, run.StrategyId);
+                var shortLatest = shortInstrument == null ? null : new LatestMarketDataService(Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings));
+                var shortTrigger = shortInstrument == null ? null : new ShortSignalTriggerService(
+                    Microsoft.Extensions.Options.Options.Create(_shortSignalSettings),
+                    Microsoft.Extensions.Options.Options.Create(_tradingSettings),
+                    Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings),
+                    shortLatest!, _patternDetectorFactory, _featureEngine, null,
+                    NullLogger<ShortSignalTriggerService>.Instance);
                 DateTime? previousEventTimeUtc = null;
                 var processedThisBatch = 0;
 
@@ -235,6 +255,29 @@ namespace TradingBot.Infrastructure.Services
                     }
 
                     quoteState.Apply(record);
+                    if (shortTrigger != null && IsHealthyTick(record))
+                    {
+                        // Replay is governed by the market event clock. The isolated aggregator and
+                        // collector cannot publish to the live bus or reach the broker.
+                        shortLatest!.Apply(new CanonicalMarketDataEvent
+                        {
+                            EventId = record.EventId, InstrumentId = record.InstrumentId, Symbol = record.Symbol,
+                            Kind = Enum.Parse<MarketDataEventKind>(record.DataType, true),
+                            EventTimeUtc = record.EventTimeUtc, ReceivedTimeUtc = record.EventTimeUtc,
+                            Source = record.Source, Sequence = record.Sequence, IsFinal = record.IsFinal,
+                            Price = record.Price, Size = record.Size
+                        });
+                        var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, record.EventTimeUtc, cancellationToken).ConfigureAwait(false);
+                        if (!isWarmup)
+                        {
+                            foreach (var selected in shortSignals)
+                            {
+                                var features = _featureEngine.ComputeFeatures(
+                                    quoteState.CreateFeatureInput(selected.Candles, record.EventTimeUtc));
+                                await PersistSignalAsync(db, run, record.EventId, selected.Candidate, features, cancellationToken).ConfigureAwait(false);
+                            }
+                        }
+                    }
 
                     var candle = TryCreateCandle(record);
                     if (candle != null)
@@ -443,6 +486,42 @@ namespace TradingBot.Infrastructure.Services
                 .ThenBy(item => item.EventId, StringComparer.Ordinal)
                 .ToArray();
         }
+
+        private ConfiguredInstrument? GetShortReplayInstrument(string instrumentId, string strategyId)
+        {
+            var instrument = _tradingSettings.GetEnabledInstruments().FirstOrDefault(item =>
+                item.InstrumentId.Equals(instrumentId, StringComparison.OrdinalIgnoreCase)
+                && item.StrategyIds.Contains(strategyId, StringComparer.OrdinalIgnoreCase));
+            if (instrument == null) return null;
+            return (_shortSignalSettings.Profiles ?? []).Any(profile => profile.Enabled
+                && profile.InstrumentId.Equals(instrumentId, StringComparison.OrdinalIgnoreCase)
+                && profile.StrategyId.Equals(strategyId, StringComparison.OrdinalIgnoreCase)) ? instrument : null;
+        }
+
+        private string GetPatternVersion(string instrumentId, string strategyId)
+        {
+            var instrument = GetShortReplayInstrument(instrumentId, strategyId);
+            if (instrument == null) return _patternDetectorFactory.DetectorVersion;
+            var profiles = (_shortSignalSettings.Profiles ?? [])
+                .Where(profile => profile.Enabled
+                    && profile.InstrumentId.Equals(instrumentId, StringComparison.OrdinalIgnoreCase)
+                    && profile.StrategyId.Equals(strategyId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(profile => profile.IntervalSeconds).ToArray();
+            var canonical = JsonSerializer.Serialize(new
+            {
+                Profiles = profiles, Aggregates = _shortAggregateSettings,
+                instrument.AllowedDirections
+            }, JsonOptions);
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+            return $"{_patternDetectorFactory.DetectorVersion}+short-replay-{hash}";
+        }
+
+        private static bool IsHealthyTick(MarketDatasetRecord record) =>
+            (record.DataType.Equals("bid", StringComparison.OrdinalIgnoreCase)
+                || record.DataType.Equals("ask", StringComparison.OrdinalIgnoreCase)
+                || record.DataType.Equals("trade", StringComparison.OrdinalIgnoreCase))
+            && record.IsFinal && record.CanTriggerTrading && record.Price is > 0m
+            && record.QualityStatus.Equals("Healthy", StringComparison.OrdinalIgnoreCase);
 
         private static DomainCandle? TryCreateCandle(MarketDatasetRecord record)
         {

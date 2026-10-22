@@ -202,6 +202,79 @@ namespace TradingBot.Tests
             await Assert.ThrowsAsync<InvalidDataException>(() => backtest.RunAsync(run.Id, new ReplayBacktestRequest()));
         }
 
+        [Fact]
+        public async Task TickOnlyShortReplayUsesLiveTriggerRulesAndBacktestsAfterBarAvailability()
+        {
+            var trading = new TradingSettings { Instruments =
+            [
+                new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                    StrategyIds = [PipelineContractVersions.DefaultStrategyId] }
+            ] };
+            var shortSignals = new ShortSignalSettings { Profiles =
+            [
+                new ShortSignalProfile { InstrumentId = "US-STK-SPY-SMART",
+                    StrategyId = PipelineContractVersions.DefaultStrategyId, IntervalSeconds = 5,
+                    PatternTypes = [PatternType.Hammer], MinimumBars = 2,
+                    MinimumConfidence = 0.5m, CooldownSeconds = 0, MaximumSignalAgeSeconds = 15 }
+            ] };
+            var records = new List<MarketDatasetRecord>
+            {
+                Quote("trade-0", "trade", StartUtc.AddMilliseconds(250), 100m),
+                Quote("trade-5", "trade", StartUtc.AddSeconds(5.25), 100.01m),
+                Quote("bid-decision", "bid", StartUtc.AddSeconds(11.9), 100m),
+                Quote("ask-decision", "ask", StartUtc.AddSeconds(11.9), 100.02m),
+                Quote("trade-close", "trade", StartUtc.AddSeconds(12), 100.01m),
+                Quote("ask-fill", "ask", StartUtc.AddSeconds(13), 100.02m),
+                Quote("bid-target", "bid", StartUtc.AddSeconds(14), 100.60m)
+            };
+            records[5].Size = 40m;
+            records[6].Size = 40m;
+            await using var harness = await ReplayHarness.CreateAsync(records, trading: trading, shortSignals: shortSignals);
+            var run = await harness.Service.StartAsync(Request());
+            run = await harness.Service.ProcessBatchAsync(run.Id, 4);
+            Assert.Empty(await harness.Service.GetSignalsAsync(run.Id));
+
+            var resumed = harness.CreateFreshService();
+            run = await resumed.ProcessBatchAsync(run.Id, 100);
+            var signal = Assert.Single(await resumed.GetSignalsAsync(run.Id));
+            Assert.Equal(ReplayRunStatus.Completed, run.Status);
+            Assert.Equal(Timeframe.FiveSeconds, signal.Timeframe);
+            Assert.Equal(StartUtc.AddSeconds(10), signal.DetectedAtUtc);
+            Assert.Equal("trade-close", signal.SourceEventId);
+            var backtest = await harness.CreateBacktestService().RunAsync(run.Id, new ReplayBacktestRequest());
+            var trade = Assert.Single(backtest.Trades);
+            Assert.Equal("Closed", trade.Status);
+            Assert.Equal("Target", trade.ExitReason);
+            Assert.Equal(StartUtc.AddSeconds(13), trade.EntryTimeUtc);
+            Assert.Equal(StartUtc.AddSeconds(14), trade.ExitTimeUtc);
+        }
+
+        [Fact]
+        public async Task ShortReplayRefusesResumeAfterProfileChanges()
+        {
+            var trading = new TradingSettings { Instruments =
+            [
+                new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                    StrategyIds = [PipelineContractVersions.DefaultStrategyId] }
+            ] };
+            var profile = new ShortSignalProfile { InstrumentId = "US-STK-SPY-SMART",
+                StrategyId = PipelineContractVersions.DefaultStrategyId, IntervalSeconds = 5,
+                PatternTypes = [PatternType.Hammer], MinimumBars = 2 };
+            var shortSignals = new ShortSignalSettings { Profiles = [profile] };
+            await using var harness = await ReplayHarness.CreateAsync(
+                [Quote("trade-0", "trade", StartUtc.AddSeconds(1), 100m),
+                    Quote("trade-1", "trade", StartUtc.AddSeconds(6), 101m)],
+                trading: trading, shortSignals: shortSignals);
+            var run = await harness.Service.StartAsync(Request());
+            run = await harness.Service.ProcessBatchAsync(run.Id, 1);
+            Assert.Equal(ReplayRunStatus.Running, run.Status);
+
+            profile.MinimumBars = 3;
+            run = await harness.CreateFreshService().ProcessBatchAsync(run.Id, 100);
+            Assert.Equal(ReplayRunStatus.Faulted, run.Status);
+            Assert.Contains("configuration changed", run.LastError, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static ReplayStartRequest Request(decimal speed = 0m) => new(
             "US-STK-SPY-SMART",
             StartUtc,
@@ -260,19 +333,23 @@ namespace TradingBot.Tests
             private readonly FixedClock _clock = new(StartUtc.AddHours(1));
             private readonly ReplaySettings _settings = new() { EventsPerBatch = 100, MaximumDelayMilliseconds = 0 };
             private readonly IFeatureEngine _featureEngine;
+            private readonly TradingSettings _trading;
+            private readonly ShortSignalSettings _shortSignals;
 
             private ReplayHarness(
                 SqliteConnection connection,
                 ServiceProvider provider,
                 FakeDatasetStore dataset,
                 RecordingDetectorFactory detectors,
-                IFeatureEngine featureEngine)
+                IFeatureEngine featureEngine, TradingSettings trading, ShortSignalSettings shortSignals)
             {
                 _connection = connection;
                 _provider = provider;
                 Dataset = dataset;
                 Detectors = detectors;
                 _featureEngine = featureEngine;
+                _trading = trading;
+                _shortSignals = shortSignals;
                 Service = CreateFreshService();
             }
 
@@ -280,7 +357,8 @@ namespace TradingBot.Tests
             public RecordingDetectorFactory Detectors { get; }
             public DeterministicReplayService Service { get; }
 
-            public static async Task<ReplayHarness> CreateAsync(List<MarketDatasetRecord> records, IFeatureEngine? featureEngine = null)
+            public static async Task<ReplayHarness> CreateAsync(List<MarketDatasetRecord> records, IFeatureEngine? featureEngine = null,
+                TradingSettings? trading = null, ShortSignalSettings? shortSignals = null)
             {
                 var connection = new SqliteConnection("Data Source=:memory:");
                 await connection.OpenAsync();
@@ -296,7 +374,8 @@ namespace TradingBot.Tests
                     provider,
                     new FakeDatasetStore(records),
                     new RecordingDetectorFactory(),
-                    featureEngine ?? new FeatureEngine());
+                    featureEngine ?? new FeatureEngine(), trading ?? new TradingSettings(),
+                    shortSignals ?? new ShortSignalSettings());
             }
 
             public DeterministicReplayService CreateFreshService() => new(
@@ -306,7 +385,8 @@ namespace TradingBot.Tests
                 Detectors,
                 _clock,
                 Options.Create(_settings),
-                NullLogger<DeterministicReplayService>.Instance);
+                NullLogger<DeterministicReplayService>.Instance,
+                tradingSettings: Options.Create(_trading), shortSignalSettings: Options.Create(_shortSignals));
 
             public ReplayBacktestService CreateBacktestService(ScalpingExecutionSettings? execution = null) => new(
                 _provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>(),

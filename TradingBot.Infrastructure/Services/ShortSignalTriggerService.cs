@@ -15,7 +15,7 @@ public sealed class ShortSignalTriggerService
     private readonly ILatestMarketDataService _latest;
     private readonly IPatternDetectorFactory _detectors;
     private readonly IFeatureEngine _features;
-    private readonly ITradingEventBus _events;
+    private readonly ITradingEventBus? _events;
     private readonly ICandidateResearchService? _research;
     private readonly ILogger<ShortSignalTriggerService> _logger;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _instrumentLocks = new(StringComparer.OrdinalIgnoreCase);
@@ -28,7 +28,7 @@ public sealed class ShortSignalTriggerService
         ILatestMarketDataService latest,
         IPatternDetectorFactory detectors,
         IFeatureEngine features,
-        ITradingEventBus events,
+        ITradingEventBus? events,
         ILogger<ShortSignalTriggerService> logger,
         ICandidateResearchService? research = null)
     {
@@ -45,6 +45,28 @@ public sealed class ShortSignalTriggerService
 
     public async Task ProcessAsync(ConfiguredInstrument instrument, DateTime nowUtc, CancellationToken cancellationToken = default)
     {
+        if (_events == null) throw new InvalidOperationException("Live short signal publishing requires an event bus.");
+        await ProcessCoreAsync(instrument, nowUtc,
+            (candidate, _, token) => _events.PublishAsync(candidate, token), true, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Evaluates the live short-signal rules in an isolated replay without publishing to the order pipeline.</summary>
+    public async Task<IReadOnlyList<ShortSignalEvaluation>> CollectAsync(
+        ConfiguredInstrument instrument, DateTime nowUtc, CancellationToken cancellationToken = default)
+    {
+        var collected = new List<ShortSignalEvaluation>();
+        await ProcessCoreAsync(instrument, nowUtc, (candidate, series, _) =>
+        {
+            collected.Add(new ShortSignalEvaluation(candidate, series));
+            return ValueTask.FromResult(true);
+        }, false, cancellationToken).ConfigureAwait(false);
+        return collected;
+    }
+
+    private async Task ProcessCoreAsync(ConfiguredInstrument instrument, DateTime nowUtc,
+        Func<PatternCandidate, IReadOnlyList<Candle>, CancellationToken, ValueTask<bool>> publish,
+        bool persistResearch, CancellationToken cancellationToken)
+    {
         var profiles = (_settings.Profiles ?? [])
             .Where(profile => profile.Enabled
                 && profile.InstrumentId.Equals(instrument.InstrumentId, StringComparison.OrdinalIgnoreCase)
@@ -57,12 +79,14 @@ public sealed class ShortSignalTriggerService
         try
         {
             foreach (var profile in profiles)
-                await ProcessProfileAsync(instrument, profile, ToUtc(nowUtc), cancellationToken).ConfigureAwait(false);
+                await ProcessProfileAsync(instrument, profile, ToUtc(nowUtc), publish, persistResearch, cancellationToken).ConfigureAwait(false);
         }
         finally { gate.Release(); }
     }
 
-    private async Task ProcessProfileAsync(ConfiguredInstrument instrument, ShortSignalProfile profile, DateTime nowUtc, CancellationToken token)
+    private async Task ProcessProfileAsync(ConfiguredInstrument instrument, ShortSignalProfile profile, DateTime nowUtc,
+        Func<PatternCandidate, IReadOnlyList<Candle>, CancellationToken, ValueTask<bool>> publish,
+        bool persistResearch, CancellationToken token)
     {
         var key = $"{instrument.InstrumentId}|{profile.StrategyId}|{profile.IntervalSeconds}";
         var state = _states.GetOrAdd(key, _ => new ProfileState());
@@ -106,14 +130,14 @@ public sealed class ShortSignalTriggerService
                 Evaluations = batch.Evaluations.Where(evaluation => allowed.Contains(evaluation.PatternType)).ToArray(),
                 Candidates = selected == null ? [] : [selected]
             };
-            if (_research != null)
+            if (persistResearch && _research != null)
                 await _research.PersistBatchAsync(filtered,
                     $"LIVE-SHORT|{instrument.InstrumentId}|{profile.IntervalSeconds}s|{bar.WindowEndUtc:O}",
                     cancellationToken: token).ConfigureAwait(false);
 
             if (selected != null)
             {
-                if (!await _events.PublishAsync(selected, token).ConfigureAwait(false))
+                if (!await publish(selected, series, token).ConfigureAwait(false))
                     throw new IOException($"Short signal channel rejected {selected.PatternKey}.");
                 state.LastPublishedEndUtc = bar.WindowEndUtc;
                 _logger.LogInformation("Short signal {Pattern} for {InstrumentId}/{StrategyId} at {WindowEndUtc}",
@@ -153,3 +177,5 @@ public sealed class ShortSignalTriggerService
         public DateTime LastPublishedEndUtc { get; set; }
     }
 }
+
+public sealed record ShortSignalEvaluation(PatternCandidate Candidate, IReadOnlyList<Candle> Candles);

@@ -49,6 +49,10 @@ public sealed class ReplayTradeSimulator
             var signal = item.Signal;
             var source = item.Source;
             if (source < 0) throw new InvalidDataException($"Replay signal {signal.SignalId} has no source event.");
+            // A short bar is detected at its window end, but may become available only
+            // when a later tick closes that window. Orders cannot predate that source event.
+            var decisionAt = signal.DetectedAtUtc > events[source].EventTimeUtc
+                ? signal.DetectedAtUtc : events[source].EventTimeUtc;
             while (quoteCursor < source)
             {
                 var market = events[++quoteCursor];
@@ -61,14 +65,14 @@ public sealed class ReplayTradeSimulator
                 results.Add(Empty(signal, "UnsupportedDirection"));
                 continue;
             }
-            if (signal.DetectedAtUtc < occupiedUntil)
+            if (decisionAt < occupiedUntil)
             {
                 results.Add(Empty(signal, "OverlappingPosition"));
                 continue;
             }
             if (bid is not > 0m || ask is not > 0m || ask < bid || bidAt is null || askAt is null
-                || signal.DetectedAtUtc - bidAt > TimeSpan.FromMilliseconds(_execution.MaximumQuoteAgeMilliseconds)
-                || signal.DetectedAtUtc - askAt > TimeSpan.FromMilliseconds(_execution.MaximumQuoteAgeMilliseconds)
+                || decisionAt - bidAt > TimeSpan.FromMilliseconds(_execution.MaximumQuoteAgeMilliseconds)
+                || decisionAt - askAt > TimeSpan.FromMilliseconds(_execution.MaximumQuoteAgeMilliseconds)
                 || (bidAt.Value - askAt.Value).Duration() > TimeSpan.FromMilliseconds(_execution.MaximumBidAskSkewMilliseconds)
                 || (ask.Value - bid.Value) / ((ask.Value + bid.Value) / 2m) * 10_000m > _execution.MaximumSpreadBps)
             {
@@ -102,8 +106,8 @@ public sealed class ReplayTradeSimulator
                 results.Add(Empty(signal, "InsufficientNetEdge", requested));
                 continue;
             }
-            var entryReady = signal.DetectedAtUtc.AddMilliseconds(request.OrderLatencyMilliseconds);
-            var entryExpires = signal.DetectedAtUtc.AddSeconds(request.EntryTimeoutSeconds);
+            var entryReady = decisionAt.AddMilliseconds(request.OrderLatencyMilliseconds);
+            var entryExpires = decisionAt.AddSeconds(request.EntryTimeoutSeconds);
             var filled = 0m;
             var entryValue = 0m;
             var exited = 0m;
