@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,7 @@ namespace TradingBot.Infrastructure.Services;
 /// <summary>Event-time, long-only fixed-bracket broker model. No live service dependency.</summary>
 public sealed class ReplayTradeSimulator
 {
+    public const string AvailableAtMetadataKey = "replayAvailableAtUtc";
     private readonly IPositionSizer _sizer;
     private readonly ScalpingExecutionSettings _execution;
 
@@ -53,6 +55,18 @@ public sealed class ReplayTradeSimulator
             // when a later tick closes that window. Orders cannot predate that source event.
             var decisionAt = signal.DetectedAtUtc > events[source].EventTimeUtc
                 ? signal.DetectedAtUtc : events[source].EventTimeUtc;
+            using (var metadata = JsonDocument.Parse(signal.MetadataJson))
+            {
+                if (metadata.RootElement.TryGetProperty(AvailableAtMetadataKey, out var available))
+                {
+                    if (available.ValueKind != JsonValueKind.String
+                        || !DateTime.TryParseExact(available.GetString(), "O", CultureInfo.InvariantCulture,
+                            DateTimeStyles.RoundtripKind, out var availableAt)
+                        || availableAt.Kind != DateTimeKind.Utc)
+                        throw new InvalidDataException($"Replay signal {signal.SignalId} has invalid availability time.");
+                    if (availableAt > decisionAt) decisionAt = availableAt;
+                }
+            }
             while (quoteCursor < source)
             {
                 var market = events[++quoteCursor];

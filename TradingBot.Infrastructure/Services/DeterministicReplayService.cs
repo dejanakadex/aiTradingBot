@@ -83,6 +83,7 @@ namespace TradingBot.Infrastructure.Services
                 throw new InvalidOperationException("No market-data events exist in the requested dataset range.");
             }
             var shortProfile = GetShortReplayInstrument(instrumentId, strategyId);
+            if (shortProfile != null) EnsureMonotonicAvailability(records);
             if (!records.Any(item => item.DataType.Equals("bar", StringComparison.OrdinalIgnoreCase))
                 && (shortProfile == null || !records.Any(item => item.DataType.Equals("trade", StringComparison.OrdinalIgnoreCase))))
             {
@@ -204,6 +205,8 @@ namespace TradingBot.Infrastructure.Services
             try
             {
                 var records = await ReadInputAsync(run.InstrumentId, run.FromUtc, run.ToUtc, cancellationToken).ConfigureAwait(false);
+                if (GetShortReplayInstrument(run.InstrumentId, run.StrategyId) != null)
+                    EnsureMonotonicAvailability(records);
                 if (!run.PatternVersion.Equals(GetPatternVersion(run.InstrumentId, run.StrategyId), StringComparison.Ordinal))
                 {
                     throw new InvalidDataException("Pattern detector configuration changed after the replay run was created; start a new run with the new version.");
@@ -241,6 +244,13 @@ namespace TradingBot.Infrastructure.Services
                     Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings),
                     shortLatest!, _patternDetectorFactory, _featureEngine, null,
                     NullLogger<ShortSignalTriggerService>.Instance);
+                var shortIntervals = (_shortSignalSettings.Profiles ?? [])
+                    .Where(profile => profile.Enabled
+                        && profile.InstrumentId.Equals(run.InstrumentId, StringComparison.OrdinalIgnoreCase)
+                        && profile.StrategyId.Equals(run.StrategyId, StringComparison.OrdinalIgnoreCase))
+                    .Select(profile => profile.IntervalSeconds).Distinct().ToArray();
+                var shortDeadlines = new SortedSet<DateTime>();
+                string? latestSourceEventId = null;
                 DateTime? previousEventTimeUtc = null;
                 var processedThisBatch = 0;
 
@@ -248,10 +258,30 @@ namespace TradingBot.Infrastructure.Services
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var record = records[index];
+                    var availableAtUtc = AvailabilityTime(record);
                     var isWarmup = index < run.ProcessedEventCount;
                     if (!isWarmup)
                     {
                         await DelayForSpeedAsync(previousEventTimeUtc, record.EventTimeUtc, run.SpeedMultiplier, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (shortTrigger != null)
+                    {
+                        while (shortDeadlines.Count > 0 && shortDeadlines.Min <= availableAtUtc)
+                        {
+                            var deadline = shortDeadlines.Min;
+                            shortDeadlines.Remove(deadline);
+                            shortLatest!.AdvanceTo(deadline);
+                            var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
+                            if (isWarmup) continue;
+                            foreach (var selected in shortSignals)
+                            {
+                                var features = _featureEngine.ComputeFeatures(
+                                    quoteState.CreateFeatureInput(selected.Candles, deadline));
+                                await PersistSignalAsync(db, run, latestSourceEventId!, selected.Candidate, features,
+                                    cancellationToken, deadline).ConfigureAwait(false);
+                            }
+                        }
                     }
 
                     quoteState.Apply(record);
@@ -263,18 +293,19 @@ namespace TradingBot.Infrastructure.Services
                         {
                             EventId = record.EventId, InstrumentId = record.InstrumentId, Symbol = record.Symbol,
                             Kind = Enum.Parse<MarketDataEventKind>(record.DataType, true),
-                            EventTimeUtc = record.EventTimeUtc, ReceivedTimeUtc = record.EventTimeUtc,
+                            EventTimeUtc = record.EventTimeUtc, ReceivedTimeUtc = availableAtUtc,
                             Source = record.Source, Sequence = record.Sequence, IsFinal = record.IsFinal,
                             Price = record.Price, Size = record.Size
                         });
-                        var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, record.EventTimeUtc, cancellationToken).ConfigureAwait(false);
-                        if (!isWarmup)
+                        if (record.DataType.Equals("trade", StringComparison.OrdinalIgnoreCase))
                         {
-                            foreach (var selected in shortSignals)
+                            foreach (var interval in shortIntervals)
                             {
-                                var features = _featureEngine.ComputeFeatures(
-                                    quoteState.CreateFeatureInput(selected.Candles, record.EventTimeUtc));
-                                await PersistSignalAsync(db, run, record.EventId, selected.Candidate, features, cancellationToken).ConfigureAwait(false);
+                                var windowTicks = TimeSpan.FromSeconds(interval).Ticks;
+                                var windowStartTicks = record.EventTimeUtc.Ticks - record.EventTimeUtc.Ticks % windowTicks;
+                                var deadline = new DateTime(windowStartTicks, DateTimeKind.Utc)
+                                    .AddSeconds(interval + _shortAggregateSettings.AllowedLatenessSeconds);
+                                if (deadline > availableAtUtc) shortDeadlines.Add(deadline);
                             }
                         }
                     }
@@ -317,6 +348,7 @@ namespace TradingBot.Infrastructure.Services
                     }
 
                     previousEventTimeUtc = record.EventTimeUtc;
+                    latestSourceEventId = record.EventId;
                     if (isWarmup) continue;
 
                     await db.Entry(run).ReloadAsync(cancellationToken).ConfigureAwait(false);
@@ -341,6 +373,24 @@ namespace TradingBot.Infrastructure.Services
 
                 if (run.ProcessedEventCount == records.Count)
                 {
+                    if (shortTrigger != null)
+                    {
+                        while (shortDeadlines.Count > 0 && shortDeadlines.Min < run.ToUtc)
+                        {
+                            var deadline = shortDeadlines.Min;
+                            shortDeadlines.Remove(deadline);
+                            shortLatest!.AdvanceTo(deadline);
+                            var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
+                            foreach (var selected in shortSignals)
+                            {
+                                var features = _featureEngine.ComputeFeatures(
+                                    quoteState.CreateFeatureInput(selected.Candles, deadline));
+                                await PersistSignalAsync(db, run, latestSourceEventId!, selected.Candidate, features,
+                                    cancellationToken, deadline).ConfigureAwait(false);
+                            }
+                        }
+                        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    }
                     if (_candidateResearchService != null)
                     {
                         await _candidateResearchService.LabelMatureCandidatesAsync(run.ToUtc, run.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -415,7 +465,8 @@ namespace TradingBot.Infrastructure.Services
             string sourceEventId,
             PatternCandidate pattern,
             MarketFeatures features,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            DateTime? availableAtUtc = null)
         {
             var context = PipelineContext.CreateForSignal(
                 run.InstrumentId,
@@ -436,6 +487,8 @@ namespace TradingBot.Infrastructure.Services
             {
                 metadata[item.Key] = item.Value;
             }
+            if (availableAtUtc.HasValue)
+                metadata[ReplayTradeSimulator.AvailableAtMetadataKey] = availableAtUtc.Value.ToString("O", CultureInfo.InvariantCulture);
             db.ReplaySignalRecords.Add(new ReplaySignalRecord
             {
                 ReplayRunId = run.Id,
@@ -498,6 +551,21 @@ namespace TradingBot.Infrastructure.Services
                 && profile.StrategyId.Equals(strategyId, StringComparison.OrdinalIgnoreCase)) ? instrument : null;
         }
 
+        private static DateTime AvailabilityTime(MarketDatasetRecord record) =>
+            record.ReceivedTimeUtc > record.EventTimeUtc ? record.ReceivedTimeUtc : record.EventTimeUtc;
+
+        private static void EnsureMonotonicAvailability(IReadOnlyList<MarketDatasetRecord> records)
+        {
+            DateTime? previous = null;
+            foreach (var record in records)
+            {
+                var available = AvailabilityTime(record);
+                if (previous.HasValue && available < previous.Value)
+                    throw new InvalidDataException("Short replay input has receive-time order inconsistent with event-time order; refusing a look-ahead replay.");
+                previous = available;
+            }
+        }
+
         private string GetPatternVersion(string instrumentId, string strategyId)
         {
             var instrument = GetShortReplayInstrument(instrumentId, strategyId);
@@ -513,7 +581,7 @@ namespace TradingBot.Infrastructure.Services
                 instrument.AllowedDirections
             }, JsonOptions);
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
-            return $"{_patternDetectorFactory.DetectorVersion}+short-replay-{hash}";
+            return $"{_patternDetectorFactory.DetectorVersion}+short-replay-v2-{hash}";
         }
 
         private static bool IsHealthyTick(MarketDatasetRecord record) =>

@@ -230,7 +230,7 @@ namespace TradingBot.Tests
             records[5].Size = 40m;
             records[6].Size = 40m;
             await using var harness = await ReplayHarness.CreateAsync(records, trading: trading, shortSignals: shortSignals);
-            var run = await harness.Service.StartAsync(Request());
+            var run = await harness.Service.StartAsync(Request() with { ToUtc = StartUtc.AddSeconds(15) });
             run = await harness.Service.ProcessBatchAsync(run.Id, 4);
             Assert.Empty(await harness.Service.GetSignalsAsync(run.Id));
 
@@ -240,7 +240,9 @@ namespace TradingBot.Tests
             Assert.Equal(ReplayRunStatus.Completed, run.Status);
             Assert.Equal(Timeframe.FiveSeconds, signal.Timeframe);
             Assert.Equal(StartUtc.AddSeconds(10), signal.DetectedAtUtc);
-            Assert.Equal("trade-close", signal.SourceEventId);
+            Assert.Equal("bid-decision", signal.SourceEventId);
+            using (var metadata = JsonDocument.Parse(signal.MetadataJson))
+                Assert.Equal(StartUtc.AddSeconds(12), metadata.RootElement.GetProperty("replayAvailableAtUtc").GetDateTime());
             var backtest = await harness.CreateBacktestService().RunAsync(run.Id, new ReplayBacktestRequest());
             var trade = Assert.Single(backtest.Trades);
             Assert.Equal("Closed", trade.Status);
@@ -273,6 +275,76 @@ namespace TradingBot.Tests
             run = await harness.CreateFreshService().ProcessBatchAsync(run.Id, 100);
             Assert.Equal(ReplayRunStatus.Faulted, run.Status);
             Assert.Contains("configuration changed", run.LastError, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task VirtualTimerClosesShortBarWithoutAnotherTickButDoesNotInventFill()
+        {
+            var trading = new TradingSettings { Instruments =
+            [
+                new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                    StrategyIds = [PipelineContractVersions.DefaultStrategyId] }
+            ] };
+            var shortSignals = new ShortSignalSettings { Profiles =
+            [
+                new ShortSignalProfile { InstrumentId = "US-STK-SPY-SMART",
+                    StrategyId = PipelineContractVersions.DefaultStrategyId, IntervalSeconds = 5,
+                    PatternTypes = [PatternType.Hammer], MinimumBars = 2,
+                    MinimumConfidence = 0.5m, CooldownSeconds = 0, MaximumSignalAgeSeconds = 15 }
+            ] };
+            await using var harness = await ReplayHarness.CreateAsync(
+                [Quote("trade-0", "trade", StartUtc.AddMilliseconds(250), 100m),
+                    Quote("trade-5", "trade", StartUtc.AddSeconds(5.25), 100.01m)],
+                trading: trading, shortSignals: shortSignals);
+            var request = Request() with { ToUtc = StartUtc.AddSeconds(15) };
+            var first = await harness.Service.StartAsync(request);
+            first = await harness.Service.ProcessBatchAsync(first.Id, 100);
+            var signal = Assert.Single(await harness.Service.GetSignalsAsync(first.Id));
+            Assert.Equal(ReplayRunStatus.Completed, first.Status);
+            Assert.Equal("trade-5", signal.SourceEventId);
+            using (var metadata = JsonDocument.Parse(signal.MetadataJson))
+                Assert.Equal(StartUtc.AddSeconds(12), metadata.RootElement.GetProperty("replayAvailableAtUtc").GetDateTime());
+
+            var backtest = await harness.CreateBacktestService().RunAsync(first.Id, new ReplayBacktestRequest());
+            Assert.Equal("NoExecutableQuote", Assert.Single(backtest.Trades).Status);
+            Assert.Equal(0, backtest.FilledTradeCount);
+
+            var second = await harness.Service.StartAsync(request);
+            second = await harness.Service.ProcessBatchAsync(second.Id, 1);
+            second = await harness.CreateFreshService().ProcessBatchAsync(second.Id, 100);
+            Assert.Equal(first.OutputSha256, second.OutputSha256);
+            Assert.Equal(signal.SignalId, Assert.Single(await harness.Service.GetSignalsAsync(second.Id)).SignalId);
+        }
+
+        [Fact]
+        public async Task ShortReplayExcludesTradeReceivedAfterItsWindowClosed()
+        {
+            var trading = new TradingSettings { Instruments =
+            [
+                new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                    StrategyIds = [PipelineContractVersions.DefaultStrategyId] }
+            ] };
+            var shortSignals = new ShortSignalSettings { Profiles =
+            [
+                new ShortSignalProfile { InstrumentId = "US-STK-SPY-SMART",
+                    StrategyId = PipelineContractVersions.DefaultStrategyId, IntervalSeconds = 5,
+                    PatternTypes = [PatternType.Hammer], MinimumBars = 2,
+                    MinimumConfidence = 0.5m, CooldownSeconds = 0, MaximumSignalAgeSeconds = 15 }
+            ] };
+            var late = Quote("trade-late", "trade", StartUtc.AddSeconds(5.25), 100.01m);
+            late.ReceivedTimeUtc = StartUtc.AddSeconds(13);
+            await using var harness = await ReplayHarness.CreateAsync(
+                [Quote("trade-0", "trade", StartUtc.AddMilliseconds(250), 100m), late],
+                trading: trading, shortSignals: shortSignals);
+            var run = await harness.Service.StartAsync(Request() with { ToUtc = StartUtc.AddSeconds(15) });
+            run = await harness.Service.ProcessBatchAsync(run.Id, 100);
+            Assert.Equal(ReplayRunStatus.Completed, run.Status);
+            Assert.Empty(await harness.Service.GetSignalsAsync(run.Id));
+
+            harness.Dataset.Records[0].ReceivedTimeUtc = StartUtc.AddSeconds(20);
+            var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                harness.Service.StartAsync(Request() with { ToUtc = StartUtc.AddSeconds(25) }));
+            Assert.Contains("receive-time order", error.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         private static ReplayStartRequest Request(decimal speed = 0m) => new(
