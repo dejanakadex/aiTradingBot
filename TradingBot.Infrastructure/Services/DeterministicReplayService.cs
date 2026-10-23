@@ -272,15 +272,10 @@ namespace TradingBot.Infrastructure.Services
                             var deadline = shortDeadlines.Min;
                             shortDeadlines.Remove(deadline);
                             shortLatest!.AdvanceTo(deadline);
-                            var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
+                            var shortCollection = await shortTrigger.CollectWithResearchAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
                             if (isWarmup) continue;
-                            foreach (var selected in shortSignals)
-                            {
-                                var features = _featureEngine.ComputeFeatures(
-                                    quoteState.CreateFeatureInput(selected.Candles, deadline));
-                                await PersistSignalAsync(db, run, latestSourceEventId!, selected.Candidate, features,
-                                    cancellationToken, deadline).ConfigureAwait(false);
-                            }
+                            await PersistShortCollectionAsync(db, run, latestSourceEventId!, quoteState,
+                                shortCollection, deadline, cancellationToken).ConfigureAwait(false);
                         }
                     }
 
@@ -380,14 +375,9 @@ namespace TradingBot.Infrastructure.Services
                             var deadline = shortDeadlines.Min;
                             shortDeadlines.Remove(deadline);
                             shortLatest!.AdvanceTo(deadline);
-                            var shortSignals = await shortTrigger.CollectAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
-                            foreach (var selected in shortSignals)
-                            {
-                                var features = _featureEngine.ComputeFeatures(
-                                    quoteState.CreateFeatureInput(selected.Candles, deadline));
-                                await PersistSignalAsync(db, run, latestSourceEventId!, selected.Candidate, features,
-                                    cancellationToken, deadline).ConfigureAwait(false);
-                            }
+                            var shortCollection = await shortTrigger.CollectWithResearchAsync(shortInstrument!, deadline, cancellationToken).ConfigureAwait(false);
+                            await PersistShortCollectionAsync(db, run, latestSourceEventId!, quoteState,
+                                shortCollection, deadline, cancellationToken).ConfigureAwait(false);
                         }
                         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -459,6 +449,37 @@ namespace TradingBot.Infrastructure.Services
             return ToSnapshot(run);
         }
 
+        private async Task PersistShortCollectionAsync(
+            TradingBotDbContext db,
+            ReplayRunRecord run,
+            string sourceEventId,
+            ReplayQuoteState quoteState,
+            ShortSignalCollection collection,
+            DateTime availableAtUtc,
+            CancellationToken cancellationToken)
+        {
+            if (_candidateResearchService != null)
+            {
+                foreach (var research in collection.ResearchBatches)
+                {
+                    var quote = quoteState.CreateFeatureInput(research.Candles, availableAtUtc);
+                    var features = _featureEngine.ComputeFeatures(quote);
+                    var context = new CandidateEvaluationContext(features.Regime,
+                        features.NormalizedLiquidity, features.AtrToPriceRatio,
+                        availableAtUtc, quote.Bid, quote.BidTimeUtc, quote.Ask, quote.AskTimeUtc);
+                    await _candidateResearchService.PersistBatchAsync(research.Batch, sourceEventId,
+                        run.Id, context, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            foreach (var selected in collection.Signals)
+            {
+                var features = _featureEngine.ComputeFeatures(
+                    quoteState.CreateFeatureInput(selected.Candles, availableAtUtc));
+                await PersistSignalAsync(db, run, sourceEventId, selected.Candidate, features,
+                    cancellationToken, availableAtUtc).ConfigureAwait(false);
+            }
+        }
+
         private async Task PersistSignalAsync(
             TradingBotDbContext db,
             ReplayRunRecord run,
@@ -468,15 +489,10 @@ namespace TradingBot.Infrastructure.Services
             CancellationToken cancellationToken,
             DateTime? availableAtUtc = null)
         {
-            var context = PipelineContext.CreateForSignal(
-                run.InstrumentId,
-                $"{pattern.Direction}|{pattern.PatternType}|{pattern.Timeframe}|{pattern.DetectedAtUtc:O}",
-                run.StrategyId,
-                run.FeatureVersion,
-                run.PatternVersion);
-            if (db.ReplaySignalRecords.Local.Any(item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId)
+            var signalId = pattern.Context.SignalId;
+            if (db.ReplaySignalRecords.Local.Any(item => item.ReplayRunId == run.Id && item.SignalId == signalId)
                 || await db.ReplaySignalRecords.AnyAsync(
-                    item => item.ReplayRunId == run.Id && item.SignalId == context.SignalId,
+                    item => item.ReplayRunId == run.Id && item.SignalId == signalId,
                     cancellationToken).ConfigureAwait(false))
             {
                 return;
@@ -492,7 +508,7 @@ namespace TradingBot.Infrastructure.Services
             db.ReplaySignalRecords.Add(new ReplaySignalRecord
             {
                 ReplayRunId = run.Id,
-                SignalId = context.SignalId,
+                SignalId = signalId,
                 SourceEventId = sourceEventId,
                 PatternType = pattern.PatternType,
                 Direction = pattern.Direction,
@@ -569,7 +585,7 @@ namespace TradingBot.Infrastructure.Services
         private string GetPatternVersion(string instrumentId, string strategyId)
         {
             var instrument = GetShortReplayInstrument(instrumentId, strategyId);
-            if (instrument == null) return _patternDetectorFactory.DetectorVersion;
+            if (instrument == null) return $"{_patternDetectorFactory.DetectorVersion}+replay-signal-v2";
             var profiles = (_shortSignalSettings.Profiles ?? [])
                 .Where(profile => profile.Enabled
                     && profile.InstrumentId.Equals(instrumentId, StringComparison.OrdinalIgnoreCase)
@@ -581,7 +597,7 @@ namespace TradingBot.Infrastructure.Services
                 instrument.AllowedDirections
             }, JsonOptions);
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
-            return $"{_patternDetectorFactory.DetectorVersion}+short-replay-v2-{hash}";
+            return $"{_patternDetectorFactory.DetectorVersion}+short-replay-v3-{hash}";
         }
 
         private static bool IsHealthyTick(MarketDatasetRecord record) =>
@@ -693,6 +709,7 @@ namespace TradingBot.Infrastructure.Services
             foreach (var item in candidates)
             {
                 canonical.Append(item.CandidateKey).Append('|').Append(item.SourceEventId).Append('|')
+                    .Append(item.EvaluatedAtUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.Outcome).Append('|').Append(item.DecisionStage).Append('|')
                     .Append(item.ReferencePrice.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
@@ -711,6 +728,9 @@ namespace TradingBot.Infrastructure.Services
             {
                 var label = item.Label;
                 canonical.Append(item.CandidateKey).Append('|').Append(label.HorizonSeconds).Append('|')
+                    .Append(label.WindowStartUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
+                    .Append(label.WindowEndUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
+                    .Append(label.EntryPrice.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(label.Status).Append('|').Append(label.TargetStopOutcome).Append('|')
                     .Append(Decimal(label.ExitPrice)).Append('|').Append(Decimal(label.MaximumFavorableExcursionBps)).Append('|')
                     .Append(Decimal(label.HorizonExitPrice)).Append('|').Append(Decimal(label.HorizonGrossReturnBps)).Append('|')

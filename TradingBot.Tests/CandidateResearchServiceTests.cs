@@ -89,6 +89,70 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ShortCandidateLabelStartsAtAvailabilityAndExcludesEarlierTicks()
+        {
+            await using var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<TradingBotDbContext>(options => options.UseSqlite(connection));
+            await using var provider = services.BuildServiceProvider();
+            var factory = provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>();
+            await using (var db = await factory.CreateDbContextAsync()) await db.Database.EnsureCreatedAsync();
+
+            var market = new[]
+            {
+                Price("before-availability", StartUtc.AddSeconds(1), 200m),
+                Price("after-availability", StartUtc.AddSeconds(11), 100.05m),
+                Price("horizon", StartUtc.AddSeconds(15), 100.10m)
+            };
+            var service = new CandidateResearchService(new FakeDatasetStore(market), factory,
+                new FixedClock(StartUtc.AddMinutes(1)),
+                Options.Create(new CandidateLabelingSettings { HorizonsSeconds = [5],
+                    DataAvailabilityGraceSeconds = 0 }),
+                NullLogger<CandidateResearchService>.Instance);
+            var candidate = new PatternCandidate(PatternType.Hammer, "SPY", Timeframe.FiveSeconds,
+                StartUtc, 0.75m, metadata: new Dictionary<string, string> { ["referencePrice"] = "100" },
+                context: PipelineContext.CreateForSignal("US-STK-SPY-SMART", "LONG|HAMMER|5S"));
+            var batch = new PatternDetectionBatch
+            {
+                Evaluations = [PatternEvaluation.FromCandidate(candidate)], Candidates = [candidate]
+            };
+            var quoteTime = StartUtc.AddSeconds(9.9);
+            var availability = StartUtc.AddSeconds(10);
+            var context = new CandidateEvaluationContext(MarketRegime.Unknown, null, null,
+                availability, 100m, quoteTime, 100.02m, quoteTime);
+
+            Assert.Equal(1, await service.PersistBatchAsync(batch, "source-tick", evaluationContext: context));
+            var stored = Assert.Single(await service.GetCandidatesAsync());
+            Assert.Equal(availability, stored.EvaluatedAtUtc);
+            var pending = Assert.Single(await service.GetLabelsAsync(stored.Id));
+            Assert.Equal(availability, pending.WindowStartUtc);
+            Assert.Equal(StartUtc.AddSeconds(15), pending.WindowEndUtc);
+            Assert.Equal(100.01m, pending.EntryPrice);
+
+            Assert.Equal(1, await service.LabelMatureCandidatesAsync(StartUtc.AddSeconds(15)));
+            var complete = Assert.Single(await service.GetLabelsAsync(stored.Id));
+            Assert.Equal(CandidateLabelStatus.Complete, complete.Status);
+            Assert.Equal(DeterministicReplayService.ComputeInputHash(market.Skip(1).ToArray()), complete.InputSha256);
+
+            var laterDetection = StartUtc.AddSeconds(20);
+            var staleCandidate = new PatternCandidate(PatternType.Hammer, "SPY", Timeframe.FiveSeconds,
+                laterDetection, 0.75m, metadata: new Dictionary<string, string> { ["referencePrice"] = "100" },
+                context: PipelineContext.CreateForSignal("US-STK-SPY-SMART", "LONG|HAMMER|5S|STALE"));
+            var staleBatch = new PatternDetectionBatch
+            {
+                Evaluations = [PatternEvaluation.FromCandidate(staleCandidate)], Candidates = [staleCandidate]
+            };
+            var staleContext = new CandidateEvaluationContext(MarketRegime.Unknown, null, null,
+                StartUtc.AddSeconds(30), 100m, StartUtc.AddSeconds(28), 100.02m, StartUtc.AddSeconds(28));
+            Assert.Equal(1, await service.PersistBatchAsync(staleBatch, "stale-tick", evaluationContext: staleContext));
+            var staleRecord = Assert.Single(await service.GetCandidatesAsync(), item => item.SignalId == staleCandidate.Context.SignalId);
+            var insufficient = Assert.Single(await service.GetLabelsAsync(staleRecord.Id));
+            Assert.Equal(CandidateLabelStatus.InsufficientData, insufficient.Status);
+            Assert.Null(insufficient.NetReturnBps);
+        }
+
+        [Fact]
         public async Task MigrationCreatesCandidateAndLabelTables()
         {
             await using var connection = new SqliteConnection("Data Source=:memory:");

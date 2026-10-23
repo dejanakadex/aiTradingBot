@@ -13,6 +13,7 @@ namespace TradingBot.Application.Configuration
         public decimal SlippagePerSideBps { get; set; } = 0.75m;
         public decimal FallbackRoundTripSpreadBps { get; set; } = 1.5m;
         public int MaximumTickGapSeconds { get; set; } = 5;
+        public int MaximumEntryQuoteAgeMilliseconds { get; set; } = 1000;
 
         public IReadOnlyList<string> GetValidationErrors()
         {
@@ -26,6 +27,7 @@ namespace TradingBot.Application.Configuration
             if (StopMoveBps <= 0m) errors.Add("CandidateLabeling:StopMoveBps must be greater than zero.");
             if (CommissionPerSideBps < 0m || SlippagePerSideBps < 0m || FallbackRoundTripSpreadBps < 0m) errors.Add("CandidateLabeling cost assumptions cannot be negative.");
             if (MaximumTickGapSeconds <= 0) errors.Add("CandidateLabeling:MaximumTickGapSeconds must be greater than zero.");
+            if (MaximumEntryQuoteAgeMilliseconds <= 0) errors.Add("CandidateLabeling:MaximumEntryQuoteAgeMilliseconds must be greater than zero.");
             return errors;
         }
     }

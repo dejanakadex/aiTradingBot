@@ -51,7 +51,7 @@ namespace TradingBot.Infrastructure.Services
             if (batch.Evaluations.Count == 0) return 0;
 
             var prefix = ScopePrefix(replayRunId);
-            var emitted = batch.Candidates.Select(item => item.PatternKey).ToHashSet(StringComparer.Ordinal);
+            var emitted = batch.Candidates.Select(item => item.Context.SignalId).ToHashSet();
             var recordKeys = batch.Evaluations.Select(item => $"{prefix}|{item.EvaluationKey}").Distinct(StringComparer.Ordinal).ToArray();
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var existing = (await db.ResearchCandidateRecords.AsNoTracking()
@@ -67,9 +67,15 @@ namespace TradingBot.Infrastructure.Services
                 var recordKey = $"{prefix}|{evaluation.EvaluationKey}";
                 if (!existing.Add(recordKey)) continue;
                 var candidate = evaluation.Candidate;
+                var availableAt = evaluationContext?.AvailableAtUtc is DateTime availability
+                    ? ToUtc(availability) : ToUtc(evaluation.EvaluatedAtUtc);
+                if (availableAt < ToUtc(evaluation.EvaluatedAtUtc))
+                    throw new ArgumentException("Candidate availability cannot precede detection time.", nameof(evaluationContext));
+                var entryMid = evaluationContext?.AvailableAtUtc.HasValue == true
+                    ? FreshEntryMid(evaluationContext, availableAt) : evaluation.ReferencePrice;
                 var outcome = candidate == null
                     ? ResearchCandidateOutcome.Rejected
-                    : emitted.Contains(evaluation.EvaluationKey)
+                    : emitted.Contains(candidate.Context.SignalId)
                         ? ResearchCandidateOutcome.Accepted
                         : ResearchCandidateOutcome.Blocked;
                 var stage = outcome switch
@@ -96,7 +102,7 @@ namespace TradingBot.Infrastructure.Services
                     PatternType = evaluation.PatternType,
                     Direction = evaluation.Direction,
                     Timeframe = evaluation.Timeframe,
-                    EvaluatedAtUtc = ToUtc(evaluation.EvaluatedAtUtc),
+                    EvaluatedAtUtc = availableAt,
                     ReferencePrice = evaluation.ReferencePrice,
                     Confidence = candidate?.Confidence ?? evaluation.FinalScore,
                     Outcome = outcome,
@@ -119,13 +125,15 @@ namespace TradingBot.Infrastructure.Services
                     record.Labels.Add(new CandidateLabelRecord
                     {
                         HorizonSeconds = horizon,
-                        Status = CandidateLabelStatus.Pending,
+                        Status = entryMid is > 0m ? CandidateLabelStatus.Pending : CandidateLabelStatus.InsufficientData,
                         TargetStopOutcome = TargetStopOutcome.Neither,
                         WindowStartUtc = record.EvaluatedAtUtc,
                         WindowEndUtc = record.EvaluatedAtUtc.AddSeconds(horizon),
-                        EntryPrice = record.ReferencePrice,
+                        EntryPrice = entryMid ?? 0m,
                         LabelVersion = LabelVersion,
-                        ReasonsJson = JsonSerializer.Serialize(new[] { "Waiting for the complete as-of label horizon." }, JsonOptions)
+                        ReasonsJson = JsonSerializer.Serialize(entryMid is > 0m
+                            ? new[] { "Waiting for the complete as-of label horizon." }
+                            : new[] { "No fresh bid/ask midpoint was available when this short signal became actionable." }, JsonOptions)
                     });
                 }
                 db.ResearchCandidateRecords.Add(record);
@@ -191,16 +199,16 @@ namespace TradingBot.Infrastructure.Services
                 if (matured.Length == 0) continue;
                 var records = await _datasetStore.ReadAsync(new DatasetQuery(
                     candidate.InstrumentId,
-                    candidate.EvaluatedAtUtc,
+                    matured[0].WindowStartUtc,
                     matured[^1].WindowEndUtc.AddTicks(1),
                     new[] { "bar", "bid", "ask", "trade" }), cancellationToken).ConfigureAwait(false);
                 var prices = CreatePriceObservations(records);
                 var spreads = CreateSpreadObservations(records);
                 foreach (var label in matured)
                 {
-                    var result = _calculator.Calculate(candidate.Direction, candidate.ReferencePrice,
-                        candidate.EvaluatedAtUtc, label.WindowEndUtc, asOf, prices, spreads);
-                    var input = records.Where(item => item.EventTimeUtc > candidate.EvaluatedAtUtc
+                    var result = _calculator.Calculate(candidate.Direction, label.EntryPrice,
+                        label.WindowStartUtc, label.WindowEndUtc, asOf, prices, spreads);
+                    var input = records.Where(item => item.EventTimeUtc > label.WindowStartUtc
                         && item.EventTimeUtc <= label.WindowEndUtc)
                         .OrderBy(item => item.EventTimeUtc).ThenBy(item => item.ReceivedTimeUtc)
                         .ThenBy(item => item.EventId, StringComparer.Ordinal).ToArray();
@@ -282,6 +290,20 @@ namespace TradingBot.Infrastructure.Services
                 if (bid.HasValue && ask >= bid) result.Add(new CandidateSpreadObservation(item.EventTimeUtc, bid.Value, ask.Value));
             }
             return result;
+        }
+
+        private decimal? FreshEntryMid(CandidateEvaluationContext context, DateTime availableAtUtc)
+        {
+            if (context.Bid is not > 0m || context.Ask is not > 0m || context.Ask < context.Bid
+                || !context.BidTimeUtc.HasValue || !context.AskTimeUtc.HasValue)
+                return null;
+            var maximumAge = TimeSpan.FromMilliseconds(_settings.MaximumEntryQuoteAgeMilliseconds);
+            var bidAt = ToUtc(context.BidTimeUtc.Value);
+            var askAt = ToUtc(context.AskTimeUtc.Value);
+            if (bidAt > availableAtUtc || askAt > availableAtUtc
+                || availableAtUtc - bidAt > maximumAge || availableAtUtc - askAt > maximumAge)
+                return null;
+            return (context.Bid.Value + context.Ask.Value) / 2m;
         }
 
         private static string ScopePrefix(Guid? replayRunId) => replayRunId?.ToString("N").ToUpperInvariant() ?? "LIVE";

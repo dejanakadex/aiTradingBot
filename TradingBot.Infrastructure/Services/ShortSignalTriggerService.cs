@@ -53,19 +53,30 @@ public sealed class ShortSignalTriggerService
     /// <summary>Evaluates the live short-signal rules in an isolated replay without publishing to the order pipeline.</summary>
     public async Task<IReadOnlyList<ShortSignalEvaluation>> CollectAsync(
         ConfiguredInstrument instrument, DateTime nowUtc, CancellationToken cancellationToken = default)
+        => (await CollectWithResearchAsync(instrument, nowUtc, cancellationToken).ConfigureAwait(false)).Signals;
+
+    /// <summary>Returns both emitted signals and all evaluated short patterns for isolated replay research.</summary>
+    public async Task<ShortSignalCollection> CollectWithResearchAsync(
+        ConfiguredInstrument instrument, DateTime nowUtc, CancellationToken cancellationToken = default)
     {
         var collected = new List<ShortSignalEvaluation>();
+        var research = new List<ShortSignalResearchBatch>();
         await ProcessCoreAsync(instrument, nowUtc, (candidate, series, _) =>
         {
             collected.Add(new ShortSignalEvaluation(candidate, series));
             return ValueTask.FromResult(true);
-        }, false, cancellationToken).ConfigureAwait(false);
-        return collected;
+        }, false, cancellationToken, (batch, series, _) =>
+        {
+            research.Add(new ShortSignalResearchBatch(batch, series));
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+        return new ShortSignalCollection(collected, research);
     }
 
     private async Task ProcessCoreAsync(ConfiguredInstrument instrument, DateTime nowUtc,
         Func<PatternCandidate, IReadOnlyList<Candle>, CancellationToken, ValueTask<bool>> publish,
-        bool persistResearch, CancellationToken cancellationToken)
+        bool persistResearch, CancellationToken cancellationToken,
+        Func<PatternDetectionBatch, IReadOnlyList<Candle>, CancellationToken, Task>? collectResearch = null)
     {
         var profiles = (_settings.Profiles ?? [])
             .Where(profile => profile.Enabled
@@ -79,14 +90,16 @@ public sealed class ShortSignalTriggerService
         try
         {
             foreach (var profile in profiles)
-                await ProcessProfileAsync(instrument, profile, ToUtc(nowUtc), publish, persistResearch, cancellationToken).ConfigureAwait(false);
+                await ProcessProfileAsync(instrument, profile, ToUtc(nowUtc), publish, persistResearch,
+                    cancellationToken, collectResearch).ConfigureAwait(false);
         }
         finally { gate.Release(); }
     }
 
     private async Task ProcessProfileAsync(ConfiguredInstrument instrument, ShortSignalProfile profile, DateTime nowUtc,
         Func<PatternCandidate, IReadOnlyList<Candle>, CancellationToken, ValueTask<bool>> publish,
-        bool persistResearch, CancellationToken token)
+        bool persistResearch, CancellationToken token,
+        Func<PatternDetectionBatch, IReadOnlyList<Candle>, CancellationToken, Task>? collectResearch)
     {
         var key = $"{instrument.InstrumentId}|{profile.StrategyId}|{profile.IntervalSeconds}";
         var state = _states.GetOrAdd(key, _ => new ProfileState());
@@ -131,9 +144,17 @@ public sealed class ShortSignalTriggerService
                 Candidates = selected == null ? [] : [selected]
             };
             if (persistResearch && _research != null)
+            {
+                var quote = _latest.Get(instrument.InstrumentId);
                 await _research.PersistBatchAsync(filtered,
                     $"LIVE-SHORT|{instrument.InstrumentId}|{profile.IntervalSeconds}s|{bar.WindowEndUtc:O}",
+                    evaluationContext: new CandidateEvaluationContext(
+                        TradingBot.Domain.Enums.MarketRegime.Unknown, null, null,
+                        nowUtc, quote?.Bid, quote?.BidTimeUtc, quote?.Ask, quote?.AskTimeUtc),
                     cancellationToken: token).ConfigureAwait(false);
+            }
+            if (collectResearch != null)
+                await collectResearch(filtered, series, token).ConfigureAwait(false);
 
             if (selected != null)
             {
@@ -179,3 +200,7 @@ public sealed class ShortSignalTriggerService
 }
 
 public sealed record ShortSignalEvaluation(PatternCandidate Candidate, IReadOnlyList<Candle> Candles);
+public sealed record ShortSignalResearchBatch(PatternDetectionBatch Batch, IReadOnlyList<Candle> Candles);
+public sealed record ShortSignalCollection(
+    IReadOnlyList<ShortSignalEvaluation> Signals,
+    IReadOnlyList<ShortSignalResearchBatch> ResearchBatches);

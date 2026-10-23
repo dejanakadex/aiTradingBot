@@ -229,7 +229,8 @@ namespace TradingBot.Tests
             };
             records[5].Size = 40m;
             records[6].Size = 40m;
-            await using var harness = await ReplayHarness.CreateAsync(records, trading: trading, shortSignals: shortSignals);
+            await using var harness = await ReplayHarness.CreateAsync(records, trading: trading,
+                shortSignals: shortSignals, withResearch: true);
             var run = await harness.Service.StartAsync(Request() with { ToUtc = StartUtc.AddSeconds(15) });
             run = await harness.Service.ProcessBatchAsync(run.Id, 4);
             Assert.Empty(await harness.Service.GetSignalsAsync(run.Id));
@@ -237,12 +238,29 @@ namespace TradingBot.Tests
             var resumed = harness.CreateFreshService();
             run = await resumed.ProcessBatchAsync(run.Id, 100);
             var signal = Assert.Single(await resumed.GetSignalsAsync(run.Id));
-            Assert.Equal(ReplayRunStatus.Completed, run.Status);
+            Assert.True(run.Status == ReplayRunStatus.Completed, run.LastError);
             Assert.Equal(Timeframe.FiveSeconds, signal.Timeframe);
             Assert.Equal(StartUtc.AddSeconds(10), signal.DetectedAtUtc);
             Assert.Equal("bid-decision", signal.SourceEventId);
             using (var metadata = JsonDocument.Parse(signal.MetadataJson))
                 Assert.Equal(StartUtc.AddSeconds(12), metadata.RootElement.GetProperty("replayAvailableAtUtc").GetDateTime());
+            await using (var researchDb = await harness.Factory.CreateDbContextAsync())
+            {
+                var candidates = await researchDb.ResearchCandidateRecords.AsNoTracking()
+                    .Where(candidate => candidate.ReplayRunId == run.Id).ToArrayAsync();
+                Assert.NotEmpty(candidates);
+                Assert.Contains(candidates, candidate => candidate.SignalId == signal.SignalId
+                    && candidate.Outcome == ResearchCandidateOutcome.Accepted);
+                var linked = Assert.Single(candidates, candidate => candidate.SignalId == signal.SignalId);
+                Assert.Equal(StartUtc.AddSeconds(12), linked.EvaluatedAtUtc);
+                var labels = await researchDb.CandidateLabelRecords.AsNoTracking()
+                    .Where(label => label.ResearchCandidateId == linked.Id).ToArrayAsync();
+                Assert.All(labels, label =>
+                {
+                    Assert.Equal(StartUtc.AddSeconds(12), label.WindowStartUtc);
+                    Assert.Equal(100.01m, label.EntryPrice);
+                });
+            }
             var backtest = await harness.CreateBacktestService().RunAsync(run.Id, new ReplayBacktestRequest());
             var trade = Assert.Single(backtest.Trades);
             Assert.Equal("Closed", trade.Status);
@@ -278,6 +296,37 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ShortReplayKeepsFilteredResearchCandidateWithoutEmittingSignal()
+        {
+            var trading = new TradingSettings { Instruments =
+            [
+                new InstrumentSettings { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY",
+                    StrategyIds = [PipelineContractVersions.DefaultStrategyId] }
+            ] };
+            var shortSignals = new ShortSignalSettings { Profiles =
+            [
+                new ShortSignalProfile { InstrumentId = "US-STK-SPY-SMART",
+                    StrategyId = PipelineContractVersions.DefaultStrategyId, IntervalSeconds = 5,
+                    PatternTypes = [PatternType.Hammer], MinimumBars = 2,
+                    MinimumConfidence = 0.9m, MaximumSignalAgeSeconds = 15 }
+            ] };
+            await using var harness = await ReplayHarness.CreateAsync(
+                [Quote("trade-0", "trade", StartUtc.AddMilliseconds(250), 100m),
+                    Quote("trade-5", "trade", StartUtc.AddSeconds(5.25), 100.01m)],
+                trading: trading, shortSignals: shortSignals, withResearch: true);
+            var run = await harness.Service.StartAsync(Request() with { ToUtc = StartUtc.AddSeconds(15) });
+
+            run = await harness.Service.ProcessBatchAsync(run.Id, 100);
+
+            Assert.True(run.Status == ReplayRunStatus.Completed, run.LastError);
+            Assert.Empty(await harness.Service.GetSignalsAsync(run.Id));
+            await using var db = await harness.Factory.CreateDbContextAsync();
+            Assert.Contains(await db.ResearchCandidateRecords.AsNoTracking()
+                    .Where(candidate => candidate.ReplayRunId == run.Id).ToArrayAsync(),
+                candidate => candidate.Outcome == ResearchCandidateOutcome.Blocked);
+        }
+
+        [Fact]
         public async Task VirtualTimerClosesShortBarWithoutAnotherTickButDoesNotInventFill()
         {
             var trading = new TradingSettings { Instruments =
@@ -295,7 +344,7 @@ namespace TradingBot.Tests
             await using var harness = await ReplayHarness.CreateAsync(
                 [Quote("trade-0", "trade", StartUtc.AddMilliseconds(250), 100m),
                     Quote("trade-5", "trade", StartUtc.AddSeconds(5.25), 100.01m)],
-                trading: trading, shortSignals: shortSignals);
+                trading: trading, shortSignals: shortSignals, withResearch: true);
             var request = Request() with { ToUtc = StartUtc.AddSeconds(15) };
             var first = await harness.Service.StartAsync(request);
             first = await harness.Service.ProcessBatchAsync(first.Id, 100);
@@ -304,6 +353,17 @@ namespace TradingBot.Tests
             Assert.Equal("trade-5", signal.SourceEventId);
             using (var metadata = JsonDocument.Parse(signal.MetadataJson))
                 Assert.Equal(StartUtc.AddSeconds(12), metadata.RootElement.GetProperty("replayAvailableAtUtc").GetDateTime());
+            await using (var researchDb = await harness.Factory.CreateDbContextAsync())
+            {
+                var labels = await researchDb.CandidateLabelRecords.AsNoTracking()
+                    .Where(label => label.ResearchCandidate.ReplayRunId == first.Id).ToArrayAsync();
+                Assert.NotEmpty(labels);
+                Assert.All(labels, label =>
+                {
+                    Assert.Equal(CandidateLabelStatus.InsufficientData, label.Status);
+                    Assert.Null(label.NetReturnBps);
+                });
+            }
 
             var backtest = await harness.CreateBacktestService().RunAsync(first.Id, new ReplayBacktestRequest());
             Assert.Equal("NoExecutableQuote", Assert.Single(backtest.Trades).Status);
@@ -407,13 +467,15 @@ namespace TradingBot.Tests
             private readonly IFeatureEngine _featureEngine;
             private readonly TradingSettings _trading;
             private readonly ShortSignalSettings _shortSignals;
+            private readonly bool _withResearch;
 
             private ReplayHarness(
                 SqliteConnection connection,
                 ServiceProvider provider,
                 FakeDatasetStore dataset,
                 RecordingDetectorFactory detectors,
-                IFeatureEngine featureEngine, TradingSettings trading, ShortSignalSettings shortSignals)
+                IFeatureEngine featureEngine, TradingSettings trading, ShortSignalSettings shortSignals,
+                bool withResearch)
             {
                 _connection = connection;
                 _provider = provider;
@@ -422,15 +484,18 @@ namespace TradingBot.Tests
                 _featureEngine = featureEngine;
                 _trading = trading;
                 _shortSignals = shortSignals;
+                _withResearch = withResearch;
                 Service = CreateFreshService();
             }
 
             public FakeDatasetStore Dataset { get; }
             public RecordingDetectorFactory Detectors { get; }
             public DeterministicReplayService Service { get; }
+            public IDbContextFactory<TradingBotDbContext> Factory =>
+                _provider.GetRequiredService<IDbContextFactory<TradingBotDbContext>>();
 
             public static async Task<ReplayHarness> CreateAsync(List<MarketDatasetRecord> records, IFeatureEngine? featureEngine = null,
-                TradingSettings? trading = null, ShortSignalSettings? shortSignals = null)
+                TradingSettings? trading = null, ShortSignalSettings? shortSignals = null, bool withResearch = false)
             {
                 var connection = new SqliteConnection("Data Source=:memory:");
                 await connection.OpenAsync();
@@ -447,7 +512,7 @@ namespace TradingBot.Tests
                     new FakeDatasetStore(records),
                     new RecordingDetectorFactory(),
                     featureEngine ?? new FeatureEngine(), trading ?? new TradingSettings(),
-                    shortSignals ?? new ShortSignalSettings());
+                    shortSignals ?? new ShortSignalSettings(), withResearch);
             }
 
             public DeterministicReplayService CreateFreshService() => new(
@@ -458,6 +523,9 @@ namespace TradingBot.Tests
                 _clock,
                 Options.Create(_settings),
                 NullLogger<DeterministicReplayService>.Instance,
+                candidateResearchService: _withResearch ? new CandidateResearchService(
+                    Dataset, Factory, _clock, Options.Create(new CandidateLabelingSettings()),
+                    NullLogger<CandidateResearchService>.Instance) : null,
                 tradingSettings: Options.Create(_trading), shortSignalSettings: Options.Create(_shortSignals));
 
             public ReplayBacktestService CreateBacktestService(ScalpingExecutionSettings? execution = null) => new(
@@ -517,7 +585,15 @@ namespace TradingBot.Tests
                     _owner.AllInputsWereOrderedAndAsOfCurrentEvent &= candles.All(item => item.TimestampUtc <= current.TimestampUtc);
                     return new[]
                     {
-                        new PatternCandidate(PatternType.Hammer, current.Symbol, current.Timeframe, current.TimestampUtc, 0.75m)
+                        new PatternCandidate(PatternType.Hammer, current.Symbol, current.Timeframe,
+                            current.TimestampUtc, 0.75m,
+                            metadata: new Dictionary<string, string>
+                            {
+                                ["referencePrice"] = current.Close.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                            },
+                            context: PipelineContext.CreateForSignal(current.InstrumentId,
+                                $"Long|Hammer|{current.Timeframe}|{current.TimestampUtc:O}",
+                                patternVersion: _owner.DetectorVersion))
                     };
                 }
             }
