@@ -47,6 +47,74 @@ public sealed class ReplayTradeSimulatorTests
         Assert.Null(trade.NetPnl);
     }
 
+    [Fact]
+    public void PassiveFillUsesPostedLimitRatherThanMoreFavorableTradePrint()
+    {
+        var events = Seed();
+        events.Add(Tick("trade-through", "trade", 2, 99.90m, 40m));
+        events.Add(Tick("bid-target", "bid", 3, 100.60m, 40m));
+
+        var trade = Assert.Single(Simulator(ScalpingOrderPolicy.PassiveLimit)
+            .Simulate(events, [Signal()], new ReplayBacktestRequest()));
+
+        Assert.Equal("Closed", trade.Status);
+        Assert.Equal(100m, trade.EntryPrice);
+    }
+
+    [Fact]
+    public void TimerCancelsUnfilledEntryRemainderBeforeAnotherAskCanFill()
+    {
+        var events = Seed();
+        events.Add(Tick("first-partial", "ask", 2, 100.02m, 20m));
+        events.Add(Tick("ask-after-deadline", "ask", 5, 100.02m, 40m));
+        events.Add(Tick("bid-timer-exit", "bid", 6, 100.05m, 40m));
+
+        var trade = Assert.Single(Simulator().Simulate(events, [Signal()],
+            new ReplayBacktestRequest(HoldingSeconds: 2)));
+
+        Assert.Equal("Closed", trade.Status);
+        Assert.Equal("Timer", trade.ExitReason);
+        Assert.Equal(5m, trade.FilledQuantity);
+        Assert.Equal(5m, trade.ExitedQuantity);
+    }
+
+    [Fact]
+    public void TriggeredStopWithoutBidLiquidityStillCancelsEntryAndExitsLater()
+    {
+        var events = Seed();
+        events.Add(Tick("first-partial", "ask", 2, 100.02m, 20m));
+        events.Add(Tick("stop-without-size", "bid", 3, 99.80m, 0m));
+        events.Add(Tick("ask-after-stop", "ask", 4, 100.02m, 40m));
+        events.Add(Tick("bid-rebound", "bid", 5, 100.10m, 40m));
+
+        var trade = Assert.Single(Simulator().Simulate(events, [Signal()], new ReplayBacktestRequest()));
+
+        Assert.Equal("Closed", trade.Status);
+        Assert.Equal("Stop", trade.ExitReason);
+        Assert.Equal(5m, trade.FilledQuantity);
+        Assert.Equal(5m, trade.ExitedQuantity);
+        Assert.Equal(Start.AddSeconds(5), trade.ExitTimeUtc);
+    }
+
+    [Fact]
+    public void TargetWithoutBidLiquidityCancelsEntryButRemainsALimitExit()
+    {
+        var events = Seed();
+        events.Add(Tick("first-partial", "ask", 2, 100.02m, 20m));
+        events.Add(Tick("target-without-size", "bid", 3, 100.60m, 0m));
+        events.Add(Tick("ask-after-target", "ask", 4, 100.02m, 40m));
+        events.Add(Tick("bid-below-target", "bid", 5, 100.30m, 40m));
+        events.Add(Tick("bid-target-fill", "bid", 6, 100.60m, 40m));
+
+        var trade = Assert.Single(Simulator().Simulate(events, [Signal()], new ReplayBacktestRequest()));
+
+        Assert.Equal("Closed", trade.Status);
+        Assert.Equal("Target", trade.ExitReason);
+        Assert.Equal(5m, trade.FilledQuantity);
+        Assert.Equal(5m, trade.ExitedQuantity);
+        Assert.Equal(Start.AddSeconds(6), trade.ExitTimeUtc);
+    }
+
     [Theory]
     [InlineData(3, 99.80, "Stop")]
     [InlineData(63, 100.05, "Timer")]
@@ -123,6 +191,41 @@ public sealed class ReplayTradeSimulatorTests
 
         Assert.Equal("Closed", trades[0].Status);
         Assert.Equal("NoExecutableQuote", trades[1].Status);
+    }
+
+    [Fact]
+    public void SignalsUseAvailabilityOrderAndQuotesAsOfTheirDecisionTime()
+    {
+        var events = Seed();
+        events.Add(Tick("early-bid", "bid", 4, 100m, 40m));
+        events.Add(Tick("early-ask", "ask", 4, 100.02m, 40m));
+        events.Add(new MarketDatasetRecord { EventId = "second-bar", DataType = "bar",
+            EventTimeUtc = Start.AddSeconds(5), IsFinal = true, CanTriggerTrading = true,
+            QualityStatus = "Healthy" });
+        events.Add(Tick("early-fill", "ask", 6, 100.02m, 40m));
+        events.Add(Tick("early-target", "bid", 7, 100.60m, 40m));
+        events.Add(Tick("late-bid", "bid", 9, 100m, 40m));
+        events.Add(Tick("late-ask", "ask", 9, 100.02m, 40m));
+        events.Add(Tick("late-fill", "ask", 11, 100.02m, 40m));
+        events.Add(Tick("late-target", "bid", 12, 100.60m, 40m));
+        var timerSignal = Signal() with
+        {
+            MetadataJson = $"{{\"{ReplayTradeSimulator.AvailableAtMetadataKey}\":\"{Start.AddSeconds(10):O}\"}}"
+        };
+        var earlierDecision = Signal() with
+        {
+            SignalId = Guid.Parse("02020202-0202-0202-0202-020202020202"),
+            SourceEventId = "second-bar",
+            DetectedAtUtc = Start.AddSeconds(5)
+        };
+
+        var trades = Simulator().Simulate(events, [timerSignal, earlierDecision], new ReplayBacktestRequest());
+
+        Assert.Collection(trades,
+            early => { Assert.Equal(earlierDecision.SignalId, early.SignalId); Assert.Equal("Closed", early.Status); },
+            late => { Assert.Equal(timerSignal.SignalId, late.SignalId); Assert.Equal("Closed", late.Status); });
+        Assert.Equal(Start.AddSeconds(6), trades[0].EntryTimeUtc);
+        Assert.Equal(Start.AddSeconds(11), trades[1].EntryTimeUtc);
     }
 
     private static ReplayTradeSimulator Simulator(ScalpingOrderPolicy policy = ScalpingOrderPolicy.MarketableLimit) => new(

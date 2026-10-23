@@ -13,6 +13,7 @@ namespace TradingBot.Infrastructure.Services;
 /// <summary>Event-time, long-only fixed-bracket broker model. No live service dependency.</summary>
 public sealed class ReplayTradeSimulator
 {
+    public const string SimulationContractVersion = "replay-backtest-v2";
     public const string AvailableAtMetadataKey = "replayAvailableAtUtc";
     private readonly IPositionSizer _sizer;
     private readonly ScalpingExecutionSettings _execution;
@@ -40,9 +41,14 @@ public sealed class ReplayTradeSimulator
         var occupiedUntil = DateTime.MinValue;
         var sourceIndexes = events.Select((market, index) => (market.EventId, index))
             .ToDictionary(x => x.EventId, x => x.index, StringComparer.Ordinal);
-        var orderedSignals = signals.Select(signal => (Signal: signal,
-                Source: sourceIndexes.TryGetValue(signal.SourceEventId, out var index) ? index : -1))
-            .OrderBy(x => x.Source).ThenBy(x => x.Signal.SignalId);
+        var orderedSignals = signals.Select(signal =>
+            {
+                if (!sourceIndexes.TryGetValue(signal.SourceEventId, out var source))
+                    throw new InvalidDataException($"Replay signal {signal.SignalId} has no source event.");
+                return (Signal: signal, Source: source,
+                    DecisionAt: DecisionTime(signal, events[source].EventTimeUtc));
+            })
+            .OrderBy(x => x.DecisionAt).ThenBy(x => x.Source).ThenBy(x => x.Signal.SignalId);
         var quoteCursor = -1;
         decimal? bid = null, ask = null;
         DateTime? bidAt = null, askAt = null;
@@ -50,24 +56,11 @@ public sealed class ReplayTradeSimulator
         {
             var signal = item.Signal;
             var source = item.Source;
-            if (source < 0) throw new InvalidDataException($"Replay signal {signal.SignalId} has no source event.");
-            // A short bar is detected at its window end, but may become available only
-            // when a later tick closes that window. Orders cannot predate that source event.
-            var decisionAt = signal.DetectedAtUtc > events[source].EventTimeUtc
-                ? signal.DetectedAtUtc : events[source].EventTimeUtc;
-            using (var metadata = JsonDocument.Parse(signal.MetadataJson))
-            {
-                if (metadata.RootElement.TryGetProperty(AvailableAtMetadataKey, out var available))
-                {
-                    if (available.ValueKind != JsonValueKind.String
-                        || !DateTime.TryParseExact(available.GetString(), "O", CultureInfo.InvariantCulture,
-                            DateTimeStyles.RoundtripKind, out var availableAt)
-                        || availableAt.Kind != DateTimeKind.Utc)
-                        throw new InvalidDataException($"Replay signal {signal.SignalId} has invalid availability time.");
-                    if (availableAt > decisionAt) decisionAt = availableAt;
-                }
-            }
-            while (quoteCursor < source)
+            var decisionAt = item.DecisionAt;
+            // A virtual timer may make a signal available after its source tick. Consume only
+            // quotes strictly before that instant; equal-time events have no proven ordering.
+            while (quoteCursor + 1 < events.Count
+                && (quoteCursor + 1 <= source || events[quoteCursor + 1].EventTimeUtc < decisionAt))
             {
                 var market = events[++quoteCursor];
                 if (!Healthy(market)) continue;
@@ -128,18 +121,31 @@ public sealed class ReplayTradeSimulator
             var exitValue = 0m;
             DateTime? firstFill = null, lastExit = null;
             var reason = string.Empty;
+            string? pendingMarketExit = null;
+            var entryCancelled = false;
             decimal? horizon = null;
-            for (var i = source + 1; i < events.Count; i++)
+            for (var i = Math.Max(source, quoteCursor) + 1; i < events.Count; i++)
             {
                 var market = events[i];
                 if (!Healthy(market)) continue;
                 var time = market.EventTimeUtc;
+                if (time <= decisionAt) continue;
                 var kind = market.DataType.ToLowerInvariant();
                 if (firstFill.HasValue && !horizon.HasValue && kind == "bid"
                     && time >= firstFill.Value.AddSeconds(request.HoldingSeconds))
                     horizon = (market.Price!.Value - entryValue / filled) / (entryValue / filled) * 10_000m;
 
-                if (exited == 0m && filled < requested && time >= entryReady && time <= entryExpires)
+                if (firstFill.HasValue)
+                {
+                    if (pendingMarketExit is null && kind == "bid" && market.Price <= stop)
+                        pendingMarketExit = reason == "Target" ? "TargetThenStop" : "Stop";
+                    if (pendingMarketExit is null && time >= firstFill.Value.AddSeconds(request.HoldingSeconds))
+                        pendingMarketExit = reason == "Target" ? "TargetThenTimer" : "Timer";
+                    if (pendingMarketExit is not null || (kind == "bid" && market.Price > target))
+                        entryCancelled = true;
+                }
+
+                if (!entryCancelled && filled < requested && time >= entryReady && time <= entryExpires)
                 {
                     var eligible = _execution.EntryPolicy == ScalpingOrderPolicy.PassiveLimit
                         ? kind == "trade" && market.Price < entryLimit
@@ -149,8 +155,11 @@ public sealed class ReplayTradeSimulator
                         var quantity = Math.Min(requested - filled, decimal.Floor(market.Size.Value * request.MaximumParticipation));
                         if (quantity > 0m)
                         {
-                            var basePrice = _execution.EntryPolicy == ScalpingOrderPolicy.PassiveLimit ? market.Price!.Value : market.Price!.Value;
-                            var price = basePrice * (1m + request.SlippageBps / 10_000m);
+                            // A trade through a resting bid establishes eligibility, not our execution price.
+                            // Assume the posted limit, never the more favorable trade print.
+                            var price = _execution.EntryPolicy == ScalpingOrderPolicy.PassiveLimit
+                                ? entryLimit
+                                : market.Price!.Value * (1m + request.SlippageBps / 10_000m);
                             if (_execution.EntryPolicy == ScalpingOrderPolicy.Market || price <= entryLimit)
                             {
                                 filled += quantity;
@@ -164,19 +173,7 @@ public sealed class ReplayTradeSimulator
                 if (firstFill.HasValue && kind == "bid" && time > firstFill.Value && exited < filled
                     && market.Size is > 0m)
                 {
-                    var deadline = firstFill.Value.AddSeconds(request.HoldingSeconds);
-                    var exitReason = reason switch
-                    {
-                        "Stop" or "Timer" or "TargetThenStop" or "TargetThenTimer" => reason,
-                        "Target" when market.Price <= stop => "TargetThenStop",
-                        "Target" when time >= deadline => "TargetThenTimer",
-                        "Target" when market.Price > target => "Target",
-                        "Target" => string.Empty,
-                        _ when market.Price <= stop => "Stop",
-                        _ when market.Price > target => "Target",
-                        _ when time >= deadline => "Timer",
-                        _ => string.Empty
-                    };
+                    var exitReason = pendingMarketExit ?? (market.Price > target ? "Target" : string.Empty);
                     if (exitReason.Length > 0)
                     {
                         var quantity = Math.Min(filled - exited, decimal.Floor(market.Size.Value * request.MaximumParticipation));
@@ -217,6 +214,25 @@ public sealed class ReplayTradeSimulator
                 gross, commission, net, horizon));
         }
         return results;
+    }
+
+    private static DateTime DecisionTime(ReplaySignalSnapshot signal, DateTime sourceEventTimeUtc)
+    {
+        // A short bar is detected at its window end, but may become available only
+        // when a later tick or virtual timer closes that window.
+        var decisionAt = signal.DetectedAtUtc > sourceEventTimeUtc
+            ? signal.DetectedAtUtc : sourceEventTimeUtc;
+        using var metadata = JsonDocument.Parse(signal.MetadataJson);
+        if (metadata.RootElement.TryGetProperty(AvailableAtMetadataKey, out var available))
+        {
+            if (available.ValueKind != JsonValueKind.String
+                || !DateTime.TryParseExact(available.GetString(), "O", CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var availableAt)
+                || availableAt.Kind != DateTimeKind.Utc)
+                throw new InvalidDataException($"Replay signal {signal.SignalId} has invalid availability time.");
+            if (availableAt > decisionAt) decisionAt = availableAt;
+        }
+        return decisionAt;
     }
 
     private static bool Healthy(MarketDatasetRecord market) => market.IsFinal && market.CanTriggerTrading

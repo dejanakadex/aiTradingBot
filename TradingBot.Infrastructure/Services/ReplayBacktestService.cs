@@ -52,7 +52,7 @@ public sealed class ReplayBacktestService : IReplayBacktestService
             throw new InvalidDataException("Replay signals or research output changed after completion; backtest refused.");
 
         var requestJson = JsonSerializer.Serialize(request, JsonOptions);
-        var requestHash = Hash($"replay-backtest-v1|{_simulator.ConfigurationFingerprint}|{requestJson}");
+        var requestHash = Hash($"{ReplayTradeSimulator.SimulationContractVersion}|{_simulator.ConfigurationFingerprint}|{requestJson}");
         var existing = await db.ReplayBacktestRecords.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ReplayRunId == replayRunId && x.RequestSha256 == requestHash, cancellationToken)
             .ConfigureAwait(false);
