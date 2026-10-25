@@ -4,6 +4,12 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 
 ## Trenutno stanje
 
+**FX-10, 25.10.2026.: implementirano i provjereno lokalnom simulacijom.** Dodani su zaseban quote-driven FX replay u postojećem servisu, izvršne SL/TP/timer/trailing labele, povijesni rule/risk proof, hashirani dataset/label/model ugovori, purged vremenska evaluacija te LightGBM net-win klasifikacija i gross-return regresija. Postojeći approval/rollback/cache workflow radi po paru/strategiji; dodatni, zadano isključen opt-in veže odobren model uz FX-9 pripremu i zajednički order kanal. ModelOps `fx-contract`/`fx-replay` provjeren je od JSON konfiguracije i migrirane SQLite baze do Parquet replaya. Popravljeni su binder duplikati konfiguriranih nizova, opcionalna IBKR metadata, normalizacija UTC datuma i zatvaranje CLI SQLite veze.
+
+Lokalno: **664/664 testova**, 26 novih slučajeva prema FX-9; restore uspješan, Release build sa stvarnim obveznim IBKR adapterom bez upozorenja/grešaka. Provjereni su sintetski bid/ask fill/partial/SL/TP/timer/trailing, coverage/future-input odbijanja, deterministički hash, vremenski ML workflow i integritet, holdout izolacija, odobrenje/rollback, model → FX-9 rezervacija → fake nalog te oslobađanje rezervacije kod odbijanja reda. Publish i guard za nedostajući/promijenjeni DLL prolaze. GitHub CI treba pratiti za novi commit pri pushu.
+
+Granice: bounded batch do 7 dana/200.000 događaja, hipotetska fill likvidnost, jedan par/strategija po backtestu, long USD izvršenje; nema stvarnog odobrenog EUR/USD modela, IBKR fill dokaza ni potvrde profitabilnosti. Ostaju FX-11 onboarding/UI/shadow, FX-12 stvarni paper i preostali produkcijski replay paritet točke 25. Točke 25/30/31 nisu zatvorene. [FX-10 detalji i operativni redoslijed](FX10_RESEARCH.md).
+
 **Build politika od 25.10.2026.:** službeni IBKR API `10.49.02.0` pohranjen je u repozitoriju kao obvezna ovisnost. Stvarni adapter uvijek se kompilira i registrira; fallback build bez DLL-a više nije podržan. Raniji rezultati u dva build načina niže ostaju povijesni dokaz. Aktualne upute su u [README-u](../README.md#required-ibkr-dependency).
 
 | Točka | Status | Sažetak |
@@ -66,7 +72,8 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | FX-7 — Strategije i signali | Implementirano i lokalno provjereno | Automatski FX shadow tok, zajednički kod odabira sa stock signalima, verzijska odobrenja, freshness/spread/volatility gateovi i trajni cooldown/checkpoint. 561/561 testova; stvarni živi FX signal nije potvrđen. |
 | FX-8 — Veličina, risk i troškovi | Implementirano i lokalno provjereno | Deterministička read-only procjena base units, pregledanih broker pravila, USD troškova/riska i valutnih krakova. 602/602 testova; bez stvarne provizije/margine/filla. Integracija rezervacija i izvršavanja pripada FX-9. |
 | FX-9 — Nalozi i pozicije | Implementirano i provjereno simulacijom, uz navedene granice | Eksplicitna paper priprema, zajednička atomska rezervacija/proof, finalni FX refresh, CASH callbackovi i postojeći lifecycle oba izlazna profila. 638/638 testova; stvarni broker fill/exit još nije potvrđen. |
-| FX-10 do FX-12 | Planirano | Sljedeće: FX replay, labele i modeli; zatim onboarding/shadow i zasebni stvarni paper E2E. |
+| FX-10 — Replay, labele i modeli | Implementirano i provjereno lokalnom simulacijom | 664/664 testova; zaseban bid/ask execution ugovor, vremenski ML, ručno odobrenje/rollback i opt-in FX-9 spoj. Bez stvarnog fill/model dokaza; [granice i workflow](FX10_RESEARCH.md). |
+| FX-11 do FX-12 | Planirano | Sljedeće: onboarding/UI/shadow, zatim zasebno odobren stvarni paper E2E. |
 
 ### FX-9 — Nalozi i pozicije
 

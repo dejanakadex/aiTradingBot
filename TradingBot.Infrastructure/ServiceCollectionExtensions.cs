@@ -50,6 +50,10 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IRiskManagementService, RiskManagementService>();
             services.AddTransient<IPositionSizer, PositionSizer>();
             services.AddSingleton<ForexRiskService>();
+            services.AddSingleton<ForexResearchContract>();
+            services.AddSingleton<ForexTradeSimulator>();
+            services.AddSingleton<ForexModelDecisionService>();
+            services.AddSingleton<ForexModelExecutionService>();
             services.AddSingleton<PortfolioRiskService>();
             services.AddSingleton<IPortfolioRiskService>(sp => sp.GetRequiredService<PortfolioRiskService>());
             services.AddSingleton<ForexPaperPreparationService>();

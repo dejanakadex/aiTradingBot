@@ -233,6 +233,111 @@ namespace TradingBot.Tests
             return new Harness(connection, factory, new NumericalModelService(factory, Options.Create(settings), new FixedClock(StartUtc.AddDays(10))));
         }
 
+        [Fact]
+        public async Task ForexModelUsesPriceOnlyForecastExactContractApprovalAndRollback()
+        {
+            await using var h = CreateHarness(); using var f = new ForexResearchFixture(); f.Profile.HoldingSeconds = 60;
+            var evaluationId = await SeedForexAsync(h, f);
+            var service = ForexModel(h, f);
+            var draft = await service.TrainAsync(new(evaluationId));
+            Assert.Equal(ForexResearchContract.Model, draft.ModelVersionTag);
+            Assert.True(draft.ApprovalReady, string.Join(" ", draft.ApprovalReasons));
+            Assert.True(draft.CandidateHoldout.ForecastMeanAbsoluteErrorBps < draft.BaselineHoldout.ForecastMeanAbsoluteErrorBps);
+            var c = f.Contract().Get("EURUSD", "patterns");
+            var request = new NumericalModelPredictionRequest("EURUSD", "patterns", c.Feature, .7m, (int)PatternType.BreakoutAndRetest,
+                (int)TradeDirection.Long, (int)Timeframe.FiveSeconds, 0, .002m, 2, StartUtc.AddDays(10))
+                { PatternVersion = c.Pattern, ExecutionLabelVersion = c.Label };
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.PredictAsync(request));
+            await service.DecideAsync(draft.Id, new(true, "test", "Synthetic FX holdout reviewed.", draft.OutputSha256));
+            var predictions = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => service.PredictAsync(request)));
+            Assert.All(predictions, x => { Assert.True(x.Eligible); Assert.True(x.ExpectedGrossReturnBps > 5); });
+            Assert.False((await service.PredictAsync(request with { EstimatedCostBps = 1000 })).Eligible);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.PredictAsync(request with { PatternVersion = "stock" }));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.PredictAsync(request with { NormalizedLiquidity = 1 }));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.PredictAsync(request with { StrategyId = "other" }));
+            var clone = await h.CloneAsDraftAsync(draft.Id);
+            await service.DecideAsync(clone.Id, new(true, "test", "Replacement FX model reviewed.", clone.OutputSha256));
+            Assert.Equal(clone.Id, (await service.PredictAsync(request)).ModelId);
+            await service.RollbackAsync(draft.Id, new("test", "Restore reviewed FX artifact.", draft.OutputSha256));
+            Assert.Equal(draft.Id, (await service.PredictAsync(request)).ModelId);
+            Assert.Equal(3, (await service.GetDecisionHistoryAsync(draft.Id)).Count);
+        }
+
+        [Fact]
+        public async Task ForexHoldoutChangesCannotChangeFittedModelOrProbabilityCutoff()
+        {
+            await using var a = CreateHarness(); await using var b = CreateHarness(); using var f = new ForexResearchFixture(); f.Profile.HoldingSeconds = 60;
+            var firstId = await SeedForexAsync(a, f); var secondId = await SeedForexAsync(b, f, changeHoldout: true);
+            var first = await ForexModel(a, f).TrainAsync(new(firstId)); var second = await ForexModel(b, f).TrainAsync(new(secondId));
+            Assert.Equal(first.ProbabilityThreshold, second.ProbabilityThreshold);
+            Assert.Equal(first.CandidateWalkForward, second.CandidateWalkForward);
+            Assert.NotEqual(first.CandidateHoldout, second.CandidateHoldout);
+            await using var da = a.Factory.CreateDbContext(); await using var db = b.Factory.CreateDbContext();
+            var artifactA = (await da.NumericalModelRecords.SingleAsync()).ModelArtifact;
+            var artifactB = (await db.NumericalModelRecords.SingleAsync()).ModelArtifact;
+            // ML.NET ZIP timestamps may differ; compare the actual model entries, not container timestamps.
+            using var za = new System.IO.Compression.ZipArchive(new MemoryStream(artifactA));
+            using var zb = new System.IO.Compression.ZipArchive(new MemoryStream(artifactB));
+            foreach (var entry in za.Entries.Where(x => x.Name == "Model.key"))
+            {
+                using var sa = entry.Open(); using var sb = zb.GetEntry(entry.FullName)!.Open();
+                using var ma = new MemoryStream(); using var mb = new MemoryStream(); sa.CopyTo(ma); sb.CopyTo(mb);
+                Assert.Equal(ma.ToArray(), mb.ToArray());
+            }
+        }
+
+        private static NumericalModelService ForexModel(Harness h, ForexResearchFixture f) => new(h.Factory,
+            Options.Create(new NumericalModelSettings { RandomSeed = 42, NumberOfLeaves = 4, NumberOfIterations = 30, LearningRate = .1,
+                MinimumExampleCountPerLeaf = 2, MinimumTrainingSamples = 40, MinimumValidationSelections = 5, MinimumHoldoutSelections = 5,
+                MinimumWalkForwardExpectancyImprovementBps = .1m, MinimumHoldoutExpectancyImprovementBps = 0, ProbabilityThresholds = [.5m, .6m, .7m] }),
+            new FixedClock(StartUtc.AddDays(10)), forexContract: f.Contract());
+
+        [Fact]
+        public async Task ForexEvaluationUsesPurgedTemporalWorkflowAndRejectsChangedReplay()
+        {
+            await using var h = CreateHarness(); using var f = new ForexResearchFixture(); f.Profile.HoldingSeconds = 60;
+            await SeedForexAsync(h, f);
+            await using var db = h.Factory.CreateDbContext(); var replay = await db.ReplayRunRecords.SingleAsync();
+            var evaluation = new ResearchEvaluationService(h.Factory, new FixedClock(StartUtc.AddDays(10)),
+                Options.Create(new ResearchEvaluationSettings { TrainingWindowDays = 4, ValidationWindowDays = 1, StepDays = 1, HoldoutDays = 2,
+                    MinimumTrainingSamples = 40, MinimumValidationSamples = 5, MinimumHoldoutSamples = 5, ConfidenceThresholds = [0m, .5m] }));
+            var request = new ResearchEvaluationRequest(60, StartUtc, StartUtc.AddDays(9), replay.Id, "EURUSD", "patterns");
+            var result = await evaluation.RunAsync(request);
+            var model = await ForexModel(h, f).TrainAsync(new(result.Id));
+            Assert.Equal(ForexResearchContract.Model, model.ModelVersionTag);
+            Assert.Equal(result.Id, (await evaluation.RunAsync(request)).Id);
+            var label = await db.CandidateLabelRecords.FirstAsync(); label.GrossReturnBps += 1; await db.SaveChangesAsync();
+            await Assert.ThrowsAsync<InvalidDataException>(() => evaluation.RunAsync(request));
+            await Assert.ThrowsAsync<InvalidDataException>(() => ForexModel(h, f).TrainAsync(new(result.Id)));
+        }
+
+        private static async Task<Guid> SeedForexAsync(Harness h, ForexResearchFixture f, bool changeHoldout = false)
+        {
+            var id = await h.SeedEvaluationAndLabelsAsync(); var c = f.Contract().Get("EURUSD", "patterns");
+            await using var db = h.Factory.CreateDbContext();
+            var replay = new ReplayRunRecord { Id = Guid.NewGuid(), Status = ReplayRunStatus.Completed, InstrumentId = "EURUSD", StrategyId = "patterns", StrategyVersion = c.Label };
+            db.ReplayRunRecords.Add(replay);
+            var labels = await db.CandidateLabelRecords.Include(x => x.ResearchCandidate).ToArrayAsync();
+            foreach (var l in labels)
+            {
+                var x = l.ResearchCandidate; x.ReplayRunId = replay.Id; x.InstrumentId = "EURUSD"; x.Symbol = "EURUSD"; x.StrategyId = "patterns";
+                x.FeatureVersion = c.Feature; x.PatternVersion = c.Pattern; x.LabelVersion = l.LabelVersion = c.Label;
+                x.Timeframe = Timeframe.FiveSeconds; x.NormalizedVolatility = x.NormalizedLiquidity == 2 ? .002m : .0002m; x.NormalizedLiquidity = null;
+                if (changeHoldout && x.EvaluatedAtUtc >= StartUtc.AddDays(7)) { l.GrossReturnBps *= -2; l.NetReturnBps = l.GrossReturnBps - l.EstimatedCostBps; }
+            }
+            await db.SaveChangesAsync(); replay.OutputSha256 = await DeterministicReplayService.ComputeOutputHashAsync(db, replay.Id, default);
+            var e = await db.ResearchEvaluationRunRecords.SingleAsync(x => x.Id == id);
+            e.ReplayRunId = replay.Id; e.InstrumentId = "EURUSD"; e.StrategyId = "patterns"; e.FeatureVersion = c.Feature; e.PatternVersion = c.Pattern; e.LabelVersion = c.Label;
+            var rows = labels.Select(x => new ResearchEvaluationObservation(x.ResearchCandidateId, x.ResearchCandidate.CandidateKey,
+                x.ResearchCandidate.InstrumentId, x.ResearchCandidate.StrategyId, x.ResearchCandidate.PatternType, x.ResearchCandidate.Direction,
+                x.ResearchCandidate.Timeframe, x.ResearchCandidate.EvaluatedAtUtc, x.WindowEndUtc, x.ResearchCandidate.Confidence,
+                x.ResearchCandidate.Outcome, x.ResearchCandidate.MarketRegime, x.ResearchCandidate.NormalizedLiquidity,
+                x.GrossReturnBps!.Value, x.EstimatedCostBps!.Value, x.NetReturnBps!.Value, x.MaximumFavorableExcursionBps!.Value,
+                x.MaximumAdverseExcursionBps!.Value, x.TargetStopOutcome, x.ResearchCandidate.FeatureVersion, x.ResearchCandidate.PatternVersion, x.LabelVersion, x.InputSha256)).ToArray();
+            e.InputSha256 = ResearchEvaluationService.ComputeInputHash(rows, new(60, StartUtc, StartUtc.AddDays(9), replay.Id, "EURUSD", "patterns"), StartUtc, StartUtc.AddDays(9));
+            await db.SaveChangesAsync(); return id;
+        }
+
         private sealed class Harness : IAsyncDisposable
         {
             public Harness(SqliteConnection connection, SimpleFactory factory, NumericalModelService service) { Connection = connection; Factory = factory; Service = service; }

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using TradingBot.Domain.Enums;
 using TradingBot.Domain.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace TradingBot.Infrastructure.Options;
 
@@ -10,6 +11,14 @@ namespace TradingBot.Infrastructure.Options;
 public sealed class ForexPatternSettings
 {
     public ForexPatternProfile[] Profiles { get; set; } = [];
+
+    public void ReplaceConfiguredArrays(IConfiguration section)
+    {
+        var configured = section.GetSection("Profiles").GetChildren().ToArray();
+        for (var i = 0; i < Math.Min(configured.Length, Profiles.Length); i++)
+            Profiles[i].Geometry.AiAnalysisTimeframes = configured[i].GetSection("Geometry:AiAnalysisTimeframes").Get<string[]>()
+                ?? Profiles[i].Geometry.AiAnalysisTimeframes;
+    }
 
     public IReadOnlyList<string> Validate()
     {

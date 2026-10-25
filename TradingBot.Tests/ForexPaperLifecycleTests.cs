@@ -20,6 +20,42 @@ namespace TradingBot.Tests;
 public sealed class ForexPaperLifecycleTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApprovedModelRouteUsesPaperPreparationAndReleasesRejectedQueue(bool acceptQueue)
+    {
+        await using var f = await Flow.Create(ExitStrategyMode.FixedBracket);
+        using var research = new ForexResearchFixture(); research.Trading = f.Trading; research.Limits = f.Limits;
+        research.Costs.StrategyId = research.Profile.StrategyId = research.Patterns.Profiles[0].StrategyId = research.Signals.Profiles[0].Selection.StrategyId = "fx";
+        research.Profile.HoldingSeconds = 60; research.Profile.Exit = f.ExitSettings;
+        var model = new ForexPredictionStub(); var contract = research.Contract();
+        var candidate = ForexModelDecisionTests.Candidate(contract, f.Clock.UtcNow, "fx");
+        var decision = new ForexModelDecisionService(contract, model, f.Quotes, Options.Create(f.Trading), Options.Create(f.ExitSettings),
+            Options.Create(new ForexExecutionSettings()), f.Clock);
+        var settings = new ForexResearchSettings(); var channel = new TestFxChannel(acceptQueue);
+        var router = new ForexModelExecutionService(Options.Create(settings), Options.Create(f.Trading), decision, f.Prepare, channel, f.Portfolio, f.Arbitration);
+        await router.ProcessAsync(candidate, default); Assert.Null(model.Last); Assert.Null(channel.Plan);
+        settings.AutomaticPaperSignalsEnabled = true;
+        if (!acceptQueue)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => router.ProcessAsync(candidate, default));
+            Assert.Equal(PortfolioReservationStatus.Released, (await f.Reservation()).Status); return;
+        }
+        await router.ProcessAsync(candidate, default); Assert.NotNull(channel.Plan);
+        Assert.Contains(ForexResearchContract.Model, channel.Plan.Context.StrategyVersion);
+        await f.Executor.ExecutePlanAsync(channel.Plan, default);
+        var entry = await f.Entry(); Assert.Equal(20000, entry.RequestedQuantity);
+        await f.Broker.FillOpenOrderAsync(entry.BrokerOrderId, 20000, 1.10002m);
+        Assert.Equal(f.Clock.UtcNow.AddSeconds(60), (await f.State()).ExitDeadlineUtc);
+    }
+
+    private sealed class TestFxChannel(bool accept) : ITradePipelineChannel
+    {
+        public ApprovedTradePlan? Plan;
+        public System.Threading.Channels.ChannelReader<ApprovedTradePlan> ApprovedTradePlanReader => throw new NotSupportedException();
+        public ValueTask<bool> PublishAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default) { Plan = plan; return ValueTask.FromResult(accept); }
+    }
+    [Theory]
     [InlineData(ExitStrategyMode.FixedBracket, "stop")]
     [InlineData(ExitStrategyMode.FixedBracket, "target")]
     [InlineData(ExitStrategyMode.FixedBracket, "timer")]
@@ -248,6 +284,8 @@ public sealed class ForexPaperLifecycleTests
         private readonly TradingEngineStatusService _status = new();
         private readonly FeatureEngine _features = new();
         private readonly ExitStrategySettings _exitSettings;
+        public ExitStrategySettings ExitSettings => _exitSettings;
+        public SignalArbitrationService Arbitration => _arbitration;
         public ExitManagementService Exit;
 
         private Flow(SqliteConnection connection, IDbContextFactory<TradingBotDbContext> factory, ExitStrategyMode exitMode)

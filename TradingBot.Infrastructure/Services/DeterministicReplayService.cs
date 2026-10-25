@@ -16,7 +16,7 @@ using DomainCandle = TradingBot.Domain.Models.Candle;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class DeterministicReplayService : IDeterministicReplayService
+    public sealed partial class DeterministicReplayService : IDeterministicReplayService
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly IMarketDatasetStore _datasetStore;
@@ -43,7 +43,10 @@ namespace TradingBot.Infrastructure.Services
             ICandidateResearchService? candidateResearchService = null,
             IOptions<TradingSettings>? tradingSettings = null,
             IOptions<ShortSignalSettings>? shortSignalSettings = null,
-            IOptions<ShortAggregateSettings>? shortAggregateSettings = null)
+            IOptions<ShortAggregateSettings>? shortAggregateSettings = null,
+            ForexResearchContract? forexContract = null, ForexTradeSimulator? forexSimulator = null,
+            IOptions<TradingBot.Infrastructure.Options.ForexSignalSettings>? forexSignals = null,
+            IOptions<TradingBot.Infrastructure.Options.ForexPatternSettings>? forexPatterns = null)
         {
             _datasetStore = datasetStore ?? throw new ArgumentNullException(nameof(datasetStore));
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -56,6 +59,8 @@ namespace TradingBot.Infrastructure.Services
             _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
             _shortSignalSettings = shortSignalSettings?.Value ?? new ShortSignalSettings();
             _shortAggregateSettings = shortAggregateSettings?.Value ?? new ShortAggregateSettings();
+            _forexContract = forexContract; _forexSimulator = forexSimulator;
+            _forexSignals = forexSignals?.Value ?? new(); _forexPatterns = forexPatterns?.Value ?? new();
         }
 
         public async Task<ReplayRunSnapshot> StartAsync(
@@ -66,7 +71,7 @@ namespace TradingBot.Infrastructure.Services
             if (request == null) throw new ArgumentNullException(nameof(request));
             var instrumentId = Required(request.InstrumentId, nameof(request.InstrumentId));
             if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == instrumentId && x.InstrumentType == InstrumentType.Forex))
-                throw new NotSupportedException("FX pattern/trade replay awaits FX-6/FX-10. Use ReplayForexFeaturesAsync for FX-5 research.");
+                throw new NotSupportedException("Use RunForexResearchAsync (ModelOps fx-replay) for FX pattern/trade replay.");
             var strategyId = Required(request.StrategyId, nameof(request.StrategyId));
             var fromUtc = ToUtc(request.FromUtc);
             var toUtc = ToUtc(request.ToUtc);
@@ -440,6 +445,8 @@ namespace TradingBot.Infrastructure.Services
                 ReplayRunStatus.Cancelled => run.Status is ReplayRunStatus.Pending or ReplayRunStatus.Running or ReplayRunStatus.Paused,
                 _ => false
             };
+            if (run.StrategyVersion.StartsWith(ForexResearchContract.Labels, StringComparison.Ordinal))
+                throw new InvalidOperationException("FX research runs are atomic offline operations; start a new fx-replay instead of changing their status.");
             if (!allowed) throw new InvalidOperationException($"Replay run in status {run.Status} cannot transition to {target}.");
 
             run.Status = target;

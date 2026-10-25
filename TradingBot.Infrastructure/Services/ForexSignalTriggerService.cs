@@ -45,19 +45,20 @@ public sealed class ForexSignalTriggerService
         _latest = latest; _inputs = inputs; _features = features; _research = research; _db = db; _logs = logs;
     }
 
-    public async Task<IReadOnlyList<PatternCandidate>> ProcessAsync(string instrumentId, DateTime nowUtc, CancellationToken token = default)
+    public async Task<IReadOnlyList<PatternCandidate>> ProcessAsync(string instrumentId, DateTime nowUtc, CancellationToken token = default, Guid? replayRunId = null)
     {
         if (nowUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("FX signal clock must be UTC.", nameof(nowUtc));
         var output = new List<PatternCandidate>();
         foreach (var profile in _profiles.Where(x => x.Selection.InstrumentId == instrumentId))
         {
-            var key = $"{instrumentId}|{profile.Selection.StrategyId}|{profile.Selection.IntervalSeconds}";
+            var key = $"{replayRunId?.ToString("N") ?? "LIVE"}|{instrumentId}|{profile.Selection.StrategyId}|{profile.Selection.IntervalSeconds}";
             var gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync(token).ConfigureAwait(false);
-            try { output.AddRange(await ProcessProfileAsync(profile, key, nowUtc, token).ConfigureAwait(false)); }
+            try { output.AddRange(await ProcessProfileAsync(profile, key, nowUtc, token, replayRunId).ConfigureAwait(false)); }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                if (replayRunId.HasValue) throw;
                 // A research/storage failure must not reconnect the quote collector or disable other profiles.
                 _logs.CreateLogger<ForexSignalTriggerService>().LogError(ex, "FX shadow profile {Profile} failed; uncommitted bar will retry.", key);
             }
@@ -66,7 +67,7 @@ public sealed class ForexSignalTriggerService
         return output;
     }
 
-    private async Task<IReadOnlyList<PatternCandidate>> ProcessProfileAsync(ForexSignalProfile profile, string key, DateTime now, CancellationToken token)
+    private async Task<IReadOnlyList<PatternCandidate>> ProcessProfileAsync(ForexSignalProfile profile, string key, DateTime now, CancellationToken token, Guid? replayRunId)
     {
         var selection = profile.Selection;
         var instrument = _instruments.Single(x => x.InstrumentId == selection.InstrumentId);
@@ -84,7 +85,7 @@ public sealed class ForexSignalTriggerService
             var featureVersion = _inputs.Compute(instrument.InstrumentId, selection.IntervalSeconds, now)?.FeatureVersion;
             var version = detector.Version + "+" + profile.Version;
             var source = await db.ResearchCandidateRecords.AsNoTracking()
-                .Where(x => x.ReplayRunId == null && x.InstrumentId == instrument.InstrumentId && x.StrategyId == selection.StrategyId
+                .Where(x => x.ReplayRunId == replayRunId && x.InstrumentId == instrument.InstrumentId && x.StrategyId == selection.StrategyId
                     && x.Timeframe == selection.Timeframe && x.PatternVersion == version && x.FeatureVersion == featureVersion)
                 .OrderByDescending(x => x.SourceEventId).Select(x => x.SourceEventId).FirstOrDefaultAsync(token).ConfigureAwait(false);
             if (source != null && DateTime.TryParseExact(source.Split('|')[^1], "O", CultureInfo.InvariantCulture,
@@ -93,7 +94,7 @@ public sealed class ForexSignalTriggerService
         }
         // Durable cooldown spans process restarts and config revisions, but is isolated per instrument/strategy/interval.
         var lastSignal = await db.ResearchCandidateRecords.AsNoTracking()
-            .Where(x => x.ReplayRunId == null && x.InstrumentId == instrument.InstrumentId && x.StrategyId == selection.StrategyId
+            .Where(x => x.ReplayRunId == replayRunId && x.InstrumentId == instrument.InstrumentId && x.StrategyId == selection.StrategyId
                 && x.Timeframe == selection.Timeframe && x.DecisionStage == AcceptedStage && x.Outcome == ResearchCandidateOutcome.Accepted)
             .OrderByDescending(x => x.EvaluatedAtUtc).Select(x => (DateTime?)x.EvaluatedAtUtc).FirstOrDefaultAsync(token).ConfigureAwait(false);
         foreach (var bar in bars)
@@ -136,11 +137,11 @@ public sealed class ForexSignalTriggerService
                 blockers.Count > 0 ? new PatternSignalDecision("FxSignalGate", blockers) :
                 x.Candidate.Confidence < selection.MinimumConfidence ? new PatternSignalDecision("FxConfidence", ["Candidate is below the signal confidence threshold."]) :
                 selected?.PatternKey != x.EvaluationKey ? new PatternSignalDecision("FxRanking", ["A higher-ranked candidate was selected for this bar."]) :
-                new PatternSignalDecision(AcceptedStage, ["Approved shadow signal only; FX risk, costs and execution are not yet enabled."]));
+                new PatternSignalDecision(AcceptedStage, ["Signal approval only; any paper entry separately requires an approved FX model and execution gates."]));
             var filtered = new PatternDetectionBatch { Evaluations = evaluations, Candidates = selected == null ? [] : [selected], SignalDecisions = decisions };
             var added = await _research.PersistBatchAsync(filtered,
-                $"LIVE-FX-SHADOW|{key}|{bar.WindowEndUtc:O}", evaluationContext:
-                new CandidateEvaluationContext(features.Regime, null, null, now,
+                $"FX-SHADOW|{selection.InstrumentId}|{selection.StrategyId}|{selection.IntervalSeconds}|{bar.WindowEndUtc:O}", replayRunId: replayRunId, evaluationContext:
+                new CandidateEvaluationContext(features.Regime, null, features.AtrToPriceRatio, now,
                     bar.LastBid, bar.LastQuoteTimeUtc, bar.LastAsk, bar.LastQuoteTimeUtc), cancellationToken: token).ConfigureAwait(false);
             if (selected != null && added > 0) { output.Add(selected); lastSignal = now; }
             lock (_processed) _processed[key] = bar.WindowEndUtc;

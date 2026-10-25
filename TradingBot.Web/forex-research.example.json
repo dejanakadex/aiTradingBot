@@ -1,0 +1,30 @@
+{
+  "ForexResearch": {
+    "AutomaticPaperSignalsEnabled": false,
+    "Profiles": [
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "StrategyId": "eurusd-patterns",
+        "IntervalSeconds": 5,
+        "HoldingSeconds": 60,
+        "EntryTimeoutSeconds": 5,
+        "LatencyMilliseconds": 250,
+        "MaximumQuoteGapSeconds": 3,
+        "StopPips": 10,
+        "TargetPips": 30,
+        "MaximumBaseUnits": 0,
+        "StartingEquityUsd": 0,
+        "FillBaseUnitsPerQuote": 0,
+        "FillAssumptionSource": "REVIEW_REQUIRED: explicit hypothetical liquidity scenario, not quote size",
+        "Exit": {
+          "Mode": "FixedBracket",
+          "BreakEvenTriggerR": 0.8,
+          "BreakEvenOffsetR": 0.05,
+          "TrailingActivationR": 1.2,
+          "TrailingAtrMultiplier": 1.0
+        },
+        "HistoricalRules": []
+      }
+    ]
+  }
+}

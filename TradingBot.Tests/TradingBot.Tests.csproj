@@ -24,6 +24,7 @@
     <ProjectReference Include="..\TradingBot.Infrastructure\TradingBot.Infrastructure.csproj" />
     <ProjectReference Include="..\TradingBot.ShadowProbe\TradingBot.ShadowProbe.csproj" />
     <ProjectReference Include="..\TradingBot.Web\TradingBot.Web.csproj" />
+    <ProjectReference Include="..\TradingBot.ModelOps\TradingBot.ModelOps.csproj" />
   </ItemGroup>
 
   <Import Project="../third_party/ibkr/IBKR.Api.targets" />

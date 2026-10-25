@@ -72,6 +72,7 @@ try
         .ValidateOnStart();
     builder.Services.AddOptions<ShortAggregateSettings>()
         .Bind(builder.Configuration.GetSection("ShortAggregates"))
+        .PostConfigure(settings => settings.IntervalsSeconds = builder.Configuration.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>() ?? settings.IntervalsSeconds)
         .Validate(settings => settings.GetValidationErrors().Count == 0, "ShortAggregates configuration is invalid.")
         .ValidateOnStart();
     builder.Services.AddOptions<ShortSignalSettings>()
@@ -91,11 +92,17 @@ try
 
     builder.Services.AddOptions<CandidateLabelingSettings>()
         .Bind(builder.Configuration.GetSection("CandidateLabeling"))
+        .PostConfigure(settings => settings.HorizonsSeconds = builder.Configuration.GetSection("CandidateLabeling:HorizonsSeconds").Get<int[]>() ?? settings.HorizonsSeconds)
         .Validate(settings => settings.GetValidationErrors().Count == 0, "CandidateLabeling configuration is invalid. Check horizons, worker timing and cost assumptions.")
         .ValidateOnStart();
 
     builder.Services.AddOptions<ResearchEvaluationSettings>()
         .Bind(builder.Configuration.GetSection("ResearchEvaluation"))
+        .PostConfigure(settings =>
+        {
+            settings.ConfidenceThresholds = builder.Configuration.GetSection("ResearchEvaluation:ConfidenceThresholds").Get<decimal[]>() ?? settings.ConfidenceThresholds;
+            settings.CostStressMultipliers = builder.Configuration.GetSection("ResearchEvaluation:CostStressMultipliers").Get<decimal[]>() ?? settings.CostStressMultipliers;
+        })
         .Validate(settings => settings.GetValidationErrors().Count == 0, "ResearchEvaluation configuration is invalid. Check windows, sample sizes, thresholds and cost multipliers.")
         .ValidateOnStart();
 
@@ -161,6 +168,7 @@ try
 
     builder.Services.AddOptions<NumericalModelSettings>()
         .Bind(builder.Configuration.GetSection("NumericalModel"))
+        .PostConfigure(settings => settings.ProbabilityThresholds = builder.Configuration.GetSection("NumericalModel:ProbabilityThresholds").Get<decimal[]>() ?? settings.ProbabilityThresholds)
         .Validate(settings => settings.GetValidationErrors().Count == 0, "NumericalModel configuration is invalid. Check LightGBM, sample and approval thresholds.")
         .ValidateOnStart();
 
@@ -199,6 +207,7 @@ try
 
     builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexPatternSettings>()
         .Bind(builder.Configuration.GetSection("ForexPatterns"))
+        .PostConfigure(settings => settings.ReplaceConfiguredArrays(builder.Configuration.GetSection("ForexPatterns")))
         .Validate(settings => settings.Validate().Count == 0, "ForexPatterns contains invalid or duplicate research profiles.")
         .ValidateOnStart();
 
@@ -216,6 +225,8 @@ try
         .Bind(builder.Configuration.GetSection("ForexExecution"))
         .Validate(settings => { settings.Validate(); return true; }, "Invalid FX execution settings.")
         .ValidateOnStart();
+    builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexResearchSettings>()
+        .Bind(builder.Configuration.GetSection("ForexResearch"), o => o.ErrorOnUnknownConfiguration = true);
 
     builder.Services.AddHealthChecks()
         .AddCheck("web", () => HealthCheckResult.Healthy("Web application is running."), tags: new[] { "live" })

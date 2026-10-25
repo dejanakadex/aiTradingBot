@@ -28,13 +28,16 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<(string InstrumentId, string StrategyId), CachedModel> _cache = new();
         private readonly SemaphoreSlim _cacheLoadLock = new(1, 1);
         private long _cacheEpoch;
+        private readonly ForexResearchContract? _forexContract;
 
         public NumericalModelService(IDbContextFactory<TradingBotDbContext> dbFactory, IOptions<NumericalModelSettings> settings, IClock clock,
-            IOptions<CandidateLabelingSettings>? labelSettings = null, IOptions<CanonicalFeatureSettings>? featureSettings = null)
+            IOptions<CandidateLabelingSettings>? labelSettings = null, IOptions<CanonicalFeatureSettings>? featureSettings = null,
+            ForexResearchContract? forexContract = null)
         {
             _dbFactory = dbFactory;
             _settings = settings.Value;
             _clock = clock;
+            _forexContract = forexContract;
             _currentLabelVersion = CandidateLabelVersion.Create(labelSettings?.Value ?? new CandidateLabelingSettings());
             _currentFeatureVersion = new FeatureEngine(featureSettings?.Value ?? new CanonicalFeatureSettings()).FeatureVersion;
         }
@@ -44,9 +47,21 @@ namespace TradingBot.Infrastructure.Services
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var evaluation = await db.ResearchEvaluationRunRecords.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.EvaluationRunId, cancellationToken).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Research evaluation '{request.EvaluationRunId}' was not found.");
-            if (!evaluation.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+            var forex = evaluation.LabelVersion.StartsWith(ForexResearchContract.Labels + "+config-", StringComparison.Ordinal);
+            if (!(evaluation.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal) || forex)
                 || !evaluation.EvaluationVersion.StartsWith(ResearchEvaluationVersion.Contract + "+config-", StringComparison.Ordinal))
                 throw new InvalidDataException("Model training requires current evaluation and covered-label contracts; legacy horizon-return labels cannot train a new model.");
+            if (forex)
+            {
+                var contract = _forexContract?.Get(evaluation.InstrumentId, evaluation.StrategyId)
+                    ?? throw new InvalidOperationException("FX model training requires its current research contract.");
+                if (evaluation.FeatureVersion != contract.Feature || evaluation.PatternVersion != contract.Pattern
+                    || evaluation.LabelVersion != contract.Label || evaluation.HorizonSeconds != contract.Profile.HoldingSeconds)
+                    throw new InvalidDataException("FX evaluation contract differs from configured research policy.");
+                var replay = await db.ReplayRunRecords.SingleOrDefaultAsync(x => x.Id == evaluation.ReplayRunId, cancellationToken);
+                if (replay?.Status != ReplayRunStatus.Completed || replay.OutputSha256 != await DeterministicReplayService.ComputeOutputHashAsync(db, replay.Id, cancellationToken))
+                    throw new InvalidDataException("FX training requires an intact completed replay.");
+            }
             var existing = await db.NumericalModelRecords.AsNoTracking().SingleOrDefaultAsync(x => x.EvaluationRunId == evaluation.Id, cancellationToken).ConfigureAwait(false);
 
             var evaluationQuery = db.CandidateLabelRecords.AsNoTracking()
@@ -103,9 +118,10 @@ namespace TradingBot.Infrastructure.Services
                     x.ResearchCandidate.Confidence, x.ResearchCandidate.PatternType, x.ResearchCandidate.Direction, x.ResearchCandidate.Timeframe,
                     x.ResearchCandidate.NormalizedLiquidity, x.ResearchCandidate.NormalizedVolatility,
                     x.ResearchCandidate.FeatureVersion, x.ResearchCandidate.PatternVersion, x.LabelVersion,
-                    x.InputSha256, NetReturnBps = x.NetReturnBps!.Value
+                    x.InputSha256, NetReturnBps = x.NetReturnBps!.Value, GrossReturnBps = x.GrossReturnBps ?? 0m
                 }).ToArrayAsync(cancellationToken).ConfigureAwait(false);
-            if (sourceRows.Any(x => string.IsNullOrWhiteSpace(x.InputSha256)
+            if (sourceRows.Any(x => forex && (x.NormalizedLiquidity.HasValue || !x.NormalizedVolatility.HasValue || x.NormalizedVolatility < 0)
+                || string.IsNullOrWhiteSpace(x.InputSha256)
                 || x.FeatureVersion != evaluation.FeatureVersion || x.PatternVersion != evaluation.PatternVersion
                 || x.LabelVersion != evaluation.LabelVersion))
                 throw new InvalidDataException("Model training requires frozen label input hashes and the exact evaluated pipeline versions.");
@@ -116,7 +132,7 @@ namespace TradingBot.Infrastructure.Services
                 PatternConfidence = (float)x.Confidence, PatternType = (float)x.PatternType, Direction = (float)x.Direction, Timeframe = (float)x.Timeframe,
                 NormalizedLiquidity = (float)(x.NormalizedLiquidity ?? 0m), NormalizedVolatility = (float)(x.NormalizedVolatility ?? 0m),
                 HourSin = (float)Math.Sin(2d * Math.PI * x.EvaluatedAtUtc.Hour / 24d), HourCos = (float)Math.Cos(2d * Math.PI * x.EvaluatedAtUtc.Hour / 24d),
-                NetReturnBps = x.NetReturnBps, Label = x.NetReturnBps > 0m
+                NetReturnBps = x.NetReturnBps, GrossReturnBps = (float)x.GrossReturnBps, Label = x.NetReturnBps > 0m
             }).ToArray();
             if (rows.Length < _settings.MinimumTrainingSamples + _settings.MinimumHoldoutSelections)
                 throw new InvalidOperationException($"Model training has {rows.Length} samples; more labeled samples are required.");
@@ -129,32 +145,46 @@ namespace TradingBot.Infrastructure.Services
             var baselineWfSelected = new List<ModelObservation>();
             var candidateWfSelected = new List<ModelObservation>();
             var validationScores = new List<ScoredObservation>();
+            var baselineForecastErrors = new List<decimal>();
             foreach (var fold in folds.Where(x => x.SelectedConfidenceThreshold.HasValue))
             {
                 var training = rows.Where(x => x.EvaluatedAtUtc >= xDate(fold.TrainingFromUtc) && x.LabelWindowEndUtc <= xDate(fold.TrainingToUtc)).ToArray();
                 var validation = rows.Where(x => x.EvaluatedAtUtc >= xDate(fold.ValidationFromUtc) && x.LabelWindowEndUtc <= xDate(fold.ValidationToUtc)).ToArray();
                 if (training.Length < _settings.MinimumTrainingSamples || validation.Length == 0) continue;
                 baselineWfSelected.AddRange(validation.Where(x => x.PatternConfidence >= (float)fold.SelectedConfidenceThreshold!.Value));
-                var (model, _) = Train(training);
+                var (model, _) = Train(training, forex);
                 var trainingScores = Score(model, training);
                 var threshold = SelectThreshold(trainingScores);
                 var foldValidationScores = Score(model, validation);
+                if (forex) baselineForecastErrors.AddRange(validation.Select(x => Math.Abs((decimal)x.GrossReturnBps - training.Average(t => (decimal)t.GrossReturnBps))));
                 validationScores.AddRange(foldValidationScores);
                 candidateWfSelected.AddRange(foldValidationScores.Where(x => x.Probability >= threshold).Select(x => x.Observation));
             }
             if (candidateWfSelected.Count < _settings.MinimumValidationSelections)
                 throw new InvalidOperationException("Walk-forward folds did not produce enough candidate model selections.");
 
-            var (finalModel, finalSchema) = Train(preHoldout);
+            var (finalModel, finalSchema) = Train(preHoldout, forex);
             // The deployed cutoff is selected from out-of-sample fold predictions, never from fitted training scores.
             var probabilityThreshold = SelectThreshold(validationScores.GroupBy(x => x.Observation.CandidateId).Select(group => group.First()));
-            var candidateHoldoutSelected = Score(finalModel, holdout).Where(x => x.Probability >= probabilityThreshold).Select(x => x.Observation).ToArray();
+            var holdoutScores = Score(finalModel, holdout);
+            var candidateHoldoutSelected = holdoutScores.Where(x => x.Probability >= probabilityThreshold).Select(x => x.Observation).ToArray();
             var baselineHoldoutSelected = holdout.Where(x => x.PatternConfidence >= (float)evaluation.SelectedConfidenceThreshold).ToArray();
             var baselineWf = Metrics(baselineWfSelected);
             var candidateWf = Metrics(candidateWfSelected);
             var baselineHoldout = Metrics(baselineHoldoutSelected);
             var candidateHoldout = Metrics(candidateHoldoutSelected);
-            var approvalReasons = ApprovalReasons(baselineWf, candidateWf, baselineHoldout, candidateHoldout);
+            var approvalReasons = ApprovalReasons(baselineWf, candidateWf, baselineHoldout, candidateHoldout).ToList();
+            if (forex)
+            {
+                baselineWf = baselineWf with { ForecastMeanAbsoluteErrorBps = baselineForecastErrors.Average() };
+                candidateWf = candidateWf with { ForecastMeanAbsoluteErrorBps = validationScores.Average(x => Math.Abs(x.ExpectedGross!.Value - (decimal)x.Observation.GrossReturnBps)) };
+                var mean = preHoldout.Average(x => (decimal)x.GrossReturnBps);
+                baselineHoldout = baselineHoldout with { ForecastMeanAbsoluteErrorBps = holdout.Average(x => Math.Abs((decimal)x.GrossReturnBps - mean)) };
+                candidateHoldout = candidateHoldout with { ForecastMeanAbsoluteErrorBps = holdoutScores.Average(x => Math.Abs(x.ExpectedGross!.Value - (decimal)x.Observation.GrossReturnBps)) };
+                if (candidateWf.ForecastMeanAbsoluteErrorBps >= baselineWf.ForecastMeanAbsoluteErrorBps
+                    || candidateHoldout.ForecastMeanAbsoluteErrorBps >= baselineHoldout.ForecastMeanAbsoluteErrorBps)
+                    approvalReasons.Add("FX gross-return forecast must beat the past-only constant baseline on walk-forward and untouched holdout MAE.");
+            }
 
             using var artifact = new MemoryStream();
             new MLContext(seed: _settings.RandomSeed).Model.Save(finalModel, finalSchema, artifact);
@@ -162,11 +192,14 @@ namespace TradingBot.Infrastructure.Services
             var inputHash = Hash(string.Join('\n', rows.Select(x => $"{x.CandidateId}|{x.CandidateKey}|{x.EvaluatedAtUtc:O}|{x.PatternConfidence:R}|{x.NormalizedLiquidity:R}|{x.NormalizedVolatility:R}|{x.NetReturnBps.ToString(CultureInfo.InvariantCulture)}|{x.LabelInputSha256}")));
             var version = await db.NumericalModelRecords.Where(x => x.InstrumentId == evaluation.InstrumentId && x.StrategyId == evaluation.StrategyId)
                 .Select(x => (int?)x.ModelVersion).MaxAsync(cancellationToken).ConfigureAwait(false) ?? 0;
+            if (forex) inputHash = Hash(inputHash + "|" + evaluation.InputSha256 + "|" + evaluation.OutputSha256
+                + "|" + Serialize(_settings) + "|" + ForexResearchContract.Model);
             var record = new NumericalModelRecord
             {
                 Id = Guid.NewGuid(), ModelVersion = version + 1, Status = NumericalModelStatus.Draft, EvaluationRunId = evaluation.Id,
                 InstrumentId = evaluation.InstrumentId, StrategyId = evaluation.StrategyId, HorizonSeconds = evaluation.HorizonSeconds,
-                Algorithm = "ML.NET LightGBM binary classification", ModelVersionTag = "numerical-model-v2",
+                Algorithm = forex ? "ML.NET LightGBM net-win classification and execution gross-return regression" : "ML.NET LightGBM binary classification",
+                ModelVersionTag = forex ? ForexResearchContract.Model : "numerical-model-v2",
                 FeatureVersion = evaluation.FeatureVersion, PatternVersion = evaluation.PatternVersion, LabelVersion = evaluation.LabelVersion,
                 ProbabilityThreshold = probabilityThreshold, BaselineWalkForwardJson = Serialize(baselineWf), CandidateWalkForwardJson = Serialize(candidateWf),
                 BaselineHoldoutJson = Serialize(baselineHoldout), CandidateHoldoutJson = Serialize(candidateHoldout),
@@ -267,17 +300,33 @@ namespace TradingBot.Infrastructure.Services
             var cached = await GetCachedModelAsync((request.InstrumentId, request.StrategyId), cancellationToken).ConfigureAwait(false);
             var record = cached.Record;
             ValidateRuntimeContract(record, request.FeatureVersion);
+            var forex = record.ModelVersionTag == ForexResearchContract.Model;
+            var forexInterval = forex ? _forexContract!.Get(request.InstrumentId, request.StrategyId).Profile.IntervalSeconds : 0;
+            if (forex && (request.PatternVersion != record.PatternVersion || request.ExecutionLabelVersion != record.LabelVersion
+                || request.Direction != (int)TradeDirection.Long || request.NormalizedLiquidity != 0 || request.NormalizedVolatility < 0
+                || request.EstimatedCostBps < 0 || request.ObservedAtUtc.Kind != DateTimeKind.Utc
+                || request.Timeframe != (int)(forexInterval == 1 ? Timeframe.OneSecond : forexInterval == 5 ? Timeframe.FiveSeconds : Timeframe.FifteenSeconds)))
+                throw new InvalidOperationException("FX inference requires exact pattern/execution contracts, long direction and price-only features.");
             var engine = cached.Engines.TryTake(out var available)
                 ? available
-                : cached.Ml.Model.CreatePredictionEngine<ModelRow, ModelPrediction>(cached.Model);
+                : cached.Ml.Model.CreatePredictionEngine<ModelRow, ModelPrediction>(cached.Model, ignoreMissingColumns: true);
             var row = FromRequest(request);
             decimal probability;
-            try { probability = (decimal)engine.Predict(row).Probability; }
+            decimal? expectedGross = null;
+            try
+            {
+                var prediction = engine.Predict(row);
+                if (!float.IsFinite(prediction.Probability) || forex && !float.IsFinite(prediction.ExpectedGrossReturnBps))
+                    throw new InvalidDataException("Model produced a non-finite prediction.");
+                probability = (decimal)prediction.Probability;
+                if (forex) expectedGross = (decimal)prediction.ExpectedGrossReturnBps;
+            }
             finally { cached.Engines.Add(engine); }
-            var eligible = probability >= record.ProbabilityThreshold;
+            var eligible = probability >= record.ProbabilityThreshold && (!forex || expectedGross > request.EstimatedCostBps);
             return new NumericalModelPrediction(record.Id, record.ModelVersion, probability, record.ProbabilityThreshold,
                 cached.HistoricalSelectedNetReturnBps, record.HorizonSeconds, eligible,
-                eligible ? "Approved local model probability passed the threshold." : "Local model probability is below the approved threshold.");
+                eligible ? "Approved local model passed its probability and applicable cost thresholds." : "Local model probability or expected edge failed.")
+                { ExpectedGrossReturnBps = expectedGross };
         }
 
         private async Task<CachedModel> GetCachedModelAsync((string InstrumentId, string StrategyId) key, CancellationToken cancellationToken)
@@ -324,6 +373,15 @@ namespace TradingBot.Infrastructure.Services
 
         private void ValidateRuntimeContract(NumericalModelRecord record, string featureVersion)
         {
+            if (record.ModelVersionTag == ForexResearchContract.Model)
+            {
+                var c = _forexContract?.Get(record.InstrumentId, record.StrategyId)
+                    ?? throw new InvalidOperationException("FX runtime research contract is unavailable.");
+                if (record.PatternVersion != c.Pattern || record.FeatureVersion != c.Feature || featureVersion != c.Feature
+                    || record.LabelVersion != c.Label || record.HorizonSeconds != c.Profile.HoldingSeconds)
+                    throw new InvalidOperationException("FX model versions, horizon or execution assumptions differ; retrain and review.");
+                return;
+            }
             if (record.ModelVersionTag != "numerical-model-v2"
                 || record.PatternVersion != PipelineContractVersions.Patterns
                 || record.LabelVersion != _currentLabelVersion)
@@ -360,12 +418,18 @@ namespace TradingBot.Infrastructure.Services
             return records.Select(ToSnapshot).ToArray();
         }
 
-        private (ITransformer Model, DataViewSchema Schema) Train(ModelObservation[] rows)
+        private (ITransformer Model, DataViewSchema Schema) Train(ModelObservation[] rows, bool forex)
         {
             var ml = new MLContext(seed: _settings.RandomSeed);
             var data = ml.Data.LoadFromEnumerable(rows.Select(ToModelRow));
-            var pipeline = ml.Transforms.Concatenate("Features", nameof(ModelObservation.PatternConfidence), nameof(ModelObservation.PatternType), nameof(ModelObservation.Direction), nameof(ModelObservation.Timeframe), nameof(ModelObservation.NormalizedLiquidity), nameof(ModelObservation.NormalizedVolatility), nameof(ModelObservation.HourSin), nameof(ModelObservation.HourCos))
-                .Append(ml.BinaryClassification.Trainers.LightGbm(new LightGbmBinaryTrainer.Options
+            var columns = new[] { nameof(ModelObservation.PatternConfidence), nameof(ModelObservation.PatternType), nameof(ModelObservation.Direction), nameof(ModelObservation.Timeframe), nameof(ModelObservation.NormalizedLiquidity), nameof(ModelObservation.NormalizedVolatility), nameof(ModelObservation.HourSin), nameof(ModelObservation.HourCos) };
+            IEstimator<ITransformer> pipeline = ml.Transforms.Concatenate("Features", columns.Where(x => !forex || x != nameof(ModelObservation.NormalizedLiquidity)).ToArray());
+            if (forex) pipeline = pipeline.Append(ml.Regression.Trainers.LightGbm(new LightGbmRegressionTrainer.Options
+                { LabelColumnName = nameof(ModelRow.GrossReturnBps), FeatureColumnName = "Features", NumberOfLeaves = _settings.NumberOfLeaves,
+                    NumberOfIterations = _settings.NumberOfIterations, LearningRate = _settings.LearningRate,
+                    MinimumExampleCountPerLeaf = _settings.MinimumExampleCountPerLeaf, Seed = _settings.RandomSeed }))
+                .Append(ml.Transforms.CopyColumns("ExpectedGrossReturnBps", "Score"));
+            pipeline = pipeline.Append(ml.BinaryClassification.Trainers.LightGbm(new LightGbmBinaryTrainer.Options
                 {
                     LabelColumnName = nameof(ModelObservation.Label), FeatureColumnName = "Features", NumberOfLeaves = _settings.NumberOfLeaves,
                     NumberOfIterations = _settings.NumberOfIterations, LearningRate = _settings.LearningRate,
@@ -378,8 +442,12 @@ namespace TradingBot.Infrastructure.Services
         {
             var ml = new MLContext(seed: _settings.RandomSeed);
             var data = ml.Data.LoadFromEnumerable(rows.Select(ToModelRow));
-            var predictions = ml.Data.CreateEnumerable<ModelPrediction>(model.Transform(data), reuseRowObject: false).ToArray();
-            return rows.Zip(predictions, (observation, prediction) => new ScoredObservation(observation, (decimal)prediction.Probability)).ToArray();
+            var transformed = model.Transform(data);
+            var forex = transformed.Schema.Any(x => x.Name == "ExpectedGrossReturnBps");
+            var predictions = ml.Data.CreateEnumerable<ModelPrediction>(transformed, reuseRowObject: false, ignoreMissingColumns: true).ToArray();
+            return rows.Zip(predictions, (observation, prediction) => new ScoredObservation(observation,
+                (decimal)prediction.Probability,
+                forex ? (decimal)prediction.ExpectedGrossReturnBps : null)).ToArray();
         }
 
         private decimal SelectThreshold(IEnumerable<ScoredObservation> source)
@@ -421,7 +489,8 @@ namespace TradingBot.Infrastructure.Services
         private static ModelRow ToModelRow(ModelObservation x) => new()
         {
             PatternConfidence = x.PatternConfidence, PatternType = x.PatternType, Direction = x.Direction, Timeframe = x.Timeframe,
-            NormalizedLiquidity = x.NormalizedLiquidity, NormalizedVolatility = x.NormalizedVolatility, HourSin = x.HourSin, HourCos = x.HourCos, Label = x.Label
+            NormalizedLiquidity = x.NormalizedLiquidity, NormalizedVolatility = x.NormalizedVolatility, HourSin = x.HourSin, HourCos = x.HourCos, Label = x.Label,
+            GrossReturnBps = x.GrossReturnBps
         };
 
         private static NumericalModelSnapshot ToSnapshot(NumericalModelRecord x) => new(x.Id, x.ModelVersion, x.Status, x.EvaluationRunId, x.InstrumentId, x.StrategyId,
@@ -457,10 +526,12 @@ namespace TradingBot.Infrastructure.Services
             public float HourSin { get; set; }
             public float HourCos { get; set; }
             public decimal NetReturnBps { get; set; }
+            public float GrossReturnBps { get; set; }
             public bool Label { get; set; }
         }
         private sealed class ModelRow
         {
+            public float GrossReturnBps { get; set; }
             public float PatternConfidence { get; set; }
             public float PatternType { get; set; }
             public float Direction { get; set; }
@@ -474,8 +545,9 @@ namespace TradingBot.Infrastructure.Services
         private sealed class ModelPrediction
         {
             [ColumnName("Probability")] public float Probability { get; set; }
+            [ColumnName("ExpectedGrossReturnBps")] public float ExpectedGrossReturnBps { get; set; }
         }
-        private sealed record ScoredObservation(ModelObservation Observation, decimal Probability);
+        private sealed record ScoredObservation(ModelObservation Observation, decimal Probability, decimal? ExpectedGross);
 
         private sealed class CachedModel(NumericalModelRecord record, MLContext ml, ITransformer model,
             decimal historicalSelectedNetReturnBps, DateTime refreshAfterUtc, long epoch)

@@ -6,9 +6,9 @@ public sealed record IbkrContractIdentity(string Symbol, string SecurityType, st
 
 /// <summary>Broker observations, not validated execution rules. Missing/sentinel sizes remain unknown.</summary>
 public sealed record IbkrContractMetadata(
-    IbkrContractIdentity Contract, string? LocalSymbol, string? ValidExchanges,
-    decimal? MinimumTick, decimal? MinimumSize, decimal? SizeIncrement, decimal? SuggestedSizeIncrement,
-    string? MarketRuleIds, string? TimeZoneId, string? TradingHours, string? LiquidHours);
+    IbkrContractIdentity Contract, string? LocalSymbol = null, string? ValidExchanges = null,
+    decimal? MinimumTick = null, decimal? MinimumSize = null, decimal? SizeIncrement = null, decimal? SuggestedSizeIncrement = null,
+    string? MarketRuleIds = null, string? TimeZoneId = null, string? TradingHours = null, string? LiquidHours = null);
 
 public sealed record IbkrContractProbe(string Status, int? ContractId = null, string? PrimaryExchange = null, int? ErrorCode = null)
 {

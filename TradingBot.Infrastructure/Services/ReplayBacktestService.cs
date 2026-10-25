@@ -35,6 +35,8 @@ public sealed class ReplayBacktestService : IReplayBacktestService
             .ConfigureAwait(false) ?? throw new KeyNotFoundException($"Replay run {replayRunId} was not found.");
         if (run.Status != ReplayRunStatus.Completed)
             throw new InvalidOperationException("Backtest requires a completed replay run.");
+        if (run.StrategyVersion.StartsWith(ForexResearchContract.Labels, StringComparison.Ordinal))
+            throw new InvalidOperationException("FX execution results are produced by fx-replay with its frozen FX research contract; stock simulation parameters cannot be applied.");
         var verification = await _dataset.VerifyAsync(cancellationToken).ConfigureAwait(false);
         if (!verification.IsValid)
             throw new InvalidDataException($"Dataset integrity verification failed: {string.Join(" ", verification.Errors)}");

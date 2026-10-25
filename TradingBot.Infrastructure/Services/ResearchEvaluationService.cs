@@ -103,9 +103,21 @@ namespace TradingBot.Infrastructure.Services
                 throw new InvalidOperationException($"Evaluation input exceeds the configured maximum of {_settings.MaximumCandidates} candidates; narrow the range or filter.");
             }
             if (rows.Length == 0) throw new InvalidOperationException("No completed candidate labels match the evaluation request.");
-            if (rows.Any(item => !item.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+            if (rows.Any(item => !(item.LabelVersion.StartsWith(PipelineContractVersions.Labels + "+config-", StringComparison.Ordinal)
+                    || item.LabelVersion.StartsWith(ForexResearchContract.Labels + "+config-", StringComparison.Ordinal))
                 || string.IsNullOrWhiteSpace(item.LabelInputSha256)))
                 throw new InvalidDataException("Evaluation requires covered labels-v2 with frozen input hashes; regenerate legacy labels.");
+            if (rows.Any(x => x.LabelVersion.StartsWith(ForexResearchContract.Labels, StringComparison.Ordinal)))
+            {
+                if (string.IsNullOrWhiteSpace(request.InstrumentId) || string.IsNullOrWhiteSpace(request.StrategyId))
+                    throw new ArgumentException("FX evaluation requires an explicit instrument and strategy.");
+                if (request.ReplayRunId == null || !await db.ReplayRunRecords.AnyAsync(x => x.Id == request.ReplayRunId
+                    && x.Status == ReplayRunStatus.Completed, cancellationToken))
+                    throw new InvalidDataException("FX evaluation requires an explicit completed research replay.");
+                var replay = await db.ReplayRunRecords.SingleAsync(x => x.Id == request.ReplayRunId, cancellationToken);
+                if (replay.OutputSha256 != await DeterministicReplayService.ComputeOutputHashAsync(db, replay.Id, cancellationToken))
+                    throw new InvalidDataException("FX replay output changed after completion.");
+            }
 
             var from = requestedFrom ?? rows.Min(item => item.EvaluatedAtUtc);
             var to = requestedTo ?? rows.Max(item => item.LabelWindowEndUtc);

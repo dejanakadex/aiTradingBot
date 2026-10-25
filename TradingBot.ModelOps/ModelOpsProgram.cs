@@ -9,7 +9,10 @@ using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
 using TradingBot.Infrastructure.Services;
+using TradingBot.Infrastructure.Options;
 using TradingBot.Persistence;
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TradingBot.Tests")]
 
 internal static class ModelOpsProgram
 {
@@ -39,14 +42,24 @@ internal static class ModelOpsProgram
             var modelSettings = configuration.GetSection("NumericalModel").Get<NumericalModelSettings>() ?? new();
             var labelSettings = configuration.GetSection("CandidateLabeling").Get<CandidateLabelingSettings>() ?? new();
             var featureSettings = configuration.GetSection("CanonicalFeatures").Get<CanonicalFeatureSettings>() ?? new();
+            // The binder appends configured arrays to nonempty defaults. Explicit lists must replace them.
+            evaluationSettings.ConfidenceThresholds = configuration.GetSection("ResearchEvaluation:ConfidenceThresholds").Get<decimal[]>() ?? evaluationSettings.ConfidenceThresholds;
+            evaluationSettings.CostStressMultipliers = configuration.GetSection("ResearchEvaluation:CostStressMultipliers").Get<decimal[]>() ?? evaluationSettings.CostStressMultipliers;
+            modelSettings.ProbabilityThresholds = configuration.GetSection("NumericalModel:ProbabilityThresholds").Get<decimal[]>() ?? modelSettings.ProbabilityThresholds;
+            labelSettings.HorizonsSeconds = configuration.GetSection("CandidateLabeling:HorizonsSeconds").Get<int[]>() ?? labelSettings.HorizonsSeconds;
+            var aggregates = configuration.GetSection("ShortAggregates").Get<ShortAggregateSettings>() ?? new();
+            aggregates.IntervalsSeconds = configuration.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>() ?? aggregates.IntervalsSeconds;
+            var forexPatterns = configuration.GetSection("ForexPatterns").Get<ForexPatternSettings>() ?? new();
+            forexPatterns.ReplaceConfiguredArrays(configuration.GetSection("ForexPatterns"));
             var errors = evaluationSettings.GetValidationErrors().Concat(modelSettings.GetValidationErrors())
                 .Concat(labelSettings.GetValidationErrors()).Concat(featureSettings.GetValidationErrors()).ToArray();
             if (errors.Length != 0) throw new InvalidOperationException(string.Join(" ", errors));
 
-            var write = command is "migrate" or "evaluate" or "train" or "approve" or "reject" or "rollback";
+            var write = command is "migrate" or "evaluate" or "train" or "approve" or "reject" or "rollback" or "fx-replay";
             var connection = new SqliteConnectionStringBuilder
             {
                 DataSource = dbPath,
+                Pooling = false,
                 Mode = write ? SqliteOpenMode.ReadWrite : SqliteOpenMode.ReadOnly,
                 DefaultTimeout = 10
             }.ToString();
@@ -57,6 +70,29 @@ internal static class ModelOpsProgram
             services.AddSingleton<IOptions<NumericalModelSettings>>(Options.Create(modelSettings));
             services.AddSingleton<IOptions<CandidateLabelingSettings>>(Options.Create(labelSettings));
             services.AddSingleton<IOptions<CanonicalFeatureSettings>>(Options.Create(featureSettings));
+            services.AddLogging();
+            services.AddSingleton<IOptions<TradingSettings>>(Options.Create(configuration.GetSection("TradingSettings").Get<TradingSettings>() ?? new()));
+            services.AddSingleton<IOptions<RiskSettings>>(Options.Create(configuration.GetSection("RiskSettings").Get<RiskSettings>() ?? new()));
+            services.AddSingleton<IOptions<ForexResearchSettings>>(Options.Create(configuration.GetSection("ForexResearch").Get<ForexResearchSettings>(o => o.ErrorOnUnknownConfiguration = true) ?? new()));
+            services.AddSingleton<IOptions<ForexRiskSettings>>(Options.Create(configuration.GetSection("ForexRisk").Get<ForexRiskSettings>() ?? new()));
+            services.AddSingleton<IOptions<ForexSignalSettings>>(Options.Create(configuration.GetSection("ForexSignals").Get<ForexSignalSettings>() ?? new()));
+            services.AddSingleton<IOptions<ForexPatternSettings>>(Options.Create(forexPatterns));
+            services.AddSingleton<IOptions<ShortAggregateSettings>>(Options.Create(aggregates));
+            services.AddSingleton<ForexResearchContract>();
+            if (command == "fx-replay")
+            {
+                var datasetPath = Required(options, "dataset");
+                if (!Path.IsPathFullyQualified(datasetPath) || !Directory.Exists(datasetPath)) throw new ArgumentException("--dataset must name an existing absolute Parquet dataset directory.");
+                services.AddSingleton<IOptions<DatasetStorageSettings>>(Options.Create(new DatasetStorageSettings { RootPath = datasetPath }));
+                services.AddSingleton<IOptions<ReplaySettings>>(Options.Create(new ReplaySettings()));
+                services.AddSingleton<IOptions<PatternDetectorOptions>>(Options.Create(new PatternDetectorOptions()));
+                services.AddSingleton<IFeatureEngine>(new FeatureEngine(featureSettings));
+                services.AddSingleton<IPatternDetectorFactory, PatternDetectorFactory>();
+                services.AddSingleton<IMarketDatasetStore, ParquetMarketDatasetStore>();
+                services.AddSingleton<ICandidateResearchService, CandidateResearchService>();
+                services.AddSingleton<ForexRiskService>(); services.AddSingleton<ForexTradeSimulator>();
+                services.AddSingleton<IDeterministicReplayService, DeterministicReplayService>();
+            }
             services.AddSingleton<IResearchEvaluationService, ResearchEvaluationService>();
             services.AddSingleton<INumericalModelService, NumericalModelService>();
             using var provider = services.BuildServiceProvider();
@@ -78,6 +114,15 @@ internal static class ModelOpsProgram
             var models = provider.GetRequiredService<INumericalModelService>();
             switch (command)
             {
+                case "fx-contract":
+                    var contract = provider.GetRequiredService<ForexResearchContract>().Get(Required(options, "instrument-id"), Required(options, "strategy-id"));
+                    Print(new { contract.Feature, contract.Pattern, contract.Label, contract.Profile.HoldingSeconds });
+                    break;
+                case "fx-replay":
+                    Print(await provider.GetRequiredService<IDeterministicReplayService>().RunForexResearchAsync(new(
+                        Required(options, "instrument-id"), ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to")),
+                        StrategyId: Required(options, "strategy-id"))));
+                    break;
                 case "evaluate":
                     Print(await evaluations.RunAsync(new ResearchEvaluationRequest(
                         int.Parse(Required(options, "horizon-seconds"), CultureInfo.InvariantCulture),
@@ -168,6 +213,8 @@ internal static class ModelOpsProgram
         Every command requires --db ABSOLUTE_SQLITE_PATH; optional --config APPSETTINGS_JSON overrides TradingBot.Web/appsettings.json.
 
         migrate
+        fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC
+        fx-contract --instrument-id ID --strategy-id ID
         evaluate --instrument-id ID --strategy-id ID --horizon-seconds N --from UTC --to UTC [--replay-run-id GUID]
         train --evaluation-id GUID
         list [--count N]

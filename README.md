@@ -223,9 +223,18 @@ account/portfolio inputs, the shared atomic reservation store and a durable asse
 execution gate refreshes these inputs before the existing order/arbitration/exit lifecycle sends a paper order.
 It supports long USD-quoted pairs with a verified USD account summary. `ForexPaperExecutionEnabled` defaults to false;
 PaperReady, verified paper reconciliation, reviewed `ForexExecution:Profiles` limits and sufficient risk capacity are also required.
-FX-7 shadow signals still do not automatically become orders: FX model approval/replay is FX-10, onboarding is FX-11.
+FX-10 adds quote-driven FX replay, execution labels, temporal classification/return regression and explicit model approval.
+`ForexResearch:AutomaticPaperSignalsEnabled` defaults to false; when explicitly enabled, an approved FX model can route
+fresh signals through FX-9 preparation and the existing final execution gate. Onboarding remains FX-11.
 FixedBracket, FX ATR trailing and the independent seconds timer have simulator coverage. Real IBKR fills and
 venue acceptance of partial-size exits remain unverified until FX-12. See [FX-9 setup and limitations](docs/EURUSD_READINESS.md#fx-9--nalozi-i-pozicije).
+
+Use ModelOps `fx-contract` and `fx-replay` with an explicit FX configuration and verified paired-quote Parquet dataset,
+then the existing `evaluate --replay-run-id`, `train`, `show`, `approve/reject` and `rollback` workflow.
+[FX-10 instructions and simulation limits](docs/FX10_RESEARCH.md) explain the historical rule snapshots, hypothetical
+fill capacity, costs, seven-day/200,000-event batch limit and model gates. The optional
+[forex-research.example.json](TradingBot.Web/forex-research.example.json) requires reviewed inputs and is not loaded automatically.
+No real EUR/USD model or trading permission has been approved by the synthetic tests.
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.
