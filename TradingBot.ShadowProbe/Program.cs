@@ -11,15 +11,24 @@ using TradingBot.Infrastructure.Services;
 
 var settings = ParseArguments(args);
 if (settings is null) return 2;
+if (settings.ContractsConfigPath is not null)
+    return await ContractProbeRunner.RunAsync(settings.ContractsConfigPath, settings.OutputPath, settings.Port, settings.ClientId);
 
 var started = DateTime.UtcNow;
 var thresholds = new ShadowFeedThresholds();
 var accumulators = settings.Symbols.ToDictionary(symbol => symbol,
     symbol => new ShadowFeedAccumulator($"US-STK-{symbol}-SMART", symbol), StringComparer.OrdinalIgnoreCase);
 using var broker = new IbkrBrokerService(
-    new IbkrOptions { Host = "127.0.0.1", Port = settings.Port, ClientId = settings.ClientId },
+    new IbkrOptions { Host = "127.0.0.1", Port = settings.Port, ClientId = settings.ClientId, ReadOnlyDiagnostics = true },
     NullLogger<IbkrBrokerService>.Instance,
-    Options.Create(new MarketDataCollectionSettings()));
+    Options.Create(new MarketDataCollectionSettings()),
+    Options.Create(new TradingSettings
+    {
+        Instruments = settings.Symbols.Select(symbol => new InstrumentSettings
+        {
+            InstrumentId = $"US-STK-{symbol}-SMART", Symbol = symbol, TradingEnabled = false
+        }).ToArray()
+    }));
 var subscriptions = new List<(string Symbol, ITickMarketDataSubscription Subscription)>();
 var readers = new List<Task>();
 var errors = new ConcurrentQueue<string>();
@@ -106,6 +115,7 @@ static ProbeSettings? ParseArguments(string[] arguments)
     var symbols = new[] { "SPY" };
     string? output = null;
     string? database = null;
+    string? contractsConfig = null;
     for (var i = 0; i < arguments.Length; i++)
     {
         if (i + 1 >= arguments.Length)
@@ -123,17 +133,19 @@ static ProbeSettings? ParseArguments(string[] arguments)
                     .Select(x => x.ToUpperInvariant()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(); break;
             case "--output": output = value; break;
             case "--database": database = value; break;
+            case "--contracts-config": contractsConfig = value; break;
             default: Console.Error.WriteLine("Unknown or invalid option."); return null;
         }
     }
     if (port is < 1 or > 65535 || clientId < 0 || seconds is < 5 or > 3600
         || symbols.Length == 0 || symbols.Any(x => x.Length is < 1 or > 8 || x.Any(c => !char.IsAsciiLetterOrDigit(c)))
-        || string.IsNullOrWhiteSpace(output))
+        || string.IsNullOrWhiteSpace(output)
+        || (contractsConfig is not null && (port is not (7497 or 4002) || database is not null)))
     {
-        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]");
+        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]. Contract-only mode: --contracts-config JSON_PATH --output ABSOLUTE_PATH [--port 7497|4002] [--client-id 87].");
         return null;
     }
-    return new ProbeSettings(port, clientId, seconds, symbols, output, database);
+    return new ProbeSettings(port, clientId, seconds, symbols, output, database, contractsConfig);
 }
 
 static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subscription,
@@ -151,4 +163,4 @@ static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subs
     }
 }
 
-internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath);
+internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath, string? ContractsConfigPath);

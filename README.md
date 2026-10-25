@@ -135,10 +135,22 @@ and verifies that a missing or changed API DLL fails validation. No TWS connecti
 
 The additive forex configuration example is [forex-instruments.example.json](TradingBot.Web/forex-instruments.example.json).
 `SecurityType=CASH`, `BaseCurrency=EUR`, `Currency=USD` and `Exchange=IDEALPRO` describe EUR/USD;
-the internal symbol is `EURUSD`, separate from the future broker symbol `EUR`. Each pair has its own
-stable ID and explicit strategies. FX-2 supports configuration/registry only: forex entries must remain
-disabled until their broker and data integrations are implemented. Stock defaults remain compatible.
+the internal symbol is `EURUSD`, separate from the broker symbol `EUR`. Each pair has its own
+stable ID and explicit strategies. FX-3 resolves configured stock and forex contracts through IBKR;
+forex collection and trading remain disabled pending their later milestones. Stock defaults remain compatible.
 The example is not loaded automatically. See [FX-2 rules and rollout](docs/EURUSD_READINESS.md#fx-2--konfiguracija-i-identitet).
+
+To check configured contracts without starting the bot, collectors or order workflow, use a logged-in
+paper TWS (7497) or paper Gateway (4002); TWS Read-Only API can remain enabled:
+
+```powershell
+dotnet run --project TradingBot.ShadowProbe --configuration Release -- --contracts-config TradingBot.Web/forex-instruments.example.json --output TestResults/fx3-contract-probe.json --port 7497 --client-id 93
+```
+
+Contract mode requires `AnalysisOnly`, global trading disabled and every instrument's `TradingEnabled=false`.
+It also checks disabled FX instruments, exports requested/resolved identity and broker metadata without account
+identifiers, and fails on missing, ambiguous or mismatched contracts. `Confirmed` proves contract identity only,
+not feed entitlement, order eligibility or paper execution. See [FX-3 diagnostics](docs/EURUSD_READINESS.md#fx-3--ibkr-ugovori-i-dijagnostika).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

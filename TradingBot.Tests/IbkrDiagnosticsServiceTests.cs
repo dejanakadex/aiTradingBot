@@ -69,14 +69,59 @@ public sealed class IbkrDiagnosticsServiceTests
         Assert.Equal(0, adapter.ProbeCalls);
     }
 
+    [Fact]
+    public async Task ForexContractConfirmationDoesNotEnableDataOrExecution()
+    {
+        var adapter = new DiagnosticAdapter { IsConnected = true };
+        var connection = new FakeIbkrConnectionService();
+        await connection.ConnectAsync();
+        var service = Create(adapter, connection, out _, out _, trading: IbkrFxContractTests.Settings());
+
+        var result = await service.GetAsync("EURUSD-ID");
+
+        var forex = Assert.Single(result.Instruments, item => item.Symbol == "EURUSD");
+        Assert.Equal("Supported", forex.ContractConfiguration);
+        Assert.Equal("Confirmed", forex.BrokerContractStatus);
+        Assert.Equal(new IbkrContractIdentity("EUR", "CASH", "IDEALPRO", "USD"), forex.RequestedContract);
+        Assert.Equal(forex.RequestedContract, forex.BrokerContract!.Contract);
+        Assert.Equal(1, forex.ContractMatchCount);
+        Assert.Equal("Disabled", forex.MarketDataStatus);
+        Assert.Equal("ForexCollectionPendingFx4", forex.DataAdapterCapability);
+        Assert.Equal("ForexExecutionPendingFx9", forex.OrderAdapterCapability);
+        Assert.Equal("NotProbed", Assert.Single(result.Instruments, item => item.Symbol == "EURGBP").BrokerContractStatus);
+        var stock = Assert.Single(result.Instruments, item => item.Symbol == "SPY");
+        Assert.Equal(new IbkrContractIdentity("SPY", "STK", "SMART", "USD"), stock.RequestedContract);
+        Assert.Equal("StockExecution", stock.OrderAdapterCapability);
+        Assert.Equal(1, adapter.ProbeCalls);
+    }
+
+    [Fact]
+    public async Task UnsupportedAndUnknownContractsNeverReachBroker()
+    {
+        var adapter = new DiagnosticAdapter { IsConnected = true };
+        var connection = new FakeIbkrConnectionService();
+        await connection.ConnectAsync();
+        var trading = new TradingSettings
+        {
+            Instruments = [new() { InstrumentId = "SPY", Symbol = "SPY", Currency = "EUR", TradingEnabled = false }]
+        };
+        var service = Create(adapter, connection, out _, out _, trading: trading);
+        var result = Assert.Single((await service.GetAsync("SPY")).Instruments);
+        Assert.Equal("UnsupportedByAdapter", result.BrokerContractStatus);
+        Assert.Null(result.RequestedContract);
+        Assert.Equal("Unsupported", result.OrderAdapterCapability);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetAsync("unknown"));
+        Assert.Equal(0, adapter.ProbeCalls);
+    }
+
     private static IbkrDiagnosticsService Create(
         IIbkrAdapter adapter, IIbkrConnectionService connection,
         out MarketDataCollectionStatusService collection,
-        out LatestMarketDataService latest, string? paperAccount = null)
+        out LatestMarketDataService latest, string? paperAccount = null, TradingSettings? trading = null)
     {
         collection = new MarketDataCollectionStatusService();
         latest = new LatestMarketDataService();
-        var trading = new TradingSettings
+        trading ??= new TradingSettings
         {
             OperatingMode = TradingOperatingMode.PaperTrading,
             Instruments = [new InstrumentSettings { InstrumentId = "SPY", Symbol = "SPY", TradingEnabled = false }]
@@ -105,7 +150,12 @@ public sealed class IbkrDiagnosticsServiceTests
         public Task<IbkrContractProbe> ProbeContractAsync(ConfiguredInstrument instrument, CancellationToken cancellationToken = default)
         {
             ProbeCalls++;
-            return Task.FromResult(new IbkrContractProbe("Confirmed", 12345, "ARCA"));
+            return Task.FromResult(new IbkrContractProbe("Confirmed", 12345, "ARCA")
+            {
+                MatchCount = 1,
+                Metadata = new(IbkrContractFactory.Describe(instrument), null, instrument.Exchange,
+                    null, null, null, null, null, null, null, null)
+            });
         }
         public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

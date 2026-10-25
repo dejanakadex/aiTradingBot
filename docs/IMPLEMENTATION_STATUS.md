@@ -42,7 +42,7 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 
 ## Dogovor za SPY nakon FX nadogradnje — 25.10.2026.
 
-Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX točaka](EURUSD_READINESS.md#dogovoreni-povratak-na-spy-nakon-fx-točaka--25102026): najprije read-only provjera povijesnih SPY SIP transakcija/kotacija starijih od 15 minuta i ograničenog IEX live feeda, zatim plan uvoza u postojeći Parquet/replay i konfigurabilnog izvora. Uplata 500 USD IBKR-u nije preduvjet za taj istraživački put. Pristup novog pružatelja još nije testiran, integracija nije implementirana i pretplata nije kupljena. Povijesni razvoj/testiranje strategija ne potvrđuje IBKR paper izvršenje; točke 25/30/31 ostaju u postojećem statusu. FX-3 je sljedeća zasebna razvojna točka.
+Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX točaka](EURUSD_READINESS.md#dogovoreni-povratak-na-spy-nakon-fx-točaka--25102026): najprije read-only provjera povijesnih SPY SIP transakcija/kotacija starijih od 15 minuta i ograničenog IEX live feeda, zatim plan uvoza u postojeći Parquet/replay i konfigurabilnog izvora. Uplata 500 USD IBKR-u nije preduvjet za taj istraživački put. Pristup novog pružatelja još nije testiran, integracija nije implementirana i pretplata nije kupljena. Povijesni razvoj/testiranje strategija ne potvrđuje IBKR paper izvršenje; točke 25/30/31 ostaju u postojećem statusu. Aktualni FX status i preostala stvarna provjera ugovora navedeni su niže.
 
 ## Obvezni IBKR DLL u repozitoriju — 25.10.2026.
 
@@ -59,7 +59,8 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | --- | --- | --- |
 | FX-1 — Inventar i regresijska zaštita | Implementirano i lokalno provjereno | Matrica postojećih funkcionalnosti i FX gapova; 13 novih fiksnih stock baseline slučajeva, ukupno 419/419 testova u službenom DLL i fallback buildu. Produkcijsko ponašanje nije promijenjeno. |
 | FX-2 — Konfiguracija i identitet valutnih parova | Implementirano i lokalno provjereno | STK/CASH tip, osnovna/kotirana valuta, jedinstveni simbol para i eksplicitne FX strategije; registry restart i zaštita od promjene ugovora pod istim ID-jem. 448/448 lokalnih testova; forex je još disabled. |
-| FX-3 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-3 ugovori i dijagnostika su sljedeća zasebna točka. |
+| FX-3 — IBKR ugovori i dijagnostika | Implementirano i lokalno provjereno; stvarni test čeka vezu | Ugovori iz konfiguracije, precizni contract-details rezultati i read-only CLI. 476/476 testova; pokušaj na 7497 bez uspostavljene veze, stvarni FX contract još nije potvrđen ovim adapterom. |
+| FX-4 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-4 prikupljanje i backfill su sljedeća razvojna točka. |
 
 ### FX-1 — Popis funkcionalnosti i zaštita dioničkog ponašanja
 
@@ -80,6 +81,16 @@ Provjera 25.10.2026., polazni shared commit `49f6b67` sa službenim obveznim IBK
 - Registry koristi postojeće SQLite stupce i vraća valutne metapodatke nakon restarta, bez migracije baze. Dodavanje disabled FX parova ne mijenja stock configuration hash ni onboarding napredak. Promjena FX ugovora, uključujući prijelaz stock/FX pod istim ID-jem, odbija cijeli sync prije upisa i traži novi `InstrumentId`.
 - `forex-instruments.example.json` je testiran stvarnim JSON binderom; nije automatski učitan i ne mijenja `appsettings.json`. Aktivacija FX prikupljanja/trgovanja u ovoj fazi izričito je blokirana kako CASH ne bi otišao u još uvijek STK brokerski put. Read-only ugovori/feed ostaju FX-3/FX-4, izvršavanje kasnije.
 - Dodano **29 testnih slučajeva**; ciljana konfiguracija/registry regresija **38/38**, puni solution **448/448**. Release build sa službenim DLL-om: **0 upozorenja, 0 grešaka**. Prošla je cijela `verify-ibkr-adapter.ps1` provjera, uključujući publish i odbijanje nedostajućeg/izmijenjenog DLL-a. GitHub CI prati se nakon pusha. Nije pokrenut bot niti slan nalog; ovo nije stvarni IBKR paper dokaz i ne zatvara točke 25/30/31.
+
+### FX-3 — IBKR ugovori i dijagnostika
+
+Provjera 25.10.2026., polazni shared commit `b972879` (radni `3257976`, identično stablo). [Ugovor i ponovljiva read-only provjera](EURUSD_READINESS.md#fx-3--ibkr-ugovori-i-dijagnostika).
+
+- Zajednička tvornica koristi normaliziranu konfiguraciju za STK/SMART/USD i CASH/IDEALPRO. Interni EURUSD/EURGBP prevodi u brokerski EUR s različitom kotiranom valutom; nepoznati/neusklađeni simboli i ID-jevi odbijaju se prije API poziva. Postojeći SPY/QQQ put koristi isti mehanizam.
+- Contract potvrda traži točno jedan odgovarajući odgovor s pozitivnim ConId-jem; odvojeni su missing/ambiguous/mismatch/error/timeout ishodi. Dijagnostika dodaje traženi i dobiveni identitet, count i dostupne tick/size/session/market-rule metapodatke; nema izmišljanja nepoznatih minimuma ili izvoza računa/sirovih poruka. Potvrda ugovora ne otključava prikupljanje ili naloge.
+- Novi contract-only način postojećeg ShadowProbea čita zasebnu konfiguraciju, provjerava disabled FX parove i zahtijeva AnalysisOnly uz isključeno trgovanje. Adapterov read-only način blokira sve order mutacije i readiness; nema pokretanja hosta, baze, kolektora ili trading lifecyclea. FX podatkovni i order pozivi ostaju izričito blokirani do sljedećih pripadajućih točaka. Shared runtime konfiguracija i baze nisu mijenjane.
+- Dodano **28 testnih slučajeva**, uključujući stvarne adapter callbackove sa sintetičkim IBKR odgovorima i istodobne parove s istim base simbolom. Završni Release build: **0 upozorenja / 0 grešaka**; puni solution **476/476**, bez preskakanja. Testni projekt sada izravno uvozi isti obvezni `IBKR.Api.targets`. Prošla publish/required-DLL provjera; lokalni TRX je u ignoriranom `TestResults/fx3`. GitHub CI prati se nakon pusha.
+- Stvarna read-only proba na `127.0.0.1:7497`, client ID 93, nije uspostavila API vezu (`InvalidOperationException`; server verzija null, nula contract odgovora). Lokalno nije pronađen listener na standardnim paper portovima 7497/4002. Potrebno je pokrenuti/prijaviti paper TWS ili Gateway, uključiti socket API i ponoviti dokumentiranu naredbu. Ovo se vodi kao **stvarno neprovjereno**, ne kao potvrda pretplate ili contracta. Nije poslan nalog; točke 25/30/31 nisu zatvorene.
 
 ## Točka 1 — izvedeno
 

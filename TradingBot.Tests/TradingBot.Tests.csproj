@@ -26,4 +26,6 @@
     <ProjectReference Include="..\TradingBot.Web\TradingBot.Web.csproj" />
   </ItemGroup>
 
+  <Import Project="../third_party/ibkr/IBKR.Api.targets" />
+
 </Project>

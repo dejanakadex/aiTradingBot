@@ -18,7 +18,14 @@ public sealed record IbkrInstrumentDiagnostics(
     string MarketDataStatus,
     int? MarketDataErrorCode,
     DateTime? LastQuoteUtc,
-    IReadOnlyList<IbkrStreamDiagnostics> CollectionStreams);
+    IReadOnlyList<IbkrStreamDiagnostics> CollectionStreams)
+{
+    public IbkrContractIdentity? RequestedContract { get; init; }
+    public IbkrContractMetadata? BrokerContract { get; init; }
+    public int? ContractMatchCount { get; init; }
+    public string DataAdapterCapability { get; init; } = "StockTradeAndBidAsk";
+    public string OrderAdapterCapability { get; init; } = "StockExecution";
+}
 
 public sealed record IbkrStreamDiagnostics(
     string Timeframe,
@@ -86,11 +93,13 @@ public sealed class IbkrDiagnosticsService
 
         foreach (var instrument in configured)
         {
-            var supported = IsSupportedContract(instrument);
+            var supported = IbkrContractFactory.IsSupported(instrument);
             var contractStatus = supported ? "NotProbed" : "UnsupportedByAdapter";
             int? contractId = null;
             string? primaryExchange = null;
             int? contractError = null;
+            IbkrContractMetadata? metadata = null;
+            int? matchCount = null;
             if (probeInstrumentId is not null && instrument.InstrumentId.Equals(probeInstrumentId, StringComparison.OrdinalIgnoreCase))
             {
                 if (!supported) contractStatus = "UnsupportedByAdapter";
@@ -104,6 +113,8 @@ public sealed class IbkrDiagnosticsService
                         contractId = result.ContractId;
                         primaryExchange = result.PrimaryExchange;
                         contractError = result.ErrorCode;
+                        metadata = result.Metadata;
+                        matchCount = result.MatchCount;
                     }
                     catch (InvalidOperationException)
                     {
@@ -131,10 +142,19 @@ public sealed class IbkrDiagnosticsService
             else marketStatus = "Available";
 
             instruments.Add(new IbkrInstrumentDiagnostics(instrument.InstrumentId, instrument.Symbol,
-                supported ? "Supported" : "Requires STK/SMART/USD adapter support", contractStatus,
+                supported ? "Supported" : "Requires STK/SMART/USD or valid CASH/IDEALPRO pair", contractStatus,
                 contractId, primaryExchange, contractError, marketStatus, marketError, lastQuoteUtc,
                 instrumentStreams.Select(item => new IbkrStreamDiagnostics(item.Timeframe, item.Status, item.BrokerConnected,
-                    item.Subscribed, item.LastHeartbeatUtc, item.LastEventTimeUtc, item.ReceiveLagMilliseconds)).ToArray()));
+                    item.Subscribed, item.LastHeartbeatUtc, item.LastEventTimeUtc, item.ReceiveLagMilliseconds)).ToArray())
+            {
+                RequestedContract = supported ? IbkrContractFactory.Describe(instrument) : null,
+                BrokerContract = metadata,
+                ContractMatchCount = matchCount,
+                DataAdapterCapability = !supported ? "Unsupported" : instrument.InstrumentType == InstrumentType.Forex
+                    ? "ForexCollectionPendingFx4" : "StockTradeAndBidAsk",
+                OrderAdapterCapability = !supported ? "Unsupported" : instrument.InstrumentType == InstrumentType.Forex
+                    ? "ForexExecutionPendingFx9" : "StockExecution"
+            });
         }
 
         return new IbkrDiagnosticsSnapshot(adapterStatus, runtime?.ApiVersion, connected ? runtime?.ServerVersion : null,
@@ -156,8 +176,4 @@ public sealed class IbkrDiagnosticsService
         };
     }
 
-    private static bool IsSupportedContract(ConfiguredInstrument instrument) =>
-        instrument.SecurityType.Equals("STK", StringComparison.OrdinalIgnoreCase)
-        && instrument.Exchange.Equals("SMART", StringComparison.OrdinalIgnoreCase)
-        && instrument.Currency.Equals("USD", StringComparison.OrdinalIgnoreCase);
 }

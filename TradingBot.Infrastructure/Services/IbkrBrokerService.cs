@@ -45,12 +45,15 @@ namespace TradingBot.Infrastructure.Services
         private bool _managedAccountsReceived;
         private bool? _configuredAccountRecognized;
         private readonly int _tickQueueCapacity;
+        private readonly IReadOnlyList<ConfiguredInstrument> _instruments;
 
-        public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger, IOptions<MarketDataCollectionSettings>? collectionSettings = null)
+        public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger,
+            IOptions<MarketDataCollectionSettings>? collectionSettings = null, IOptions<TradingSettings>? tradingSettings = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _tickQueueCapacity = collectionSettings?.Value.TickQueueCapacity ?? 8192;
+            _instruments = (tradingSettings?.Value ?? new TradingSettings()).GetConfiguredInstruments();
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
@@ -105,11 +108,14 @@ namespace TradingBot.Infrastructure.Services
             _readerLoop = Task.Run(() => ProcessMessagesAsync(reader, _signal!, _readerLoopCts!.Token), CancellationToken.None);
 
             _client!.reqManagedAccts();
-            _client.reqIds(-1);
-            _client.reqAllOpenOrders();
+            if (!_options.ReadOnlyDiagnostics)
+            {
+                _client.reqIds(-1);
+                _client.reqAllOpenOrders();
+            }
 
             await PublishConnectionStatusAsync(ConnectionStatus.Connected).ConfigureAwait(false);
-            await PublishReadinessAsync(_nextOrderId > 0).ConfigureAwait(false);
+            await PublishReadinessAsync(!_options.ReadOnlyDiagnostics && _nextOrderId > 0).ConfigureAwait(false);
         }
 
         public async Task StopAsync(CancellationToken cancellationToken = default)
@@ -169,9 +175,10 @@ namespace TradingBot.Infrastructure.Services
         public async Task<OrderStatusDto> SubmitOrderAsync(OrderRequestDto request, CancellationToken cancellationToken = default)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+            EnsureOrderMutationAllowed();
+            var contract = BuildStockOperationContract(request.Symbol, "FX order execution awaits FX-8/FX-9.");
             var client = GetConnectedClient();
             var orderId = GetNextOrderId();
-            var contract = BuildStockContract(request.Symbol);
             var order = BuildOrder(orderId, request);
             var confirmation = NewTcs<OrderStatusDto>();
 
@@ -213,6 +220,7 @@ namespace TradingBot.Infrastructure.Services
 
         public Task<bool> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
         {
+            EnsureOrderMutationAllowed();
             if (!int.TryParse(orderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var brokerOrderId))
             {
                 return Task.FromResult(false);
@@ -226,13 +234,14 @@ namespace TradingBot.Infrastructure.Services
         public async Task<OrderStatusDto> ModifyOrderAsync(string brokerOrderId, OrderRequestDto request, CancellationToken cancellationToken = default)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+            EnsureOrderMutationAllowed();
+            var contract = BuildStockOperationContract(request.Symbol, "FX order execution awaits FX-8/FX-9.");
             if (!int.TryParse(brokerOrderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var orderId) || orderId <= 0)
             {
                 throw new ArgumentException("A valid numeric IBKR broker order id is required for order modification.", nameof(brokerOrderId));
             }
 
             var client = GetConnectedClient();
-            var contract = BuildStockContract(request.Symbol);
             var order = BuildOrder(orderId, request);
             var confirmation = NewTcs<OrderStatusDto>();
 
@@ -335,6 +344,7 @@ namespace TradingBot.Infrastructure.Services
             var startUtc = ToUtc(historicalRequest.StartUtc);
             var endUtc = ToUtc(historicalRequest.EndUtc);
             if (endUtc <= startUtc) throw new ArgumentOutOfRangeException(nameof(historicalRequest), "Historical request end must be after start.");
+            var contract = BuildStockOperationContract(historicalRequest.Symbol, "FX history collection awaits FX-4.", historicalRequest.InstrumentId);
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var request = new HistoricalBarsRequest(historicalRequest.Symbol, NormalizeTimeframe(historicalRequest.Timeframe));
@@ -342,7 +352,7 @@ namespace TradingBot.Infrastructure.Services
 
             client.reqHistoricalData(
                 requestId,
-                BuildStockContract(historicalRequest.Symbol),
+                contract,
                 endUtc.ToString("yyyyMMdd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture),
                 BuildDuration(startUtc, endUtc),
                 ToIbkrBarSize(historicalRequest.Timeframe),
@@ -365,6 +375,7 @@ namespace TradingBot.Infrastructure.Services
 
         public Task<IMarketDataSubscription> SubscribeAsync(string symbol, string timeframe, CancellationToken cancellationToken = default)
         {
+            var contract = BuildStockOperationContract(symbol, "FX bar collection awaits FX-4.");
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var normalizedTimeframe = NormalizeTimeframe(timeframe);
@@ -385,7 +396,7 @@ namespace TradingBot.Infrastructure.Services
 
             client.reqHistoricalData(
                 requestId,
-                BuildStockContract(symbol),
+                contract,
                 string.Empty,
                 BuildDuration(timeframe, 50),
                 ToIbkrBarSize(timeframe),
@@ -401,6 +412,7 @@ namespace TradingBot.Infrastructure.Services
         public Task<ITickMarketDataSubscription> SubscribeTicksAsync(string instrumentId, string symbol, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var contract = BuildStockOperationContract(symbol, "FX tick collection awaits FX-4.", instrumentId);
             var client = GetConnectedClient();
             var tradeId = GetNextRequestId();
             var quoteId = GetNextRequestId();
@@ -415,7 +427,6 @@ namespace TradingBot.Infrastructure.Services
             _tickSubscriptions[quoteId] = subscription;
             try
             {
-                var contract = BuildStockContract(symbol);
                 client.reqTickByTickData(tradeId, contract, "AllLast", 0, false);
                 client.reqTickByTickData(quoteId, contract, "BidAsk", 0, false);
                 return Task.FromResult<ITickMarketDataSubscription>(subscription);
@@ -430,13 +441,18 @@ namespace TradingBot.Infrastructure.Services
         public async Task<IbkrContractProbe> ProbeContractAsync(ConfiguredInstrument instrument, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(instrument);
+            cancellationToken.ThrowIfCancellationRequested();
+            var configured = ResolveInstrument(instrument.Symbol, instrument.InstrumentId);
+            if (!configured.ContractKey.Equals(instrument.ContractKey, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Probe contract does not match the configured instrument.", nameof(instrument));
+            var contract = IbkrContractFactory.Create(configured);
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var request = new ContractDetailsRequest(instrument);
             _contractRequests[requestId] = request;
             try
             {
-                client.reqContractDetails(requestId, BuildStockContract(instrument.Symbol));
+                client.reqContractDetails(requestId, contract);
                 return await request.Completion.Task.WaitAsync(BrokerResponseTimeout, cancellationToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
@@ -453,7 +469,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (orderId <= 0) return;
             Interlocked.Exchange(ref _nextOrderId, orderId);
-            _ = PublishReadinessAsync(true);
+            _ = PublishReadinessAsync(!_options.ReadOnlyDiagnostics);
         }
 
         public override void managedAccounts(string accountsList)
@@ -921,17 +937,27 @@ namespace TradingBot.Infrastructure.Services
 
         private int GetNextRequestId() => Interlocked.Increment(ref _nextRequestId);
 
-        private static Contract BuildStockContract(string symbol)
+        private ConfiguredInstrument ResolveInstrument(string symbol, string? instrumentId = null)
         {
             if (string.IsNullOrWhiteSpace(symbol)) throw new ArgumentException("symbol is required", nameof(symbol));
+            var matches = _instruments.Where(item => item.Symbol.Equals(symbol.Trim(), StringComparison.OrdinalIgnoreCase)
+                && (instrumentId is null || item.InstrumentId.Equals(instrumentId, StringComparison.OrdinalIgnoreCase))).ToArray();
+            if (matches.Length != 1)
+                throw new ArgumentException("A unique configured instrument with matching symbol and identity is required.", nameof(symbol));
+            return matches[0];
+        }
 
-            return new Contract
-            {
-                Symbol = symbol.Trim().ToUpperInvariant(),
-                SecType = "STK",
-                Exchange = "SMART",
-                Currency = "USD"
-            };
+        private Contract BuildStockOperationContract(string symbol, string fxReason, string? instrumentId = null)
+        {
+            var instrument = ResolveInstrument(symbol, instrumentId);
+            if (instrument.InstrumentType == InstrumentType.Forex) throw new NotSupportedException(fxReason);
+            return IbkrContractFactory.Create(instrument);
+        }
+
+        private void EnsureOrderMutationAllowed()
+        {
+            if (_options.ReadOnlyDiagnostics)
+                throw new InvalidOperationException("Order mutations are disabled in read-only diagnostics.");
         }
 
         private Order BuildOrder(int orderId, OrderRequestDto request)
@@ -1309,17 +1335,7 @@ namespace TradingBot.Infrastructure.Services
             public void Complete()
             {
                 var results = _details.ToArray();
-                var probe = results.Length switch
-                {
-                    0 => new IbkrContractProbe("NotFound"),
-                    1 when results[0].Contract?.ConId > 0
-                        && string.Equals(results[0].Contract.Symbol, _instrument.Symbol, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(results[0].Contract.SecType, _instrument.SecurityType, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(results[0].Contract.Currency, _instrument.Currency, StringComparison.OrdinalIgnoreCase) => new IbkrContractProbe(
-                        "Confirmed", results[0].Contract.ConId, results[0].Contract.PrimaryExch),
-                    1 => new IbkrContractProbe("Mismatch"),
-                    _ => new IbkrContractProbe("Ambiguous")
-                };
+                var probe = IbkrContractFactory.Evaluate(_instrument, results);
                 Completion.TrySetResult(probe);
             }
         }
