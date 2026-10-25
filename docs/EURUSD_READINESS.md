@@ -167,6 +167,8 @@ Implementirani su FX-specific rollout dokazi, odvojeno AnalysisOnly mjerenje mod
 
 ## Preostale tehničke obveze za stvarni FX shadow i FX-12
 
+Operativna dopuna 25.10.2026.: [ForexCollection profil i launcher](FOREX_COLLECTION.md) pripremljeni su i stvarni kolektor radi na paper TWS-u, uz adapterovu zabranu naloga. Baza/Parquet sada postoje i sadrže 1.425 povijesnih MIDPOINT barova, s prijavljenom prazninom od 92 minute. Nedostaju živi quoteovi iz otvorene sesije i model/shadow dokaz. Popravljene su nedostajuće operativne tablice, bez brisanja podataka; 696/696 testova prolazi. To ne zatvara FX-12.
+
 1. FX-3/FX-4 sada imaju CASH/IDEALPRO ugovore i zaseban quote/MIDPOINT podatkovni put, a FX-5 zasebne kratke agregate i lokalno potvrđen feature replay paritet. Ostaje stvarna provjera produkcijskog živog toka tijekom otvorene sesije i dužeg backfilla.
 2. FX-9 je spojio FX-8 izračun, osvježavanje, rezervaciju i lifecycle za navedeni uži paper opseg. Stvarno potvrditi izvršiva pravila, marginu, provizije i rezidualne izlaze prije paper odobrenja. Za druge valute računa/cross-parove potrebna je dodatna izvršna integracija; stock `PositionSizer` i replay `CommissionPerShare` ne smiju obrađivati FX po dioničkim pretpostavkama.
 3. FX-10 je povezao zasebne FX patterne/signal s odobrenim modelom i FX-9 pripremom iza isključenog opt-ina. Potrebni su stvarni kvalitetni podaci, model koji prođe evaluaciju te operativni onboarding/shadow dokaz prije aktivacije. Quote size nije dokaz fill količine.

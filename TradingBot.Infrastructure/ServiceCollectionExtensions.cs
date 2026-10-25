@@ -135,6 +135,7 @@ namespace TradingBot.Infrastructure
                     Host = ibkr.Host,
                     Port = ibkr.GetPort(trading.OperatingMode),
                     ClientId = ibkr.ClientId,
+                    ReadOnlyDiagnostics = ibkr.ReadOnlyApi,
                     AccountId = trading.OperatingMode == TradingBot.Domain.Enums.TradingOperatingMode.LiveTrading
                         ? ibkr.AccountId
                         : ibkr.PaperAccountId

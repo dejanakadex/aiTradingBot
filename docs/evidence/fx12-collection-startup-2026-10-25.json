@@ -1,0 +1,184 @@
+{
+  "CheckedAtUtc": "2026-10-25T19:38:35.3149205Z",
+  "Scope": "Operational collection startup, not a paper execution or model-shadow validation",
+  "Profile": "ForexCollection",
+  "ProfileSha256": "071550FD9CCCA2CF63EEF8303D2F41C7E64BB50ACBA7BA96EA16523AE2832F49",
+  "ReadOnlyApi": true,
+  "TradingEnabled": false,
+  "SourceBaseCommit": "9831bf12465190783aff04f8cbfef7fc2aac957b",
+  "Broker": {
+    "adapterStatus": "Real",
+    "apiVersion": "10.49.2.0",
+    "serverVersion": 225,
+    "connectionStatus": "Connected",
+    "brokerConnected": true,
+    "operatingMode": "AnalysisOnly",
+    "port": 7497
+  },
+  "Streams": [
+    {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "timeframe": "1m",
+      "status": 4,
+      "statusReason": "Subscription is active outside the configured regular session.",
+      "brokerConnected": true,
+      "subscribed": true,
+      "lastHeartbeatUtc": "2026-10-25T19:28:16.8886424Z",
+      "lastEventTimeUtc": "2026-10-23T20:59:00Z",
+      "consecutiveFailures": 0,
+      "reconnectCount": 0
+    },
+    {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "timeframe": "TICK",
+      "status": 4,
+      "statusReason": "Subscription active outside the instrument's collection session.",
+      "brokerConnected": true,
+      "subscribed": true,
+      "lastHeartbeatUtc": null,
+      "lastEventTimeUtc": null,
+      "consecutiveFailures": 0,
+      "reconnectCount": 0
+    }
+  ],
+  "Backfill": [
+    {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "timeframe": "1m",
+      "status": 40,
+      "barsReceived": 4183,
+      "barsInserted": 1425,
+      "completedSegments": 3,
+      "failedAttempts": 0,
+      "gapCount": 1
+    }
+  ],
+  "HistoricalGaps": [
+    {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "timeframe": "1m",
+      "startUtc": "2026-10-22T19:28:00Z",
+      "endUtc": "2026-10-22T21:00:00Z",
+      "missingBars": 92
+    }
+  ],
+  "ParquetVerification": {
+    "isValid": true,
+    "fileCount": 4,
+    "rowCount": 1425,
+    "manifestSha256": "700A6FD6D338C172DABF91FA8B30F12BE4CC9E39179A9BF789B32B1E9EFD801A",
+    "errors": []
+  },
+  "DatabaseCounts": {
+    "Candles": 1425,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "Trades": 0,
+    "PortfolioRiskReservationRecords": 0,
+    "NumericalModelRecords": 0,
+    "InstrumentRolloutEvaluationRecords": 7,
+    "PostTradeAnalysisRecords": 0
+  },
+  "LiveTicksValidated": false,
+  "ModelShadowValidated": false,
+  "PaperExecutionValidated": false,
+  "Rollout": [
+    {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "evaluatedAtUtc": "2026-10-25T19:37:09.6926333",
+      "statusAfter": 30,
+      "reasons": [
+        "History 1m: gaps=1; healthy MIDPOINT bars=1425/50.",
+        "eurusd-patterns: FX research configuration or evidence is incomplete (InvalidOperationException).",
+        "FX market-data streams are missing or unhealthy.",
+        "Fresh paired FX bid/ask is unavailable; MIDPOINT history cannot replace quote ticks.",
+        "FX session is closed; collection will resume independently of trading permission.",
+        "Readiness: history=False; research=False; model shadow=False; measured sample=False.",
+        "Model shadow is not a risk approval. FX-9 rechecks account, broker rules, costs, reservations and paper permissions. Actual IBKR fills remain unverified (FX-12)."
+      ],
+      "shadowCriteriaPassed": false
+    }
+  ],
+  "SchemaRepairMigration": "20261025193000_EnsureOperationalEvidenceTables",
+  "SchemaReadPreflightPassed": true,
+  "PreflightAfterRepair": {
+    "checkedAtUtc": "2026-10-25T19:35:30.4692635Z",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "strategyId": "eurusd-patterns",
+    "sessionOpen": false,
+    "nextScheduledSessionUtc": "2026-10-25T21:15:00Z",
+    "checks": [
+      {
+        "code": "session",
+        "passed": false,
+        "detail": "Configured FX session is closed."
+      },
+      {
+        "code": "no-live",
+        "passed": true,
+        "detail": "Live mode and live explicit enablement must remain off."
+      },
+      {
+        "code": "instrument",
+        "passed": true,
+        "detail": "An enabled USD-quoted CASH instrument with the selected long strategy is required; collection does not require trading enablement."
+      },
+      {
+        "code": "isolated-execution",
+        "passed": true,
+        "detail": "Other instruments must not be enabled for execution during the bounded pilot; collection may remain enabled."
+      },
+      {
+        "code": "research-contract",
+        "passed": false,
+        "detail": "FX research contract is missing, incomplete or inconsistent. No defaults were approved."
+      },
+      {
+        "code": "reviewed-size-limits",
+        "passed": false,
+        "detail": "Reviewed venue base-unit minimum/maximum and evidence must be present and no older than 24 hours; broker rules still need a live refresh."
+      },
+      {
+        "code": "database",
+        "passed": true,
+        "detail": "An existing operational database is required; this command never creates or migrates one."
+      },
+      {
+        "code": "paper-ready",
+        "passed": false,
+        "detail": "Registry must already be PaperReady from FX-11 evidence; this command never changes it."
+      },
+      {
+        "code": "current-rollout",
+        "passed": false,
+        "detail": "An unexpired FX-11 rollout assessment must retain PaperReady; its freshness limit is 60 seconds."
+      },
+      {
+        "code": "approved-model",
+        "passed": false,
+        "detail": "Exactly one approved FX model must match the current research contract and artifact hash."
+      },
+      {
+        "code": "research-integrity",
+        "passed": false,
+        "detail": "Approved model must reference an intact completed FX evaluation and replay."
+      },
+      {
+        "code": "local-capacity-clear",
+        "passed": true,
+        "detail": "The isolated pilot requires no existing active local reservations; actual broker positions/orders require separate reconciliation."
+      }
+    ],
+    "scope": "Offline file/database preflight only; no broker connection, migration, approval or order submission.",
+    "offlinePrerequisitesPassed": false,
+    "canSendOrders": false,
+    "runtimeChecksStillRequired": [
+      "Verified paper account and USD summary",
+      "Fresh live paired quotes and healthy current rollout",
+      "Broker size/price rules, margin and partial-size protective exits",
+      "Existing positions/orders reconciled",
+      "Bounded test limits and stop procedure",
+      "Fresh approved signal, FX-9 sizing, costs, reservation and execution guard"
+    ]
+  }
+}

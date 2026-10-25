@@ -37,6 +37,7 @@ coverage/
 
 # Local runtime databases and SQLite sidecars
 data/datasets/
+data/eurusd-collection/
 *.db
 *.db-wal
 *.db-shm

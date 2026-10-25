@@ -4,6 +4,8 @@
 
 ## Utvrđeni preduvjeti
 
+**Kasnija operativna dopuna istog dana:** nedostatak konfiguracije instrumenta i baze riješen je zasebnim [ForexCollection profilom](FOREX_COLLECTION.md). Kolektor je pokrenut na paper TWS-u i spremio je 1.425 povijesnih barova; postoji jedna označena praznina od 92 minute. Naknadni preflight čita cijelu popravljenu operativnu shemu i potvrđuje instrument/bazu, ali model, research, PaperReady i izvršni uvjeti ostaju neispunjeni. Naloga nije bilo. Sljedeći odlomak i raniji JSON ostaju vremenski označen dokaz prije te pripreme.
+
 Read-only provjera zajedničkog `TradingBot.Web/appsettings.json` u 18:41 UTC našla je samo stock instrument, bez FX research/signal/execution profila. Konfiguracija je u AnalysisOnly, bez uključenog FX paper/model opt-ina. Na provjerenoj zadanoj lokaciji `TradingBot.Web/data/trading.db` nema operativne baze; provjera nije tražila ili stvarala alternativnu bazu na cijelom računalu. Ni zadana `data/trading.db` iz korijena checkouta nije pronađena. Nema pripremljenog produkcijskog EUR/USD modela i dokaza stvarnog model shadow toka u ovom checkoutu.
 
 Prema aplikacijskom kalendaru FX sesija tada je zatvorena; sljedeće predviđeno otvaranje je 25.10.2026. u 21:15 UTC, odnosno 22:15 Europe/Zagreb. To nije potvrda brokerove raspoloživosti ni prazničnog rasporeda. Otvaranje sesije samo po sebi neće ukloniti preostale blokade. [Anonimizirani izvještaj](evidence/fx12-preflight-2026-10-25.json) bilježi stanje u trenutku provjere. Raniji FX-11 dokaz veze i 60 MIDPOINT barova ostaje povijesni dokaz, bez živih tickova/model odluka/fillova.

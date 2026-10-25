@@ -5,6 +5,8 @@ Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_
 
 ## Sažetak
 
+Operativna dopuna 25.10.2026.: EUR/USD kolektor sada ima aktivan zaseban profil, trajnu bazu i Parquet. Stvarno pokretanje otkrilo je nedostatak rollout i post-trade tablica koji ranije testiranje djelomične sheme nije uhvatilo; forward migracija i provjera svih mapiranih stupaca to popravljaju uz očuvanje podataka. TWS veza i 1.425 spremljenih barova potvrđeni su, s jednom povijesnom prazninom. [Dokaz i granice kolektora](FOREX_COLLECTION.md). Prikupljanje čeka sesiju, a nalozi su blokirani u adapteru; nema potvrde model shadowa ili stvarnog izvršenja.
+
 Naknadna dopuna 25.10.2026., FX-12 priprema: read-only inventar postojeće konfiguracije/SQLite dokaza i protokol stvarnog paper testa otkrivaju nedostajuće FX profile, bazu na zadanoj lokaciji i zatvorenu sesiju. Offline provjera ne daje dopuštenje naloga; stvarni model shadow, brokerova pravila i entry/fill/zaštita/exit još moraju biti potvrđeni. Ispravljen je UTC binding datuma pregledanih izvršnih pravila. [FX-12 opseg i blokade](FX12_PAPER_PROTOCOL.md). Nema stvarnog naloga ni promjene live enablementa.
 
 Naknadna dopuna 25.10.2026., FX-11: uklonjena je stock-only pretpostavka onboardinga za FX. Model shadow ima zasebne trajne dokaze i gateove po strategiji, a UI prikazuje valutne jedinice i razloge blokade. Operativni startup i cijela regresija prolaze (680/680). TWS veza i 60 MIDPOINT barova ponovno su potvrđeni; nema živog shadow uzorka u zatvorenoj sesiji ni odobrenog produkcijskog modela. [Opseg i granice FX-11](FX11_ONBOARDING.md). Nije omogućen live trading ni proveden stvarni paper nalog.

@@ -7,6 +7,8 @@ namespace TradingBot.Application.Configuration
         public string Host { get; set; } = "localhost";
         public IbkrHostType HostType { get; set; } = IbkrHostType.Gateway;
         public int ClientId { get; set; } = 1;
+        // Collection hosts can reject every broker order mutation, independently of trading gates.
+        public bool ReadOnlyApi { get; set; }
         public string? AccountId { get; set; }
         public string? PaperAccountId { get; set; }
         public IbkrEndpointSettings Paper { get; set; } = new() { Port = 4002 };
