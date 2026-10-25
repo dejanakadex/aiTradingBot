@@ -36,7 +36,9 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # global.json permits this feature band; pin the tested SDK so a newly
+          # advertised but unavailable download cannot break unrelated changes.
+          dotnet-version: '10.0.402'
 
       - name: Show SDK information
         run: dotnet --info
