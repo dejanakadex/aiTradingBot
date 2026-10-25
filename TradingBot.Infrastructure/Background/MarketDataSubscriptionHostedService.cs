@@ -146,7 +146,7 @@ namespace TradingBot.Infrastructure.Background
                     await using var subscription = await _marketDataService
                         .SubscribeAsync(stream.Instrument.Symbol, stream.Timeframe, cancellationToken)
                         .ConfigureAwait(false);
-                    var inSession = IsRegularSession(_clock.UtcNow);
+                    var inSession = IsRegularSession(stream.Instrument, _clock.UtcNow);
                     _collectionStatus.ReportStatus(
                         stream.StreamKey,
                         inSession ? MarketDataCollectionStatus.Live : MarketDataCollectionStatus.IdleOutsideSession,
@@ -282,7 +282,7 @@ namespace TradingBot.Infrastructure.Background
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     var now = ToUtc(_clock.UtcNow);
-                    if (!IsRegularSession(now))
+                    if (!IsRegularSession(stream.Instrument, now))
                     {
                         lastActivityUtc = now;
                         _collectionStatus.ReportStatus(
@@ -333,7 +333,7 @@ namespace TradingBot.Infrastructure.Background
 
         private async Task TryGapFillAsync(CollectionStream stream, CancellationToken cancellationToken)
         {
-            if (!_collectionSettings.AutoGapFillEnabled || !IsRegularSession(_clock.UtcNow)) return;
+            if (!_collectionSettings.AutoGapFillEnabled || !IsRegularSession(stream.Instrument, _clock.UtcNow)) return;
             var snapshot = _collectionStatus.GetAll()
                 .Single(item => item.StreamKey.Equals(stream.StreamKey, StringComparison.OrdinalIgnoreCase));
             if (!snapshot.LastEventTimeUtc.HasValue) return;
@@ -376,21 +376,8 @@ namespace TradingBot.Infrastructure.Background
                 .Add(TimeSpan.FromSeconds(_collectionSettings.HeartbeatGraceSeconds));
         }
 
-        private bool IsRegularSession(DateTime utcNow)
-        {
-            if (!_collectionSettings.RegularSessionOnly) return true;
-            var local = TimeZoneInfo.ConvertTimeFromUtc(ToUtc(utcNow), ResolveEasternTimeZone());
-            if (local.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
-            var start = new TimeSpan(
-                Math.Clamp(_tradingSettings.TradingStartHourNewYork, 0, 23),
-                Math.Clamp(_tradingSettings.TradingStartMinuteNewYork, 0, 59),
-                0);
-            var end = new TimeSpan(
-                Math.Clamp(_tradingSettings.TradingEndHourNewYork, 0, 23),
-                Math.Clamp(_tradingSettings.TradingEndMinuteNewYork, 0, 59),
-                0);
-            return local.TimeOfDay >= start && local.TimeOfDay < end;
-        }
+        private bool IsRegularSession(ConfiguredInstrument instrument, DateTime utcNow) =>
+            MarketDataSession.IsOpen(instrument, ToUtc(utcNow), _tradingSettings, _collectionSettings.RegularSessionOnly);
 
         private static string NormalizeTimeframe(string timeframe) => timeframe.Trim().ToLowerInvariant() switch
         {

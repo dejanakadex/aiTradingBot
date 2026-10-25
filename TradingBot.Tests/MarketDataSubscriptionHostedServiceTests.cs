@@ -79,6 +79,30 @@ namespace TradingBot.Tests
         }
 
         [Fact]
+        public async Task ForexCollectsOvernightAlongsideIdleStockWithoutPublishingAnalysis()
+        {
+            var settings = ForexCollectionTests.Settings();
+            settings.Instruments = [.. settings.Instruments,
+                new InstrumentSettings { InstrumentId = "SPY", Symbol = "SPY", TradingEnabled = false, MarketDataTimeframes = ["1m"] }];
+            var harness = CreateHarness(settings);
+            harness.Clock.UtcNow = new DateTime(2026, 10, 26, 2, 0, 0, DateTimeKind.Utc);
+            try
+            {
+                await harness.Service.StartAsync(CancellationToken.None);
+                await WaitUntilAsync(() => harness.MarketData.Subscriptions.Count == 2);
+                await WaitUntilAsync(() => harness.CollectionStatus.GetAll().All(x => x.Subscribed));
+                Assert.Equal(MarketDataCollectionStatus.Live, harness.CollectionStatus.GetAll().Single(x => x.Symbol == "EURUSD").Status);
+                Assert.Equal(MarketDataCollectionStatus.IdleOutsideSession, harness.CollectionStatus.GetAll().Single(x => x.Symbol == "SPY").Status);
+                await harness.MarketData.PublishAsync("EURUSD", "1m", ForexCollectionTests.Bar(harness.Clock.UtcNow.AddMinutes(-1)));
+                await WaitUntilAsync(() => harness.CollectionStatus.GetAll().Single(x => x.Symbol == "EURUSD").LastHeartbeatUtc.HasValue);
+                using var db = harness.Factory.CreateDbContext();
+                Assert.Null(db.Candles.Single(x => x.Symbol == "EURUSD").Volume);
+                Assert.False(harness.EventBus.CandleReader.TryRead(out _));
+            }
+            finally { await harness.Service.StopAsync(CancellationToken.None); harness.Dispose(); }
+        }
+
+        [Fact]
         public async Task StartsCollectionWithoutTradingReadiness()
         {
             var harness = CreateHarness();

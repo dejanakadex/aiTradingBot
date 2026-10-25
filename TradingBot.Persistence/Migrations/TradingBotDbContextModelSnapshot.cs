@@ -201,7 +201,7 @@ namespace TradingBot.Persistence.Migrations
                     b.Property<DateTime>("TimestampUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal>("Volume")
+                    b.Property<decimal?>("Volume")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

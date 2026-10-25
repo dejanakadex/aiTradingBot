@@ -41,6 +41,7 @@ namespace TradingBot.Infrastructure.Services
         private CancellationTokenSource? _readerLoopCts;
         private Task? _readerLoop;
         private int _nextOrderId;
+        private TaskCompletionSource<bool> _apiHandshake = NewTcs<bool>();
         private int _nextRequestId = 10_000;
         private bool _managedAccountsReceived;
         private bool? _configuredAccountRecognized;
@@ -89,6 +90,8 @@ namespace TradingBot.Infrastructure.Services
                 _readerLoopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 _managedAccountsReceived = false;
                 _configuredAccountRecognized = null;
+                _nextOrderId = 0;
+                _apiHandshake = NewTcs<bool>();
                 _marketDataErrors.Clear();
             }
 
@@ -106,6 +109,15 @@ namespace TradingBot.Infrastructure.Services
             var reader = new EReader(_client!, _signal!);
             reader.Start();
             _readerLoop = Task.Run(() => ProcessMessagesAsync(reader, _signal!, _readerLoopCts!.Token), CancellationToken.None);
+
+            // Socket negotiation alone does not authorize API requests: TWS can drop them until nextValidId.
+            // This callback is automatic even in read-only mode; receiving it never grants order permission.
+            try { await _apiHandshake.Task.WaitAsync(BrokerResponseTimeout, cancellationToken).ConfigureAwait(false); }
+            catch
+            {
+                await StopAsync().ConfigureAwait(false);
+                throw;
+            }
 
             _client!.reqManagedAccts();
             if (!_options.ReadOnlyDiagnostics)
@@ -344,10 +356,12 @@ namespace TradingBot.Infrastructure.Services
             var startUtc = ToUtc(historicalRequest.StartUtc);
             var endUtc = ToUtc(historicalRequest.EndUtc);
             if (endUtc <= startUtc) throw new ArgumentOutOfRangeException(nameof(historicalRequest), "Historical request end must be after start.");
-            var contract = BuildStockOperationContract(historicalRequest.Symbol, "FX history collection awaits FX-4.", historicalRequest.InstrumentId);
+            var instrument = ResolveInstrument(historicalRequest.Symbol, historicalRequest.InstrumentId);
+            var contract = IbkrContractFactory.Create(instrument);
+            var profile = IbkrDataProfile.For(instrument);
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
-            var request = new HistoricalBarsRequest(historicalRequest.Symbol, NormalizeTimeframe(historicalRequest.Timeframe));
+            var request = new HistoricalBarsRequest(historicalRequest.Symbol, NormalizeTimeframe(historicalRequest.Timeframe)) { Profile = profile };
             _historicalRequests[requestId] = request;
 
             client.reqHistoricalData(
@@ -356,8 +370,8 @@ namespace TradingBot.Infrastructure.Services
                 endUtc.ToString("yyyyMMdd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture),
                 BuildDuration(startUtc, endUtc),
                 ToIbkrBarSize(historicalRequest.Timeframe),
-                "TRADES",
-                1,
+                profile.WhatToShow,
+                profile.UseRegularHours,
                 2,
                 false,
                 []);
@@ -375,7 +389,9 @@ namespace TradingBot.Infrastructure.Services
 
         public Task<IMarketDataSubscription> SubscribeAsync(string symbol, string timeframe, CancellationToken cancellationToken = default)
         {
-            var contract = BuildStockOperationContract(symbol, "FX bar collection awaits FX-4.");
+            var instrument = ResolveInstrument(symbol);
+            var contract = IbkrContractFactory.Create(instrument);
+            var profile = IbkrDataProfile.For(instrument);
             var client = GetConnectedClient();
             var requestId = GetNextRequestId();
             var normalizedTimeframe = NormalizeTimeframe(timeframe);
@@ -391,6 +407,7 @@ namespace TradingBot.Infrastructure.Services
                 TryBrokerCall(() => client.cancelHistoricalData(requestId), "cancel streaming historical data");
             });
             subscription.SetContext(symbol, normalizedTimeframe);
+            subscription.Profile = profile;
 
             _subscriptions[requestId] = subscription;
 
@@ -400,8 +417,8 @@ namespace TradingBot.Infrastructure.Services
                 string.Empty,
                 BuildDuration(timeframe, 50),
                 ToIbkrBarSize(timeframe),
-                "TRADES",
-                1,
+                profile.WhatToShow,
+                profile.UseRegularHours,
                 2,
                 true,
                 []);
@@ -412,7 +429,9 @@ namespace TradingBot.Infrastructure.Services
         public Task<ITickMarketDataSubscription> SubscribeTicksAsync(string instrumentId, string symbol, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var contract = BuildStockOperationContract(symbol, "FX tick collection awaits FX-4.", instrumentId);
+            var instrument = ResolveInstrument(symbol, instrumentId);
+            var contract = IbkrContractFactory.Create(instrument);
+            var profile = IbkrDataProfile.For(instrument);
             var client = GetConnectedClient();
             var tradeId = GetNextRequestId();
             var quoteId = GetNextRequestId();
@@ -420,14 +439,14 @@ namespace TradingBot.Infrastructure.Services
             {
                 _tickSubscriptions.TryRemove(tradeId, out _);
                 _tickSubscriptions.TryRemove(quoteId, out _);
-                TryBrokerCall(() => client.cancelTickByTickData(tradeId), "cancel trade tick data");
+                if (profile.RequestTrades) TryBrokerCall(() => client.cancelTickByTickData(tradeId), "cancel trade tick data");
                 TryBrokerCall(() => client.cancelTickByTickData(quoteId), "cancel bid/ask tick data");
-            });
-            _tickSubscriptions[tradeId] = subscription;
+            }, profile.TickSource, profile.RequestTrades);
+            if (profile.RequestTrades) _tickSubscriptions[tradeId] = subscription;
             _tickSubscriptions[quoteId] = subscription;
             try
             {
-                client.reqTickByTickData(tradeId, contract, "AllLast", 0, false);
+                if (profile.RequestTrades) client.reqTickByTickData(tradeId, contract, "AllLast", 0, false);
                 client.reqTickByTickData(quoteId, contract, "BidAsk", 0, false);
                 return Task.FromResult<ITickMarketDataSubscription>(subscription);
             }
@@ -469,6 +488,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (orderId <= 0) return;
             Interlocked.Exchange(ref _nextOrderId, orderId);
+            _apiHandshake.TrySetResult(true);
             _ = PublishReadinessAsync(!_options.ReadOnlyDiagnostics);
         }
 
@@ -820,7 +840,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (_historicalRequests.TryGetValue(reqId, out var historicalRequest))
             {
-                historicalRequest.Record(ToMarketBar(historicalRequest.Symbol, historicalRequest.Timeframe, bar));
+                historicalRequest.Record(ToMarketBar(historicalRequest.Symbol, historicalRequest.Timeframe, bar, historicalRequest.Profile));
             }
 
             if (_subscriptions.TryGetValue(reqId, out var subscription))
@@ -861,7 +881,7 @@ namespace TradingBot.Infrastructure.Services
                 }
 
                 _marketDataErrors.TryRemove(subscription.Symbol, out _);
-                var marketBar = ToMarketBar(subscription.Symbol, subscription.Timeframe, bar);
+                var marketBar = ToMarketBar(subscription.Symbol, subscription.Timeframe, bar, subscription.Profile);
                 var completedBar = subscription.AcceptLiveUpdate(marketBar);
                 if (completedBar == null)
                 {
@@ -1111,7 +1131,7 @@ namespace TradingBot.Infrastructure.Services
             }
         }
 
-        private static MarketBar ToMarketBar(string symbol, string timeframe, Bar bar)
+        internal static MarketBar ToMarketBar(string symbol, string timeframe, Bar bar, IbkrDataProfile? profile = null)
         {
             return new MarketBar
             {
@@ -1119,13 +1139,13 @@ namespace TradingBot.Infrastructure.Services
                 Timeframe = timeframe,
                 TimestampUtc = ParseIbkrBarTime(bar.Time),
                 ReceivedTimeUtc = DateTime.UtcNow,
-                Source = "IBKR",
+                Source = profile?.BarSource ?? "IBKR",
                 IsFinal = true,
                 Open = ToDecimal(bar.Open),
                 High = ToDecimal(bar.High),
                 Low = ToDecimal(bar.Low),
                 Close = ToDecimal(bar.Close),
-                Volume = bar.Volume
+                Volume = profile?.RequestTrades == false ? null : bar.Volume
             };
         }
 
@@ -1329,6 +1349,7 @@ namespace TradingBot.Infrastructure.Services
             public string Symbol { get; }
             public string Timeframe { get; }
             public ConcurrentBag<MarketBar> Bars { get; } = new();
+            public IbkrDataProfile? Profile { get; init; }
             public TaskCompletionSource<IEnumerable<MarketBar>> Completion { get; } = NewTcs<IEnumerable<MarketBar>>();
 
             public void Record(MarketBar bar)
@@ -1367,6 +1388,7 @@ namespace TradingBot.Infrastructure.Services
             }
 
             public int RequestId { get; }
+            public IbkrDataProfile? Profile { get; set; }
             public string Symbol { get; private set; } = string.Empty;
             public string Timeframe { get; private set; } = string.Empty;
             public bool BackfillCompleted { get; private set; }
@@ -1414,11 +1436,17 @@ namespace TradingBot.Infrastructure.Services
             private (double Price, decimal Size)? _lastBid;
             private (double Price, decimal Size)? _lastAsk;
 
-            public TickSubscription(string instrumentId, string symbol, int capacity, Action dispose)
+            private readonly string _source;
+            private readonly bool _allowTrades;
+
+            public TickSubscription(string instrumentId, string symbol, int capacity, Action dispose,
+                string source = "IBKR.TickByTick", bool allowTrades = true)
             {
                 InstrumentId = instrumentId;
                 Symbol = symbol;
                 _dispose = dispose;
+                _source = source;
+                _allowTrades = allowTrades;
                 _channel = Channel.CreateBounded<CanonicalMarketDataEvent>(new BoundedChannelOptions(capacity)
                 {
                     FullMode = BoundedChannelFullMode.Wait,
@@ -1434,12 +1462,12 @@ namespace TradingBot.Infrastructure.Services
 
             public void PublishQuote(long epochSeconds, double bidPrice, double askPrice, decimal bidSize, decimal askSize)
             {
-                if (_lastBid != (bidPrice, bidSize))
+                if (!_allowTrades || _lastBid != (bidPrice, bidSize))
                 {
                     Publish(MarketDataEventKind.Bid, epochSeconds, bidPrice, bidSize);
                     _lastBid = (bidPrice, bidSize);
                 }
-                if (_lastAsk != (askPrice, askSize))
+                if (!_allowTrades || _lastAsk != (askPrice, askSize))
                 {
                     Publish(MarketDataEventKind.Ask, epochSeconds, askPrice, askSize);
                     _lastAsk = (askPrice, askSize);
@@ -1448,7 +1476,8 @@ namespace TradingBot.Infrastructure.Services
 
             public void Publish(MarketDataEventKind kind, long epochSeconds, double price, decimal size)
             {
-                if (_disposed != 0 || !double.IsFinite(price) || price <= 0 || price > (double)decimal.MaxValue || size < 0) return;
+                if (!_allowTrades && kind == MarketDataEventKind.Trade) return;
+                if (_disposed != 0 || !double.IsFinite(price) || price <= 0 || price >= (double)decimal.MaxValue || (_allowTrades && size < 0)) return;
                 DateTime eventTime;
                 try { eventTime = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).UtcDateTime; }
                 catch (ArgumentOutOfRangeException) { return; }
@@ -1461,9 +1490,9 @@ namespace TradingBot.Infrastructure.Services
                     Kind = kind,
                     EventTimeUtc = eventTime,
                     ReceivedTimeUtc = DateTime.UtcNow,
-                    Source = "IBKR.TickByTick",
+                    Source = _source,
                     Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture),
-                    Size = size,
+                    Size = size < 0 || size == decimal.MaxValue ? null : size,
                     IsFinal = true
                 };
                 if (!_channel.Writer.TryWrite(marketEvent)) Interlocked.Increment(ref _droppedEvents);

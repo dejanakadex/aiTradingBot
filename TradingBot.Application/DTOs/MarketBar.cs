@@ -16,6 +16,7 @@ namespace TradingBot.Application.DTOs
         public decimal High { get; init; }
         public decimal Low { get; init; }
         public decimal Close { get; init; }
-        public decimal Volume { get; init; }
+        // Null means unavailable (for example IBKR MIDPOINT); zero is a measured zero.
+        public decimal? Volume { get; init; } = 0m;
     }
 }

@@ -1,0 +1,66 @@
+{
+  "TradingSettings": {
+    "Enabled": false,
+    "OperatingMode": "AnalysisOnly",
+    "LiveTradingExplicitlyEnabled": false,
+    "Instruments": [
+      {
+        "InstrumentId": "US-STK-SPY-SMART",
+        "Symbol": "SPY",
+        "SecurityType": "STK",
+        "Exchange": "SMART",
+        "Currency": "USD",
+        "Enabled": false,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "deterministic-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ]
+      },
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "Symbol": "EURUSD",
+        "BaseCurrency": "EUR",
+        "Currency": "USD",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Enabled": true,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "eurusd-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ],
+        "MaximumHoldingSeconds": 60
+      },
+      {
+        "InstrumentId": "FX-CASH-EUR-GBP-IDEALPRO",
+        "BaseCurrency": "EUR",
+        "Currency": "GBP",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Enabled": false,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "eurgbp-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ],
+        "MaximumHoldingSeconds": 45
+      }
+    ]
+  }
+}

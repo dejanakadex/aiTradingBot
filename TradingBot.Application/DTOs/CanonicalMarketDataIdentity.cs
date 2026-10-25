@@ -20,7 +20,7 @@ namespace TradingBot.Application.DTOs
                 bar.High.ToString(CultureInfo.InvariantCulture),
                 bar.Low.ToString(CultureInfo.InvariantCulture),
                 bar.Close.ToString(CultureInfo.InvariantCulture),
-                bar.Volume.ToString(CultureInfo.InvariantCulture));
+                bar.Volume?.ToString(CultureInfo.InvariantCulture) ?? "unavailable");
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
         }
 

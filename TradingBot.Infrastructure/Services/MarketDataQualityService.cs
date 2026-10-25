@@ -167,6 +167,11 @@ namespace TradingBot.Infrastructure.Services
             {
                 return Reject(MarketDataQualityStatus.Invalid, $"Symbol '{marketEvent.Symbol}' does not match configured instrument '{marketEvent.InstrumentId}'.");
             }
+            if (configured.InstrumentType == InstrumentType.Forex
+                && (marketEvent.Kind == MarketDataEventKind.Trade
+                    || marketEvent.Kind == MarketDataEventKind.Bar
+                        && (marketEvent.Volume.HasValue || !marketEvent.Source.StartsWith("IBKR.Midpoint", StringComparison.Ordinal))))
+                return Reject(MarketDataQualityStatus.Invalid, "FX collection requires quote/MIDPOINT data with unavailable trade volume.");
 
             if (!marketEvent.IsFinal)
             {
@@ -214,13 +219,16 @@ namespace TradingBot.Infrastructure.Services
             if (marketEvent.Kind == MarketDataEventKind.Bar
                 && state?.LastEventTimeUtc is DateTime lastBarTime
                 && ExpectedBarInterval(marketEvent.Timeframe) is TimeSpan interval
-                && ToUtc(lastBarTime).Date == eventTime.Date
+                && (configured.InstrumentType == InstrumentType.Forex
+                    ? MarketDataSession.HasForexBarBetween(ToUtc(lastBarTime).Add(interval), eventTime, interval)
+                    : ToUtc(lastBarTime).Date == eventTime.Date)
                 && eventTime > ToUtc(lastBarTime).Add(interval).Add(FutureTolerance))
             {
                 return Gap($"Bar gap detected: expected {ToUtc(lastBarTime).Add(interval):O}, received {eventTime:O}.");
             }
 
-            return new MarketDataQualityAssessment(MarketDataQualityStatus.Healthy, "Event passed canonical quality checks.", true, marketEvent.Kind == MarketDataEventKind.Bar);
+            return new MarketDataQualityAssessment(MarketDataQualityStatus.Healthy, "Event passed canonical quality checks.", true,
+                configured.InstrumentType != InstrumentType.Forex && marketEvent.Kind == MarketDataEventKind.Bar);
         }
 
         private static string? ValidateShape(CanonicalMarketDataEvent marketEvent)

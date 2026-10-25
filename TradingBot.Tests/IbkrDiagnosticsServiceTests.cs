@@ -86,7 +86,7 @@ public sealed class IbkrDiagnosticsServiceTests
         Assert.Equal(forex.RequestedContract, forex.BrokerContract!.Contract);
         Assert.Equal(1, forex.ContractMatchCount);
         Assert.Equal("Disabled", forex.MarketDataStatus);
-        Assert.Equal("ForexCollectionPendingFx4", forex.DataAdapterCapability);
+        Assert.Equal("ForexBidAskAndMidpoint", forex.DataAdapterCapability);
         Assert.Equal("ForexExecutionPendingFx9", forex.OrderAdapterCapability);
         Assert.Equal("NotProbed", Assert.Single(result.Instruments, item => item.Symbol == "EURGBP").BrokerContractStatus);
         var stock = Assert.Single(result.Instruments, item => item.Symbol == "SPY");

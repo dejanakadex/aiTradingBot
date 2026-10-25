@@ -70,6 +70,8 @@ namespace TradingBot.Infrastructure.Services
                 .OrderBy(item => item.TimestampUtc)
                 .ToArray();
             if (candles.Length == 0) throw new InvalidOperationException("No candles are available at or before AsOfUtc.");
+            if (candles.Any(item => !item.HasTradeVolume))
+                throw new NotSupportedException("Quote-derived features require FX-5; missing trade volume must not be interpreted as zero.");
 
             ValidateSeriesIdentity(candles);
             var last = candles[^1];

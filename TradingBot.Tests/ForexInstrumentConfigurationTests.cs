@@ -99,7 +99,6 @@ public sealed class ForexInstrumentConfigurationTests
     }
 
     [Theory]
-    [InlineData(true, false)]
     [InlineData(true, true)]
     [InlineData(false, true)]
     public void ForexActivationFailsWithSpecificOptionsError(bool enabled, bool trading)
@@ -113,7 +112,7 @@ public sealed class ForexInstrumentConfigurationTests
         using var provider = services.BuildServiceProvider();
         var error = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<TradingSettings>>().Value);
         Assert.Contains("FX-CASH-EUR-USD-IDEALPRO", error.Message);
-        Assert.Contains("Enabled=false and TradingEnabled=false", error.Message);
+        Assert.Contains("TradingEnabled=false", error.Message);
         Assert.Throws<ArgumentException>(() => Mixed(fx).GetEnabledInstruments());
     }
 

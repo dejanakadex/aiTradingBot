@@ -150,15 +150,15 @@ public sealed class IbkrFxContractTests
     }
 
     [Fact]
-    public async Task ForexDataAndOrdersRemainBlockedBeforeAnyConnection()
+    public async Task ForexOrdersRemainBlockedWhileDataReachesConnectionCheck()
     {
         using var broker = Broker();
         var order = new OrderRequestDto { Symbol = "EURUSD", Quantity = 20000, Side = "BUY", Type = "MARKET" };
         await Assert.ThrowsAsync<NotSupportedException>(() => broker.SubmitOrderAsync(order));
         await Assert.ThrowsAsync<NotSupportedException>(() => broker.ModifyOrderAsync("1", order));
-        await Assert.ThrowsAsync<NotSupportedException>(() => broker.SubscribeAsync("EURUSD", "1m"));
-        await Assert.ThrowsAsync<NotSupportedException>(() => broker.SubscribeTicksAsync("EURUSD-ID", "EURUSD"));
-        await Assert.ThrowsAsync<NotSupportedException>(() => broker.GetHistoricalBarsAsync(new HistoricalBarRequest(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => broker.SubscribeAsync("EURUSD", "1m"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => broker.SubscribeTicksAsync("EURUSD-ID", "EURUSD"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => broker.GetHistoricalBarsAsync(new HistoricalBarRequest(
             "EURUSD-ID", "EURUSD", "1m", DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow)));
     }
 
@@ -239,8 +239,12 @@ public sealed class IbkrFxContractTests
         using var broker = Broker(readOnly: true);
         bool? ready = null;
         broker.ReadinessChanged += value => { ready = value; return Task.CompletedTask; };
+        var handshake = (TaskCompletionSource<bool>)typeof(IbkrBrokerService)
+            .GetField("_apiHandshake", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(broker)!;
+        Assert.False(handshake.Task.IsCompleted);
         broker.nextValidId(123);
         Assert.False(ready);
+        Assert.True(handshake.Task.IsCompletedSuccessfully);
     }
 
     [Theory]

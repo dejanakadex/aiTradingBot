@@ -11,6 +11,8 @@ using TradingBot.Infrastructure.Services;
 
 var settings = ParseArguments(args);
 if (settings is null) return 2;
+if (settings.ForexDataConfigPath is not null)
+    return await ForexDataProbeRunner.RunAsync(settings.ForexDataConfigPath, settings.OutputPath, settings.Port, settings.ClientId, settings.Seconds);
 if (settings.ContractsConfigPath is not null)
     return await ContractProbeRunner.RunAsync(settings.ContractsConfigPath, settings.OutputPath, settings.Port, settings.ClientId);
 
@@ -116,6 +118,7 @@ static ProbeSettings? ParseArguments(string[] arguments)
     string? output = null;
     string? database = null;
     string? contractsConfig = null;
+    string? forexDataConfig = null;
     for (var i = 0; i < arguments.Length; i++)
     {
         if (i + 1 >= arguments.Length)
@@ -134,18 +137,20 @@ static ProbeSettings? ParseArguments(string[] arguments)
             case "--output": output = value; break;
             case "--database": database = value; break;
             case "--contracts-config": contractsConfig = value; break;
+            case "--forex-data-config": forexDataConfig = value; break;
             default: Console.Error.WriteLine("Unknown or invalid option."); return null;
         }
     }
     if (port is < 1 or > 65535 || clientId < 0 || seconds is < 5 or > 3600
         || symbols.Length == 0 || symbols.Any(x => x.Length is < 1 or > 8 || x.Any(c => !char.IsAsciiLetterOrDigit(c)))
         || string.IsNullOrWhiteSpace(output)
-        || (contractsConfig is not null && (port is not (7497 or 4002) || database is not null)))
+        || ((contractsConfig is not null || forexDataConfig is not null) && (port is not (7497 or 4002) || database is not null))
+        || (contractsConfig is not null && forexDataConfig is not null))
     {
-        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]. Contract-only mode: --contracts-config JSON_PATH --output ABSOLUTE_PATH [--port 7497|4002] [--client-id 87].");
+        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]. Read-only modes: --contracts-config JSON_PATH or --forex-data-config JSON_PATH, with --output ABSOLUTE_PATH [--port 7497|4002] [--client-id 87] [--seconds 1800].");
         return null;
     }
-    return new ProbeSettings(port, clientId, seconds, symbols, output, database, contractsConfig);
+    return new ProbeSettings(port, clientId, seconds, symbols, output, database, contractsConfig, forexDataConfig);
 }
 
 static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subscription,
@@ -163,4 +168,4 @@ static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subs
     }
 }
 
-internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath, string? ContractsConfigPath);
+internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath, string? ContractsConfigPath, string? ForexDataConfigPath);

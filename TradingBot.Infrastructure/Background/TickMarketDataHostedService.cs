@@ -60,7 +60,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
         var instruments = _trading.GetEnabledInstruments();
         var checkpoints = (await _quality.GetStreamsAsync(stoppingToken).ConfigureAwait(false))
             .Where(x => x.Kind is MarketDataEventKind.Bid or MarketDataEventKind.Ask or MarketDataEventKind.Trade)
-            .Where(x => x.Source == "IBKR.TickByTick" && x.LastReceivedTimeUtc.HasValue)
+            .Where(x => x.Source.StartsWith("IBKR.TickByTick", StringComparison.Ordinal) && x.LastReceivedTimeUtc.HasValue)
             .GroupBy(x => x.InstrumentId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.Max(y => y.LastReceivedTimeUtc)!.Value, StringComparer.OrdinalIgnoreCase);
 
@@ -104,7 +104,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
                 }
 
                 _status.ReportStatus(key, MarketDataCollectionStatus.Subscribing,
-                    "Requesting IBKR AllLast and BidAsk tick-by-tick streams.", true, false, _clock.UtcNow);
+                    instrument.InstrumentType == InstrumentType.Forex ? "Requesting IBKR FX BidAsk stream; no trade volume."
+                        : "Requesting IBKR AllLast and BidAsk tick-by-tick streams.", true, false, _clock.UtcNow);
                 await using var subscription = await _ticks!.SubscribeTicksAsync(
                     instrument.InstrumentId, instrument.Symbol, token).ConfigureAwait(false);
                 var subscribedAt = _clock.UtcNow;
@@ -114,7 +115,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.", 0, token).ConfigureAwait(false);
                 }
                 gapStart = subscribedAt;
-                _status.ReportStatus(key, MarketDataCollectionStatus.Live,
+                _status.ReportStatus(key, IsRegularSession(instrument, subscribedAt) ? MarketDataCollectionStatus.Live : MarketDataCollectionStatus.IdleOutsideSession,
                     "Tick requests active; waiting for broker callbacks.", true, true, subscribedAt);
                 delay = _settings.ReconnectInitialDelaySeconds;
                 var lastActivity = subscribedAt;
@@ -138,11 +139,16 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         }
                         var now = _clock.UtcNow;
                         _latest.AdvanceTo(now);
-                        if (_shortSignals != null)
+                        if (_shortSignals != null && instrument.InstrumentType != InstrumentType.Forex)
                             await _shortSignals.ProcessAsync(instrument, now, token).ConfigureAwait(false);
-                        if (IsRegularSession(now) && now - lastActivity > TimeSpan.FromSeconds(_settings.TickHeartbeatTimeoutSeconds))
+                        if (IsRegularSession(instrument, now) && now - lastActivity > TimeSpan.FromSeconds(_settings.TickHeartbeatTimeoutSeconds))
                             throw new IOException("Tick heartbeat timeout.");
-                        if (!IsRegularSession(now)) lastActivity = now;
+                        if (!IsRegularSession(instrument, now))
+                        {
+                            lastActivity = now;
+                            _status.ReportStatus(key, MarketDataCollectionStatus.IdleOutsideSession,
+                                "Subscription active outside the instrument's collection session.", true, true, now);
+                        }
                         continue;
                     }
                     if (!available) throw new IOException("Tick channel completed.");
@@ -151,7 +157,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         var assessment = await _pipeline.ProcessCanonicalEventAsync(marketEvent, token).ConfigureAwait(false);
                         if (!assessment.CanPersist)
                             throw new IOException($"Tick quality rejected: {assessment.Status} {assessment.Reason}");
-                        if (assessment.IsHealthy && _shortSignals != null)
+                        if (assessment.IsHealthy && _shortSignals != null && instrument.InstrumentType != InstrumentType.Forex)
                             await _shortSignals.ProcessAsync(instrument, marketEvent.ReceivedTimeUtc, token).ConfigureAwait(false);
                         lastActivity = _clock.UtcNow;
                         gapStart = marketEvent.ReceivedTimeUtc;
@@ -179,20 +185,23 @@ public sealed class TickMarketDataHostedService : BackgroundService
                 _logger.LogWarning(ex, "Tick collection interrupted for {InstrumentId}; retrying independently.", instrument.InstrumentId);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(delay), token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(instrument.InstrumentType == InstrumentType.Forex ? Math.Max(15, delay) : delay), token).ConfigureAwait(false);
             delay = Math.Min(_settings.ReconnectMaximumDelaySeconds, delay * 2);
         }
     }
 
     private async Task RecordGapAsync(ConfiguredInstrument instrument, DateTime start, DateTime end, string reason, long dropped, CancellationToken token)
     {
+        var windows = instrument.InstrumentType == InstrumentType.Forex && dropped == 0
+            ? MarketDataSession.ForexOpenWindows(start, end).ToArray() : [(Start: start, End: end)];
+        if (windows.Length == 0) return;
         await using var db = await _dbFactory.CreateDbContextAsync(token).ConfigureAwait(false);
-        db.TickCoverageGapRecords.Add(new TickCoverageGapRecord
+        foreach (var window in windows) db.TickCoverageGapRecords.Add(new TickCoverageGapRecord
         {
             InstrumentId = instrument.InstrumentId,
             Symbol = instrument.Symbol,
-            StartUtc = start,
-            EndUtc = end,
+            StartUtc = window.Start,
+            EndUtc = window.End,
             Reason = reason,
             DroppedEvents = dropped,
             RecordedAtUtc = _clock.UtcNow
@@ -200,15 +209,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
         await db.SaveChangesAsync(token).ConfigureAwait(false);
     }
 
-    private bool IsRegularSession(DateTime utcNow)
-    {
-        if (!_settings.RegularSessionOnly) return true;
-        var eastern = TimeZoneInfo.ConvertTimeFromUtc(utcNow,
-            OperatingSystem.IsWindows() ? TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time") : TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
-        return eastern.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
-            && eastern.TimeOfDay >= new TimeSpan(_trading.TradingStartHourNewYork, _trading.TradingStartMinuteNewYork, 0)
-            && eastern.TimeOfDay < new TimeSpan(_trading.TradingEndHourNewYork, _trading.TradingEndMinuteNewYork, 0);
-    }
+    private bool IsRegularSession(ConfiguredInstrument instrument, DateTime utcNow) =>
+        MarketDataSession.IsOpen(instrument, utcNow, _trading, _settings.RegularSessionOnly);
 
     private static string Key(string instrumentId) => $"{instrumentId}|TICK|ALL".ToUpperInvariant();
 }

@@ -100,6 +100,9 @@ namespace TradingBot.Infrastructure.Services
         {
             if (bar == null) throw new ArgumentNullException(nameof(bar));
             var resolvedInstrumentId = ResolveInstrumentId(instrumentId, bar.InstrumentId, bar.Symbol);
+            var forex = _settings.GetConfiguredInstruments().Any(item => item.InstrumentId == resolvedInstrumentId
+                && item.InstrumentType == InstrumentType.Forex);
+            if (forex) publishToEventBus = false; // Quote-derived features/patterns are introduced in FX-5/FX-6.
             var canonical = new CanonicalMarketDataEvent
             {
                 EventId = CanonicalMarketDataIdentity.ForBar(resolvedInstrumentId, bar, NormalizeTimeframe(bar.Timeframe)),
@@ -108,7 +111,7 @@ namespace TradingBot.Infrastructure.Services
                 Kind = MarketDataEventKind.Bar,
                 EventTimeUtc = ToUtc(bar.TimestampUtc),
                 ReceivedTimeUtc = ToUtc(bar.ReceivedTimeUtc ?? _clock.UtcNow),
-                Source = NormalizeSource(source, bar.Source, publishToEventBus ? "IBKR.StreamingBar" : "IBKR.HistoricalBar"),
+                Source = NormalizeSource(forex ? null : source, bar.Source, publishToEventBus ? "IBKR.StreamingBar" : "IBKR.HistoricalBar"),
                 Sequence = bar.Sequence,
                 IsFinal = bar.IsFinal,
                 Timeframe = NormalizeTimeframe(bar.Timeframe),
@@ -323,7 +326,7 @@ namespace TradingBot.Infrastructure.Services
                     High = marketEvent.High!.Value,
                     Low = marketEvent.Low!.Value,
                     Close = marketEvent.Close!.Value,
-                    Volume = marketEvent.Volume!.Value
+                    Volume = marketEvent.Volume
                 });
                 await ctx.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return true;

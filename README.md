@@ -137,7 +137,8 @@ The additive forex configuration example is [forex-instruments.example.json](Tra
 `SecurityType=CASH`, `BaseCurrency=EUR`, `Currency=USD` and `Exchange=IDEALPRO` describe EUR/USD;
 the internal symbol is `EURUSD`, separate from the broker symbol `EUR`. Each pair has its own
 stable ID and explicit strategies. FX-3 resolves configured stock and forex contracts through IBKR;
-forex collection and trading remain disabled pending their later milestones. Stock defaults remain compatible.
+FX-4 permits collection with per-instrument `Enabled=true` and `TradingEnabled=false`.
+Forex execution remains blocked; stock defaults remain compatible.
 The example is not loaded automatically. See [FX-2 rules and rollout](docs/EURUSD_READINESS.md#fx-2--konfiguracija-i-identitet).
 
 To check configured contracts without starting the bot, collectors or order workflow, use a logged-in
@@ -151,6 +152,26 @@ Contract mode requires `AnalysisOnly`, global trading disabled and every instrum
 It also checks disabled FX instruments, exports requested/resolved identity and broker metadata without account
 identifiers, and fails on missing, ambiguous or mismatched contracts. `Confirmed` proves contract identity only,
 not feed entitlement, order eligibility or paper execution. See [FX-3 diagnostics](docs/EURUSD_READINESS.md#fx-3--ibkr-ugovori-i-dijagnostika).
+
+For an isolated read-only FX data check, [forex-collection.example.json](TradingBot.Web/forex-collection.example.json)
+enables EUR/USD collection and keeps the other entries disabled within that example only:
+
+```powershell
+dotnet run --project TradingBot.ShadowProbe --configuration Release -- --forex-data-config TradingBot.Web/forex-collection.example.json --output TestResults/fx4-data-probe.json --port 7497 --client-id 95 --seconds 30
+```
+
+This mode requires one enabled FX instrument, disabled global trading and `AnalysisOnly`. It creates a fresh
+SQLite/Parquet directory next to the report, requests one recent open hour of MIDPOINT history, then runs the
+existing quote/bar collectors for the requested duration. It starts no order or strategy workers. The report
+separates `HistoryAndStoragePassed` from `LiveQuotesConfirmed`; exit code 0 confirms history/storage only.
+Zero quotes during a closed session do not confirm the live feed. Both example files require explicit use;
+they do not overwrite shared `appsettings.json` or the operational database.
+
+FX uses `BidAsk` ticks and `MIDPOINT` bars with `useRTH=0`. Quote sizes are broker-reported base-currency
+amounts, not trade volume. Bar volume is `null` in SQLite/Parquet; the additive candle migration preserves
+existing stock rows and indexes. Forex collection follows the New York Sunday 17:15–Friday 17:00 week with
+the daily 17:00–17:15 break, including US DST. Holiday exceptions remain a documented calendar limitation.
+FX feature/pattern publication and execution remain gated for later milestones. See [FX-4 evidence and limits](docs/EURUSD_READINESS.md#fx-4--prikupljanje-i-povijesna-dopuna).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

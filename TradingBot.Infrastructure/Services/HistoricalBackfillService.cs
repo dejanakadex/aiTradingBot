@@ -113,6 +113,9 @@ namespace TradingBot.Infrastructure.Services
             {
                 var now = ToUtc(_clock.UtcNow);
                 await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+                var enabled = (await _registry.GetAllAsync(cancellationToken).ConfigureAwait(false))
+                    .Where(item => item.ConfiguredEnabled).ToArray();
+                var enabledIds = enabled.Select(item => item.InstrumentId).ToArray();
                 var lastRequest = await db.HistoricalBackfillJobRecords
                     .MaxAsync(item => (DateTime?)item.LastRequestedAtUtc, cancellationToken)
                     .ConfigureAwait(false);
@@ -122,6 +125,7 @@ namespace TradingBot.Infrastructure.Services
                 }
 
                 var job = await db.HistoricalBackfillJobRecords
+                    .Where(item => enabledIds.Contains(item.InstrumentId))
                     .Where(item => item.Status == HistoricalBackfillStatus.Pending
                         || item.Status == HistoricalBackfillStatus.Running
                         || (item.Status == HistoricalBackfillStatus.RetryPending
@@ -131,6 +135,7 @@ namespace TradingBot.Infrastructure.Services
                     .FirstOrDefaultAsync(cancellationToken)
                     .ConfigureAwait(false);
                 if (job == null) return null;
+                var forex = enabled.Single(item => item.InstrumentId == job.InstrumentId).InstrumentType == InstrumentType.Forex;
 
                 await EnsureInstrumentBackfillingAsync(job.InstrumentId, cancellationToken).ConfigureAwait(false);
 
@@ -172,7 +177,7 @@ namespace TradingBot.Infrastructure.Services
                     var request = new HistoricalBarRequest(job.InstrumentId, job.Symbol, job.Timeframe, segmentStart, segmentEnd);
                     var received = (await _marketData.GetHistoricalBarsAsync(request, cancellationToken).ConfigureAwait(false)).ToArray();
                     var valid = received
-                        .Where(bar => IsValid(bar, job.Symbol, job.Timeframe, segmentStart, segmentEnd))
+                        .Where(bar => IsValid(bar, job.Symbol, job.Timeframe, segmentStart, segmentEnd, forex))
                         .GroupBy(bar => ToUtc(bar.TimestampUtc))
                         .Select(group => group.First())
                         .OrderBy(bar => bar.TimestampUtc)
@@ -296,9 +301,10 @@ namespace TradingBot.Infrastructure.Services
                     Timeframe = normalizedTimeframe
                 };
                 var request = new HistoricalBarRequest(normalizedInstrumentId, normalizedSymbol, normalizedTimeframe, start, end);
+                var forex = (await _registry.GetAsync(normalizedInstrumentId, cancellationToken).ConfigureAwait(false))?.InstrumentType == InstrumentType.Forex;
                 var received = (await _marketData.GetHistoricalBarsAsync(request, cancellationToken).ConfigureAwait(false)).ToArray();
                 var valid = received
-                    .Where(bar => IsValid(bar, normalizedSymbol, normalizedTimeframe, start, end))
+                    .Where(bar => IsValid(bar, normalizedSymbol, normalizedTimeframe, start, end, forex))
                     .GroupBy(bar => ToUtc(bar.TimestampUtc))
                     .Select(group => group.First())
                     .OrderBy(bar => bar.TimestampUtc)
@@ -475,7 +481,7 @@ namespace TradingBot.Infrastructure.Services
                     INSERT OR IGNORE INTO Candles
                         (InstrumentId, Symbol, Timeframe, TimestampUtc, ReceivedTimeUtc, Source, IsFinal, QualityStatus, Open, High, Low, Close, Volume)
                     VALUES
-                        ({job.InstrumentId}, {job.Symbol}, {(int)timeframe}, {ToUtc(bar.TimestampUtc)}, {receivedAtUtc}, {source}, {true}, {(int)MarketDataQualityStatus.Healthy}, {bar.Open}, {bar.High}, {bar.Low}, {bar.Close}, {bar.Volume})
+                        ({job.InstrumentId}, {job.Symbol}, {(int)timeframe}, {ToUtc(bar.TimestampUtc)}, {ToUtc(bar.ReceivedTimeUtc ?? receivedAtUtc)}, {(bar.Source.StartsWith("IBKR.Midpoint", StringComparison.Ordinal) ? bar.Source : source)}, {true}, {(int)MarketDataQualityStatus.Healthy}, {bar.Open}, {bar.High}, {bar.Low}, {bar.Close}, {bar.Volume})
                     """, cancellationToken).ConfigureAwait(false);
             }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -495,6 +501,30 @@ namespace TradingBot.Infrastructure.Services
             var interval = GetInterval(job.Timeframe);
             var eastern = ResolveEasternTimeZone();
             var gaps = new List<HistoricalDataGapRecord>();
+            var instrument = await _registry.GetAsync(job.InstrumentId, cancellationToken).ConfigureAwait(false);
+            if (instrument?.InstrumentType == InstrumentType.Forex)
+            {
+                var present = timestamps.Select(ToUtc).ToHashSet();
+                DateTime? gapStart = null;
+                var missing = 0;
+                for (var at = job.DesiredStartUtc; at < job.DesiredEndUtc; at = at.Add(interval))
+                {
+                    if (MarketDataSession.IsForexOpen(at) && !present.Contains(at))
+                    {
+                        gapStart ??= at;
+                        missing++;
+                    }
+                    else if (gapStart.HasValue)
+                    {
+                        gaps.Add(NewGap(job, gapStart.Value, at, missing, now));
+                        gapStart = null;
+                        missing = 0;
+                    }
+                }
+                if (gapStart.HasValue) gaps.Add(NewGap(job, gapStart.Value, job.DesiredEndUtc, missing, now));
+                db.HistoricalDataGapRecords.AddRange(gaps);
+                return gaps.Count;
+            }
 
             foreach (var day in timestamps.Select(ToUtc).GroupBy(value => TimeZoneInfo.ConvertTimeFromUtc(value, eastern).Date))
             {
@@ -536,7 +566,7 @@ namespace TradingBot.Infrastructure.Services
             return TimeSpan.FromSeconds(Math.Min(900, _settings.InitialRetryDelaySeconds * multiplier));
         }
 
-        private static bool IsValid(MarketBar bar, string symbol, string timeframe, DateTime start, DateTime end)
+        private static bool IsValid(MarketBar bar, string symbol, string timeframe, DateTime start, DateTime end, bool forex)
         {
             var at = ToUtc(bar.TimestampUtc);
             return string.Equals(bar.Symbol, symbol, StringComparison.OrdinalIgnoreCase)
@@ -546,7 +576,7 @@ namespace TradingBot.Infrastructure.Services
                 && bar.Open > 0m && bar.High > 0m && bar.Low > 0m && bar.Close > 0m
                 && bar.High >= bar.Low && bar.High >= bar.Open && bar.High >= bar.Close
                 && bar.Low <= bar.Open && bar.Low <= bar.Close
-                && bar.Volume >= 0m;
+                && (forex ? bar.Volume is null && bar.Source.StartsWith("IBKR.Midpoint", StringComparison.Ordinal) : bar.Volume >= 0m);
         }
 
         private static HistoricalBackfillJobSnapshot ToSnapshot(HistoricalBackfillJobRecord job) => new(

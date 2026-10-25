@@ -27,7 +27,7 @@ public sealed class TickMarketDataTests
         if (type == null) return; // The official API DLL is absent in the fallback build.
         var constructor = Assert.Single(type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
         var subscription = Assert.IsAssignableFrom<ITickMarketDataSubscription>(constructor.Invoke(
-            ["SPY-ID", "SPY", 128, (Action)(() => { })]));
+            ["SPY-ID", "SPY", 128, (Action)(() => { }), "IBKR.TickByTick", true]));
         try
         {
             var timestamp = DateTimeOffset.UtcNow.AddSeconds(-1).ToUnixTimeSeconds();
@@ -53,8 +53,10 @@ public sealed class TickMarketDataTests
         finally { await subscription.DisposeAsync(); }
     }
 
-    [Fact]
-    public async Task CollectsIndependentInstrumentTicksAndRecordsUnrecoverableInterruption()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CollectsIndependentInstrumentTicksAndRecordsUnrecoverableInterruption(bool forex)
     {
         var connectionString = $"Data Source=tick-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
         using var anchor = new SqliteConnection(connectionString);
@@ -71,6 +73,12 @@ public sealed class TickMarketDataTests
                 new InstrumentSettings { InstrumentId = "QQQ-ID", Symbol = "QQQ", MarketDataTimeframes = ["1m"] }
             ]
         };
+        var otherSymbol = forex ? "EURUSD" : "QQQ";
+        if (forex)
+        {
+            settings.Instruments[1] = ForexCollectionTests.Settings().Instruments[0];
+            settings.Instruments[1].InstrumentId = "QQQ-ID";
+        }
         var clock = new SystemClock();
         var tickService = new FakeTickService();
         var sink = new CapturingSink();
@@ -100,7 +108,7 @@ public sealed class TickMarketDataTests
             await UntilAsync(() => tickService.Subscriptions.Count == 2);
             var now = DateTime.UtcNow;
             tickService.Publish("SPY", Tick("SPY-ID", "SPY", MarketDataEventKind.Bid, 100m, 10m, now));
-            tickService.Publish("QQQ", Tick("QQQ-ID", "QQQ", MarketDataEventKind.Trade, 200m, 5m, now));
+            tickService.Publish(otherSymbol, Tick("QQQ-ID", otherSymbol, forex ? MarketDataEventKind.Bid : MarketDataEventKind.Trade, 200m, 5m, now));
             await UntilAsync(() => sink.Records.Count == 2);
             Assert.Contains(sink.Records, x => x.InstrumentId == "SPY-ID" && x.Size == 10m);
             Assert.Contains(sink.Records, x => x.InstrumentId == "QQQ-ID" && x.Size == 5m);

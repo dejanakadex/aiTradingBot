@@ -151,7 +151,7 @@ public sealed class IbkrDiagnosticsService
                 BrokerContract = metadata,
                 ContractMatchCount = matchCount,
                 DataAdapterCapability = !supported ? "Unsupported" : instrument.InstrumentType == InstrumentType.Forex
-                    ? "ForexCollectionPendingFx4" : "StockTradeAndBidAsk",
+                    ? "ForexBidAskAndMidpoint" : "StockTradeAndBidAsk",
                 OrderAdapterCapability = !supported ? "Unsupported" : instrument.InstrumentType == InstrumentType.Forex
                     ? "ForexExecutionPendingFx9" : "StockExecution"
             });

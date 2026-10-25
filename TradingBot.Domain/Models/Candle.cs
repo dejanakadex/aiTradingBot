@@ -18,6 +18,8 @@ namespace TradingBot.Domain.Models
         public decimal Low { get; }
         public decimal Close { get; }
         public decimal Volume { get; }
+        public decimal? TradeVolume { get; }
+        public bool HasTradeVolume => TradeVolume.HasValue;
 
         public Candle(
             string symbol,
@@ -27,7 +29,7 @@ namespace TradingBot.Domain.Models
             decimal high,
             decimal low,
             decimal close,
-            decimal volume,
+            decimal? volume,
             string? instrumentId = null,
             DateTime? receivedTimeUtc = null,
             string? source = null,
@@ -63,7 +65,9 @@ namespace TradingBot.Domain.Models
             High = high;
             Low = low;
             Close = close;
-            Volume = volume;
+            TradeVolume = volume;
+            // Compatibility for stock algorithms. Such algorithms must reject !HasTradeVolume.
+            Volume = volume ?? 0m;
         }
     }
 }
