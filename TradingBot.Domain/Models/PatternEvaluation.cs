@@ -20,7 +20,9 @@ namespace TradingBot.Domain.Models
         public PatternCandidate? Candidate { get; init; }
         public bool Accepted => Candidate != null;
         public decimal FinalScore => ScoreComponents.Sum(component => component.WeightedScore);
-        public string EvaluationKey => $"{InstrumentId}|{StrategyId}|{Direction}|{PatternType}|{Timeframe}|{EvaluatedAtUtc:O}".ToUpperInvariant();
+        public bool IsForexResearch => PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns + "+", StringComparison.Ordinal);
+        public string EvaluationKey => ($"{InstrumentId}|{StrategyId}|{Direction}|{PatternType}|{Timeframe}|{EvaluatedAtUtc:O}"
+            + (IsForexResearch ? $"|{PatternVersion}|{FeatureVersion}" : string.Empty)).ToUpperInvariant();
 
         public static PatternEvaluation FromCandidate(PatternCandidate candidate) => new()
         {

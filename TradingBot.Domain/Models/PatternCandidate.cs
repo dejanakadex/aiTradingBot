@@ -21,7 +21,9 @@ namespace TradingBot.Domain.Models
         public string InstrumentId => Context.InstrumentId;
         public string StrategyId => Context.StrategyId;
         public string PatternVersion => Context.PatternVersion;
-        public string PatternKey => $"{InstrumentId}|{StrategyId}|{Direction}|{PatternType}|{Timeframe}|{DetectedAtUtc:O}".ToUpperInvariant();
+        public string PatternKey => ($"{InstrumentId}|{StrategyId}|{Direction}|{PatternType}|{Timeframe}|{DetectedAtUtc:O}"
+            + (PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns + "+", StringComparison.Ordinal)
+                ? $"|{PatternVersion}|{Context.FeatureVersion}" : string.Empty)).ToUpperInvariant();
 
         public PatternCandidate(PatternType patternType, string symbol, Timeframe timeframe, DateTime detectedAtUtc, decimal confidence,
             IEnumerable<decimal>? relevantPriceLevels = null, IDictionary<string, string>? metadata = null, PipelineContext? context = null,

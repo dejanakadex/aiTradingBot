@@ -1,0 +1,26 @@
+{
+  "ForexPatterns": {
+    "Profiles": [
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "StrategyId": "eurusd-patterns",
+        "IntervalSeconds": 5,
+        "Directions": ["Long", "Short"],
+        "MinimumConsecutiveCandles": 26,
+        "RequirePriceFeatureWarmup": true,
+        "EngulfingSupportProximityPercent": 0.0003,
+        "Geometry": {
+          "MinimumTradeSetupQuality": 0.6,
+          "Hammer": { "MinPullbackPercent": 0.0001, "SupportProximityPercent": 0.0003 },
+          "ShootingStar": { "MinPullbackPercent": 0.0001, "SupportProximityPercent": 0.0003 },
+          "BullishEngulfing": { "RequireVolumeConfirmation": false, "MinPullbackPercent": 0.0001 },
+          "BearishEngulfing": { "RequireVolumeConfirmation": false, "MinPullbackPercent": 0.0001 },
+          "DoubleBottom": { "MaxLowDiffPercent": 0.0003, "MinReboundPercent": 0.0002, "ConfirmationTolerancePercent": 0.0001 },
+          "DoubleTop": { "MaxLowDiffPercent": 0.0003, "MinReboundPercent": 0.0002, "ConfirmationTolerancePercent": 0.0001 },
+          "BreakoutAndRetest": { "RequireVolumeConfirmation": false, "RetestTolerancePercent": 0.0003, "MinBreakoutPercent": 0.0001, "MinBouncePercent": 0.0001 },
+          "BreakdownAndRetest": { "RequireVolumeConfirmation": false, "RetestTolerancePercent": 0.0003, "MinBreakoutPercent": 0.0001, "MinBouncePercent": 0.0001 }
+        }
+      }
+    ]
+  }
+}

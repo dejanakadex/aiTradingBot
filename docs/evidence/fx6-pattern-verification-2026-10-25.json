@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-25",
+  "scope": "FX-6 local deterministic research verification",
+  "sharedBranch": "trading-bot-v2",
+  "startingSharedCommit": "c80f411d0a22f43b07846002c063e68707d84467",
+  "startingWorktreeCommit": "178c4c1",
+  "tests": { "passed": 543, "failed": 0, "skipped": 0, "newFx6Cases": 22 },
+  "testCommand": "dotnet test TradingBot.sln -c Release --no-restore --logger trx;LogFileName=fx6.trx",
+  "stockBaselineUnchanged": true,
+  "pricePatternCases": 8,
+  "vwapPatternsRejectedWithoutTradeVolume": true,
+  "unavailableVolumeWeight": 0,
+  "availableWeightsSum": 1,
+  "researchPersistence": "Accepted and rejected evaluations, idempotent per version, no stock FX labels",
+  "connectedSimulation": "Paired quotes -> midpoint aggregates -> FX features -> patterns -> isolated SQLite; trading disabled",
+  "requiredIbkrPublishVerification": "passed outside sandbox; initial sandbox publish exited without compiler diagnostics",
+  "newBrokerConnectionOpened": false,
+  "ordersSent": false,
+  "liveFxPatternsConfirmed": false,
+  "thresholdsEmpiricallyCalibrated": false,
+  "nextStep": "FX-7 strategy and signal routing"
+}

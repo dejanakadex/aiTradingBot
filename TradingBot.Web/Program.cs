@@ -197,6 +197,11 @@ try
         .Validate(settings => settings.MinimumFifteenMinuteCandlesForTradeSetup >= 1, "PatternDetector:MinimumFifteenMinuteCandlesForTradeSetup must be at least 1.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexPatternSettings>()
+        .Bind(builder.Configuration.GetSection("ForexPatterns"))
+        .Validate(settings => settings.Validate().Count == 0, "ForexPatterns contains invalid or duplicate research profiles.")
+        .ValidateOnStart();
+
     builder.Services.AddHealthChecks()
         .AddCheck("web", () => HealthCheckResult.Healthy("Web application is running."), tags: new[] { "live" })
         .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "dependency", "ready" })

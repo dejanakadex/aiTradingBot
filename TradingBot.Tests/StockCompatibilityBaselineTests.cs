@@ -132,7 +132,7 @@ public sealed class StockCompatibilityBaselineTests
         Assert.Equal(expected, decimal.Round(actual.Value, 12));
     }
 
-    private static PatternDetectorOptions FixtureOptions() => new()
+    internal static PatternDetectorOptions FixtureOptions() => new()
     {
         DoubleBottom = { MaxLowDiffPercent = 0.05m, MinSeparation = 2, MaxSeparation = 6, MinReboundPercent = 0.05m },
         DoubleTop = { MaxLowDiffPercent = 0.05m, MinSeparation = 2, MaxSeparation = 6, MinReboundPercent = 0.05m },
@@ -140,7 +140,7 @@ public sealed class StockCompatibilityBaselineTests
         BreakdownAndRetest = { Lookback = 5, RetestTolerancePercent = 0.03m }
     };
 
-    private static IReadOnlyList<Candle> PatternSeries(PatternType type)
+    internal static IReadOnlyList<Candle> PatternSeries(PatternType type)
     {
         (decimal O, decimal H, decimal L, decimal C, decimal V)[] rows = type switch
         {

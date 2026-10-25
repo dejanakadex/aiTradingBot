@@ -109,7 +109,7 @@ namespace TradingBot.Infrastructure.Services
                     DecisionStage = stage,
                     FeatureVersion = evaluation.FeatureVersion,
                     PatternVersion = evaluation.PatternVersion,
-                    LabelVersion = LabelVersion,
+                    LabelVersion = evaluation.IsForexResearch ? "labels-fx-deferred" : LabelVersion,
                     MarketRegime = evaluationContext?.MarketRegime.ToString() ?? MarketRegime.Unknown.ToString(),
                     NormalizedLiquidity = evaluationContext?.NormalizedLiquidity,
                     NormalizedVolatility = evaluationContext?.NormalizedVolatility,
@@ -120,7 +120,8 @@ namespace TradingBot.Infrastructure.Services
                     CreatedAtUtc = now,
                     UpdatedAtUtc = now
                 };
-                foreach (var horizon in _settings.HorizonsSeconds.OrderBy(value => value))
+                // FX execution, costs and labels belong to FX-10; never apply per-share stock labels.
+                foreach (var horizon in evaluation.IsForexResearch ? Array.Empty<int>() : _settings.HorizonsSeconds.OrderBy(value => value).ToArray())
                 {
                     record.Labels.Add(new CandidateLabelRecord
                     {

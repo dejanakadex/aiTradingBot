@@ -187,6 +187,19 @@ stock patterns or simulate FX orders. The data probe above now includes aggregat
 feature snapshot. Local synthetic parity is verified; real streaming feature validation remains pending.
 See [FX-5 rules and verification](docs/EURUSD_READINESS.md#fx-5--kratki-quote-agregati-i-featurei).
 
+FX-6 adds explicit research evaluation of eight price patterns on FX quote-midpoint bars.
+[forex-patterns.example.json](TradingBot.Web/forex-patterns.example.json) contains an optional
+`ForexPatterns` section to merge into local configuration alongside the collection configuration;
+it is not loaded automatically. Profiles are separate by instrument, strategy and 1s/5s/15s interval.
+Their initial thresholds are research starting points, not calibrated trading parameters.
+`ForexPatternResearchService.EvaluateAndPersistAsync` queries the completed FX bars and stores every
+accepted/rejected evaluation in the existing SQLite research tables. `ForexPatternDetector.Evaluate`
+is the deterministic, storage-free entry point for the same canonical input and as-of time.
+Volume is explicitly unavailable and excluded from scoring; VWAP patterns are rejected with a reason.
+FX research records have no stock labels. Automatic signal routing/cooldown is FX-7, FX costs/labels
+and full trade replay remain FX-8/FX-10. These services do not publish orders or start a broker connection.
+See [FX-6 scope and evidence](docs/EURUSD_READINESS.md#fx-6--patterni-i-bodovanje).
+
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.
 - Supply account-specific configuration and API keys through environment variables or your local secret configuration. Keep shared settings free of credentials.

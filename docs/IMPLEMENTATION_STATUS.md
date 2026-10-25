@@ -62,7 +62,19 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | FX-3 — IBKR ugovori i dijagnostika | Implementirano i stvarno read-only provjereno | Konfigurirani ugovori, contract-details dijagnostika i CLI; ispravljen regionalni decimalni parsing službenog dekodera. 481/481 testova; paper TWS potvrdio SPY/EURUSD/EURGBP. Nema potvrde podataka ili izvršavanja. |
 | FX-4 — Prikupljanje i povijesna dopuna | Implementirano; stvarna povijest/storage provjereni, live tickovi čekaju otvorenu sesiju | BidAsk + MIDPOINT profil, null volumen, FX kalendar i trajni SQLite/Parquet/backfill. 501/501 lokalnih testova; dva uzastopna read-only paper TWS pokušaja spremila po 60 stvarnih barova. Nema potvrde aktualnih tickova ili izvršavanja. |
 | FX-5 — Kratki agregati i featurei | Implementirano i lokalno provjereno | Upareni quote MIDPOINT 1s/5s/15s agregati, as-of/warmup pravila, zasebna verzija i nedostupni volumenski featurei. 521/521 testova; 40 identičnih feature frameova nakon Parquet replaya. Stvarni živi FX-5 tok nije potvrđen. |
-| FX-6 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-6 patterni i bodovanje su sljedeća razvojna točka. |
+| FX-6 — Patterni i bodovanje | Implementirano i lokalno provjereno | Osam cjenovnih patterna, zasebni FX pragovi/verzije, eksplicitno nedostupan volumen i odbijanje VWAP-a, zapis svih procjena bez stock labela. 543/543 testova; stvarni live FX pattern tok nije potvrđen. |
+| FX-7 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); sljedeće su strategije i signali, FX-7. |
+
+### FX-6 — Patterni i bodovanje
+
+Provjera 25.10.2026., polazni shared commit `c80f411` (radni `178c4c1`, identično stablo). [Pravila i granice](EURUSD_READINESS.md#fx-6--patterni-i-bodovanje), [sažetak lokalne provjere](evidence/fx6-pattern-verification-2026-10-25.json).
+
+- `ForexPatternDetector` ponovno koristi postojeću geometriju osam long/short cjenovnih patterna, uz zasebne `ForexPatterns` profile po instrumentu/strategiji/intervalu. Profil se validira i kopira prije izračuna; config SHA-256, feature verzija i izvor ostaju dio identiteta. Stock pragovi, fingerprint i očekivani scoreovi nisu promijenjeni.
+- Volumen ima `IsAvailable=false`, težinu 0 i razlog; dostupne težine normaliziraju se na 1. Nema neutralnog volumenskog bonusa ni zamjene quote countom. VWAP reclaim/reject i zahtjev za volumenskom potvrdom odbijaju se s razlogom. FX quality/context/confirmation i neckline pragovi eksplicitno se provjeravaju.
+- Koriste se finalni zdravi kratki midpoint barovi dostupni do UTC as-of trenutka; input mora biti homogen, gap resetira warmup. Zadano se traži 26 uzastopnih barova i zagrijani cjenovni featurei. Ovo je research, bez execution freshness/spread gatea; potonji pripada strategijskom/risk putu FX-7/FX-8.
+- `ForexPatternResearchService` eksplicitno sprema prihvaćene i odbijene procjene u postojeći SQLite. FX verzija ulazi u research/pattern ključ i signal ID; ponavljanje iste procjene je idempotentno, drukčiji profil ne prepisuje raniju procjenu. `labels-fx-deferred` nema label retke: stock per-share labeling se ne primjenjuje na FX. Automatsko pokretanje iz signalnog toka i cooldown ostaju FX-7; trade replay i FX labele ostaju FX-10.
+- **543/543 solution testova**, uključujući **22 nova FX-6 slučaja**. Provjereni svi cjenovni patterni, VWAP/volume odbijanje, pragovi, decimalna preciznost, config binding/version snapshot, as-of/gap i povezani quote → aggregate → feature → pattern → SQLite tok uz `TradingEnabled=false`. SPY baseline prolazi. Release kompilacija bez upozorenja; required-DLL/publish provjera prolazi. Sandbox publish ponovno je zahtijevao ponavljanje izvan sandboxa, bez promjene koda. GitHub CI provjerava se nakon pusha.
+- Nije pokrenuta nova brokerska veza niti slan nalog. Pragovi nisu empirijski kalibrirani, stvarni live/paper pattern tok nije potvrđen, a točke 25/30/31 i FX-12 nisu zatvorene. Sljedeće: **FX-7**, uz obvezni `TradingEnabled=false`.
 
 ### FX-5 — Kratki agregati i featurei
 

@@ -12,6 +12,15 @@ namespace TradingBot.Infrastructure.Services
         private readonly PatternDetectorOptions _options;
         private readonly ILogger<PatternDetector> _logger;
         private readonly Dictionary<PatternDedupKey, DateTime> _lastDetected = new();
+        private readonly ForexPatternProfile? _forex;
+        private readonly IReadOnlyList<PatternConditionResult> _researchConditions = Array.Empty<PatternConditionResult>();
+
+        internal PatternDetector(ForexPatternProfile profile, string version, IReadOnlyList<PatternConditionResult> conditions,
+            ILogger<PatternDetector> logger) : this(profile.Geometry, logger, version)
+        {
+            _forex = profile;
+            _researchConditions = conditions;
+        }
 
         public PatternDetector(PatternDetectorOptions? options, ILogger<PatternDetector> logger, string? detectorVersion = null)
         {
@@ -166,7 +175,7 @@ namespace TradingBot.Infrastructure.Services
                 Component("contextScore", DirectionalContextScore(candles, options.PullbackLookbackCandles, options.MinPullbackPercent, direction), 0.15m, "Directional pullback/rally context."),
                 Component("confirmationScore", confirmation, 0.15m, "Close through the prior candle structure."),
                 Component("volumeScore", VolumeScore(candles), 0.10m, "Latest volume relative to prior candles."),
-                Component("locationScore", DirectionalLocationScore(candles, direction == TradeDirection.Long ? second.Low : second.High, 0.004m, direction), 0.05m, "Proximity to recent support/resistance.")
+                Component("locationScore", DirectionalLocationScore(candles, direction == TradeDirection.Long ? second.Low : second.High, _forex?.EngulfingSupportProximityPercent ?? 0.004m, direction), 0.05m, "Proximity to recent support/resistance.")
             };
             return BuildEvaluation(type, direction, second, strategyId, featureVersion, conditions, components, new[] { first.Low, first.High, second.Low, second.High });
         }
@@ -307,6 +316,10 @@ namespace TradingBot.Infrastructure.Services
         private PatternEvaluation EvaluateVwapCross(IReadOnlyList<Candle> candles, string strategyId, string featureVersion, TradeDirection direction, PatternType type, VwapReclaimPatternOptions options)
         {
             var latest = candles[^1];
+            if (_forex != null)
+                return BuildEvaluation(type, direction, latest, strategyId, featureVersion,
+                    new[] { Condition("tradeVolumeUnavailable", false, "FX quote midpoint has no trade volume; VWAP is unavailable. Quote count/size is not a substitute.") },
+                    Array.Empty<PatternScoreComponent>(), Array.Empty<decimal>());
             var priorCount = Math.Max(1, options.PriorBelowVwapCandles);
             var minimum = priorCount + 1;
             var vwap = Vwap(candles);
@@ -356,20 +369,49 @@ namespace TradingBot.Infrastructure.Services
         {
             var conditionArray = conditions.ToArray();
             var componentArray = components.ToArray();
+            if (_forex != null)
+            {
+                var availableWeight = componentArray.Where(x => x.Code != "volumeScore").Sum(x => x.Weight);
+                componentArray = componentArray.Select(x => x.Code == "volumeScore"
+                    ? x with { Score = 0m, Weight = 0m, IsAvailable = false, Reason = "Trade volume unavailable for FX midpoint; excluded from quality score." }
+                    : x with { Weight = availableWeight > 0m ? x.Weight / availableWeight : 0m }).ToArray();
+                // Correct the last decimal rounding remainder so available weights sum to exactly one.
+                var lastAvailable = Array.FindLastIndex(componentArray, x => x.IsAvailable);
+                if (availableWeight > 0m && lastAvailable >= 0)
+                    componentArray[lastAvailable] = componentArray[lastAvailable] with
+                    { Weight = componentArray[lastAvailable].Weight + 1m - componentArray.Sum(x => x.Weight) };
+                var rule = _options.ForPattern(type);
+                var gates = new List<PatternConditionResult>(_researchConditions)
+                {
+                    Condition("volumeConfirmationAvailable", !rule.RequireVolumeConfirmation,
+                        "FX midpoint cannot satisfy required trade-volume confirmation."),
+                    Condition("fxQuality", componentArray.Sum(x => x.WeightedScore) >= Math.Max(_options.MinimumTradeSetupQuality, rule.MinimumQualityForTradeSetup),
+                        $"FX quality {Format(componentArray.Sum(x => x.WeightedScore))} must be >= {Format(Math.Max(_options.MinimumTradeSetupQuality, rule.MinimumQualityForTradeSetup))}."),
+                    Condition("fxContext", componentArray.FirstOrDefault(x => x.Code == "contextScore")?.Score >= rule.MinimumContextScore,
+                        $"FX context must be available and >= {Format(rule.MinimumContextScore)}."),
+                    Condition("fxConfirmation", componentArray.FirstOrDefault(x => x.Code == "confirmationScore")?.Score >= rule.MinimumConfirmationScore,
+                        $"FX confirmation must be available and >= {Format(rule.MinimumConfirmationScore)}.")
+                };
+                if (rule is DoubleBottomPatternOptions pivot && pivot.RequireNecklineBreakForTradeSetup)
+                    gates.Add(Condition("fxNecklineBreak", extraMetadata?.TryGetValue("necklineBreak", out var broken) == true && broken == "True",
+                        "FX pivot profile requires a confirmed neckline break."));
+                conditionArray = conditionArray.Concat(gates).ToArray();
+            }
             var failedReasons = conditionArray.Where(item => !item.Passed).Select(item => item.Reason).ToArray();
             var finalScore = Clamp01(componentArray.Sum(item => item.WeightedScore));
             PatternCandidate? candidate = null;
             if (failedReasons.Length == 0)
             {
                 var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var component in componentArray) metadata[component.Code] = Format(component.Score);
+                foreach (var component in componentArray) metadata[component.Code] = component.IsAvailable ? Format(component.Score) : "unavailable";
+                if (_forex != null) metadata["priceBasis"] = "QuoteMidpoint";
                 metadata["finalQuality"] = Format(finalScore);
                 metadata["referencePrice"] = Format(candle.Close);
                 metadata["direction"] = direction.ToString();
                 metadata["patternVersion"] = DetectorVersion;
                 if (extraMetadata != null) foreach (var item in extraMetadata) metadata[item.Key] = item.Value;
                 var context = PipelineContext.CreateForSignal(candle.InstrumentId,
-                    $"{direction}|{type}|{candle.Timeframe}|{candle.TimestampUtc:O}", strategyId, featureVersion, DetectorVersion);
+                    $"{direction}|{type}|{candle.Timeframe}|{candle.TimestampUtc:O}" + (_forex != null ? $"|{DetectorVersion}|{featureVersion}" : string.Empty), strategyId, featureVersion, DetectorVersion);
                 candidate = new PatternCandidate(type, candle.Symbol, candle.Timeframe, candle.TimestampUtc, finalScore,
                     levels, metadata, context, direction, conditionArray, componentArray,
                     new[] { $"Accepted {direction} {type}; all hard conditions passed." });
@@ -455,8 +497,9 @@ namespace TradingBot.Infrastructure.Services
             return reference <= 0m ? 0m : ScoreAtMost(Math.Abs(patternPrice - reference) / reference, proximity);
         }
 
-        private static decimal VolumeScore(IReadOnlyList<Candle> candles)
+        private decimal VolumeScore(IReadOnlyList<Candle> candles)
         {
+            if (_forex != null) return 0m;
             if (candles.Count < 6) return 0.5m;
             var previous = candles.Take(candles.Count - 1).TakeLast(Math.Min(20, candles.Count - 1)).Average(item => item.Volume);
             return previous <= 0m ? 0.5m : Clamp01(candles[^1].Volume / previous / 1.5m);
@@ -494,7 +537,7 @@ namespace TradingBot.Infrastructure.Services
         }
         private static decimal Average(params decimal[] values) => values.Length == 0 ? 0m : Clamp01(values.Average());
         private static decimal Clamp01(decimal value) => Math.Clamp(value, 0m, 1m);
-        private static string Format(decimal value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+        private string Format(decimal value) => value.ToString(_forex != null ? "G29" : "0.####", CultureInfo.InvariantCulture);
         private static TimeSpan TimeframeDuration(Timeframe timeframe) => timeframe switch
         {
             Timeframe.OneSecond => TimeSpan.FromSeconds(1),

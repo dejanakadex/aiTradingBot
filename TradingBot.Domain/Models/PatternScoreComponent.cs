@@ -4,7 +4,8 @@ namespace TradingBot.Domain.Models
         string Code,
         decimal Score,
         decimal Weight,
-        string Reason)
+        string Reason,
+        bool IsAvailable = true)
     {
         public decimal WeightedScore => Score * Weight;
     }

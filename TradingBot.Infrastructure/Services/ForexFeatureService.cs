@@ -12,6 +12,12 @@ public sealed class ForexFeatureService(ILatestMarketDataService latest, IFeatur
 {
     public MarketFeatures? Compute(string instrumentId, int intervalSeconds, DateTime asOfUtc)
     {
+        var input = GetInput(instrumentId, intervalSeconds, asOfUtc);
+        return input == null ? null : features.ComputeFeatures(input);
+    }
+
+    public CanonicalFeatureInput? GetInput(string instrumentId, int intervalSeconds, DateTime asOfUtc)
+    {
         var instrument = trading.Value.GetConfiguredInstruments().Single(x => x.InstrumentId == instrumentId);
         if (instrument.InstrumentType != InstrumentType.Forex) throw new ArgumentException("An FX instrument is required.", nameof(instrumentId));
         var bars = latest.GetCompletedForexAggregates(instrumentId, intervalSeconds, asOfUtc, aggregates.Value.MaxCompletedPerInterval);
@@ -25,10 +31,10 @@ public sealed class ForexFeatureService(ILatestMarketDataService latest, IFeatur
             bar.Open, bar.High, bar.Low, bar.Close, null, instrument.InstrumentId, bar.AvailableAtUtc,
             $"{ForexQuoteAggregator.CandleSource}.{bar.Version}.{intervalSeconds}s")).ToArray();
         var last = bars[^1];
-        return features.ComputeFeatures(new CanonicalFeatureInput
+        return new CanonicalFeatureInput
         {
             Candles = candles, ForexMidpoint = true, AsOfUtc = asOfUtc,
             Bid = last.LastBid, Ask = last.LastAsk, BidTimeUtc = last.LastQuoteTimeUtc, AskTimeUtc = last.LastQuoteTimeUtc
-        });
+        };
     }
 }
