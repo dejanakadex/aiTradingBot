@@ -44,6 +44,17 @@ namespace TradingBot.Infrastructure.Services
             var records = await db.InstrumentRegistryRecords.ToListAsync(cancellationToken).ConfigureAwait(false);
             var byInstrumentId = records.ToDictionary(item => item.InstrumentId, StringComparer.OrdinalIgnoreCase);
 
+            // Do not let a pair change reuse historical data/model identity. Check the whole batch before writes.
+            foreach (var instrument in configured)
+            {
+                if (byInstrumentId.TryGetValue(instrument.InstrumentId, out var previous)
+                    && (instrument.InstrumentType == InstrumentType.Forex
+                        || InstrumentIdentity.GetInstrumentType(previous.SecurityType) == InstrumentType.Forex)
+                    && InstrumentIdentity.ContractKey(previous.SecurityType, previous.Symbol, previous.Exchange, previous.Currency)
+                        != instrument.ContractKey)
+                    throw new InvalidOperationException($"Instrument '{instrument.InstrumentId}' changes a forex contract identity; use a new InstrumentId to preserve historical data and model attribution.");
+            }
+
             foreach (var instrument in configured)
             {
                 var configurationHash = BuildConfigurationHash(instrument);

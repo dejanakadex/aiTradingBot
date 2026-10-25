@@ -186,6 +186,80 @@ namespace TradingBot.Tests
             }
         }
 
+        [Fact]
+        public async Task DisabledForexPairsSurviveRestartWithoutChangingStockProgress()
+        {
+            using var database = CreateDatabase(out var factory);
+            var clock = new MutableClock(InitialUtc);
+            var spy = Instrument("US-STK-SPY-SMART", "SPY", true, false);
+            var settings = BuildSettings(spy);
+            var service = CreateService(factory, settings, clock);
+            await service.SynchronizeConfiguredAsync();
+            var stock = await service.TransitionAsync(spy.InstrumentId,
+                InstrumentOnboardingStatus.BackfillPending, InstrumentOnboardingStatus.Backfilling, "Test", "Test");
+            string stockHash;
+            await using (var db = await factory.CreateDbContextAsync())
+                stockHash = (await db.InstrumentRegistryRecords.SingleAsync()).ConfigurationHash;
+
+            var usd = ForexInstrumentConfigurationTests.Forex("USD");
+            var gbp = ForexInstrumentConfigurationTests.Forex("GBP");
+            gbp.StrategyIds = ["gbp-only"];
+            settings.Instruments = [spy, usd, gbp];
+            var added = await service.SynchronizeConfiguredAsync();
+            Assert.Equal(2, added.Added);
+            Assert.Equal(1, added.Unchanged);
+            var storedPair = Assert.Single(added.Instruments, x => x.InstrumentId == usd.InstrumentId);
+            Assert.Equal("EURUSD", storedPair.Symbol);
+            Assert.Equal("EUR", storedPair.BaseCurrency);
+            Assert.Equal("USD", storedPair.QuoteCurrency);
+            Assert.Equal(InstrumentType.Forex, storedPair.InstrumentType);
+            Assert.False(storedPair.CollectionEnabled);
+            Assert.False(storedPair.CanSubmitPaperOrders);
+
+            usd.Symbol = " eur/usd ";
+            var restarted = CreateService(factory, settings, clock);
+            var result = await restarted.SynchronizeConfiguredAsync();
+            Assert.Equal(3, result.Unchanged);
+            var stockAfter = Assert.Single(result.Instruments, x => x.InstrumentId == spy.InstrumentId);
+            Assert.Equal(stock.Status, stockAfter.Status);
+            Assert.Equal(stock.Version, stockAfter.Version);
+            Assert.Equal(storedPair.Version, Assert.Single(result.Instruments, x => x.InstrumentId == usd.InstrumentId).Version);
+            var storedGbp = Assert.Single(result.Instruments, x => x.InstrumentId == gbp.InstrumentId);
+            Assert.Equal("EUR/GBP", storedGbp.DisplaySymbol);
+            Assert.Equal(new[] { "gbp-only" }, storedGbp.StrategyIds);
+            await using var check = await factory.CreateDbContextAsync();
+            Assert.Equal(stockHash, (await check.InstrumentRegistryRecords.SingleAsync(x => x.InstrumentId == spy.InstrumentId)).ConfigurationHash);
+        }
+
+        [Theory]
+        [InlineData("pair-change")]
+        [InlineData("stock-to-forex")]
+        [InlineData("forex-to-stock")]
+        public async Task ChangingForexContractRequiresNewIdentityAndDoesNotPartiallySync(string change)
+        {
+            using var database = CreateDatabase(out var factory);
+            var settings = BuildSettings(
+                Instrument("stock", "SPY", true, false), ForexInstrumentConfigurationTests.Forex("USD"));
+            var service = CreateService(factory, settings, new MutableClock(InitialUtc));
+            await service.SynchronizeConfiguredAsync();
+            var before = await service.GetAllAsync();
+            settings.Instruments[0].StrategyIds = ["would-change-stock"];
+            if (change == "pair-change") settings.Instruments[1].Currency = "GBP";
+            else if (change == "stock-to-forex")
+            {
+                var replacement = ForexInstrumentConfigurationTests.Forex("GBP");
+                replacement.InstrumentId = "stock";
+                settings.Instruments[0] = replacement;
+            }
+            else settings.Instruments[1] = Instrument(settings.Instruments[1].InstrumentId, "EURUSD", false, false);
+
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SynchronizeConfiguredAsync());
+            Assert.Contains("use a new InstrumentId", error.Message);
+            var after = await service.GetAllAsync();
+            Assert.Equal(before.Select(x => (x.InstrumentId, x.Version, x.Symbol, x.Currency, x.SecurityType)),
+                after.Select(x => (x.InstrumentId, x.Version, x.Symbol, x.Currency, x.SecurityType)));
+        }
+
         private static async Task AdvanceToPaperReadyAsync(IInstrumentRegistryService service, string instrumentId)
         {
             var transitions = new[]

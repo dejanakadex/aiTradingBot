@@ -47,14 +47,15 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 - Postojeći DI test više ne preskače provjeru ako stvarni adapter nedostaje: zahtijeva zajedničku realnu instancu za order/account/position/bar/tick servise i `Real` dijagnostiku s verzijom API-ja, bez otvaranja broker veze.
 - Lokalna završna provjera: restore, Release build **0 upozorenja / 0 grešaka**, solution testovi **419/419**. Publish web aplikacije potvrđuje identičan DLL, `Google.Protobuf.dll`, runtime dependency manifest te kopiju licence, izvora i provenance dokumenta. Provjere nedostajuće i izmijenjene datoteke moraju pasti čak i uz postojeći build output; stvarni DLL tijekom provjere ostaje netaknut.
 - CI sada koristi isti uključeni DLL, cijeli testni skup i provjeru publish paketa/negativnih build slučajeva. GitHub rezultat prati se nakon pusha; lokalna provjera nije tvrdnja da je CI već završen.
-- Bot, ShadowProbe i TWS veza nisu pokretani. Ova promjena rješava trajnu build/runtime ovisnost, ne potvrđuje market-data prava ili paper naloge. FX-2 i daljnje FX točke još nisu započete.
+- Bot, ShadowProbe i TWS veza nisu pokretani. Ova promjena rješava trajnu build/runtime ovisnost, ne potvrđuje market-data prava ili paper naloge. U tom commitu FX-2 i daljnje FX točke još nisu bile započete.
 
 ## FX nadogradnja — trenutni status
 
 | Točka | Status | Dokaz i granica |
 | --- | --- | --- |
 | FX-1 — Inventar i regresijska zaštita | Implementirano i lokalno provjereno | Matrica postojećih funkcionalnosti i FX gapova; 13 novih fiksnih stock baseline slučajeva, ukupno 419/419 testova u službenom DLL i fallback buildu. Produkcijsko ponašanje nije promijenjeno. |
-| FX-2 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-2 konfiguracija je sljedeća zasebna točka. |
+| FX-2 — Konfiguracija i identitet valutnih parova | Implementirano i lokalno provjereno | STK/CASH tip, osnovna/kotirana valuta, jedinstveni simbol para i eksplicitne FX strategije; registry restart i zaštita od promjene ugovora pod istim ID-jem. 448/448 lokalnih testova; forex je još disabled. |
+| FX-3 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-3 ugovori i dijagnostika su sljedeća zasebna točka. |
 
 ### FX-1 — Popis funkcionalnosti i zaštita dioničkog ponašanja
 
@@ -65,6 +66,16 @@ Provjera 23.–25.10.2026., polazni shared commit `d4bf83c` (radni `75fe6e0`, id
 - Lokalni TRX dokazi su u ignoriranom `TestResults/fx1-before`, `TestResults/fx1-official` i `TestResults/fx1-fallback`. GitHub CI za ovaj commit nije pokrenut niti se lokalni rezultat predstavlja kao CI potvrda.
 - U ograničenom izvršnom okruženju pomoćna IBKR skripta/višestruki MSBuild procesi vraćali su failure bez compiler greške, a fallback testni proces zastao je bez završnog rezultata. NuGet je prijavio `NU1900` zbog nedostupnog mrežnog izvora. Izravni jednoprocesni buildovi prošli su; ponovljeni restore, fallback testovi i cijela `scripts/verify-ibkr-adapter.ps1` skripta izvan ograničenja prošli su bez promjene koda ili isključivanja NuGet audita. Točan uzrok zastoja nije izoliran; nije zabilježen pad pojedinog testa. Za fallback je eksplicitno korištena nepostojeća putanja `C:\__fx1_no_ibkr__\CSharpAPI.dll`. Završni restore vraćen je na zadani službeni DLL.
 - Nema izmjene produkcijskog koda, konfiguracije, paketa ili migracija. Oba izlazna profila i svi postojeći testovi ostaju. Nije pokrenut bot niti slan nalog. FX order tok i stvarni paper E2E ostaju neimplementirani/nepotvrđeni; točke 25, 30 i 31 nisu ovime zatvorene.
+
+### FX-2 — Konfiguracija i identitet valutnih parova
+
+Provjera 25.10.2026., polazni shared commit `49f6b67` sa službenim obveznim IBKR DLL-om. [Pravila konfiguracije i primjer](EURUSD_READINESS.md#fx-2--konfiguracija-i-identitet).
+
+- Postojeći `SecurityType` bira `Stock`/`Forex`; `BaseCurrency` je novo konfiguracijsko polje za CASH, a `Currency` ostaje kotirana valuta. Interni simbol para (`EURUSD`/`EURGBP`) odvojen je od budućeg broker simbola (`EUR`). Alias formati normaliziraju se; duplikati, neusklađene valute i nepodržani tipovi prijavljuju konkretnu options grešku.
+- Strategije, smjerovi, timeframeovi i limiti pripadaju instrumentu. FX strategije moraju biti eksplicitne. JSON binding više ne dopisuje inicijalizirane stock zadane strategije/smjerove uz izričito zadane nizove; zadane vrijednosti primjenjuju se nakon bindinga samo kad su izostavljene. Zadržani su stock `deterministic-patterns`/`Long` defaulti i legacy `Symbols` normalizacija.
+- Registry koristi postojeće SQLite stupce i vraća valutne metapodatke nakon restarta, bez migracije baze. Dodavanje disabled FX parova ne mijenja stock configuration hash ni onboarding napredak. Promjena FX ugovora, uključujući prijelaz stock/FX pod istim ID-jem, odbija cijeli sync prije upisa i traži novi `InstrumentId`.
+- `forex-instruments.example.json` je testiran stvarnim JSON binderom; nije automatski učitan i ne mijenja `appsettings.json`. Aktivacija FX prikupljanja/trgovanja u ovoj fazi izričito je blokirana kako CASH ne bi otišao u još uvijek STK brokerski put. Read-only ugovori/feed ostaju FX-3/FX-4, izvršavanje kasnije.
+- Dodano **29 testnih slučajeva**; ciljana konfiguracija/registry regresija **38/38**, puni solution **448/448**. Release build sa službenim DLL-om: **0 upozorenja, 0 grešaka**. Prošla je cijela `verify-ibkr-adapter.ps1` provjera, uključujući publish i odbijanje nedostajućeg/izmijenjenog DLL-a. GitHub CI prati se nakon pusha. Nije pokrenut bot niti slan nalog; ovo nije stvarni IBKR paper dokaz i ne zatvara točke 25/30/31.
 
 ## Točka 1 — izvedeno
 

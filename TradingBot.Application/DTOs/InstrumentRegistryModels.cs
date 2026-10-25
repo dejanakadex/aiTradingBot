@@ -1,4 +1,5 @@
 using TradingBot.Domain.Enums;
+using TradingBot.Domain.Models;
 
 namespace TradingBot.Application.DTOs
 {
@@ -9,6 +10,10 @@ namespace TradingBot.Application.DTOs
         public string Exchange { get; init; } = string.Empty;
         public string Currency { get; init; } = string.Empty;
         public string SecurityType { get; init; } = string.Empty;
+        public InstrumentType InstrumentType => InstrumentIdentity.GetInstrumentType(SecurityType);
+        public string? BaseCurrency => InstrumentIdentity.GetBaseCurrency(SecurityType, Symbol, Currency);
+        public string QuoteCurrency => Currency;
+        public string DisplaySymbol => BaseCurrency is { } basis ? $"{basis}/{Currency}" : Symbol;
         public bool ConfiguredEnabled { get; init; }
         public bool TradingRequested { get; init; }
         public InstrumentOnboardingStatus Status { get; init; }

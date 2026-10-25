@@ -1,6 +1,6 @@
 # EUR/USD — priprema nastavka
 
-Status 25.10.2026.: **FX-1 priprema i regresijska osnova su provedene**, ali postojeći bot još nije spreman za EUR/USD paper naloge. Do tada `TradingSettings:OperatingMode` ostaje `AnalysisOnly`, a za novi instrument `TradingEnabled=false`. Ovaj dokument ne potvrđuje profitabilnost strategije ni stvarne IBKR fillove.
+Status 25.10.2026.: **FX-1 i FX-2 konfiguracijski temelj su provedeni**, ali postojeći bot još nije spreman za EUR/USD podatkovni tok ili paper naloge. Do FX-3/FX-4 forex konfiguracija mora imati `Enabled=false` i `TradingEnabled=false`; primjer ostaje u `AnalysisOnly` načinu. Ovaj dokument ne potvrđuje profitabilnost strategije ni stvarne IBKR fillove.
 
 ## Što je već provjereno
 
@@ -15,7 +15,7 @@ Svaka točka završava odgovarajućim testovima, dokumentacijom i zasebnim commi
 | Točka | Opseg i kriterij prihvata | Status |
 | --- | --- | --- |
 | FX-1 — Inventar i regresijska zaštita | Popis stvarno aktivnih patterna, featurea, strategija i izlaza; stock baseline i testovi prije FX izmjena. [Matrica](STOCK_COMPATIBILITY_BASELINE.md). | Implementirano i lokalno provjereno; rezultati u statusu implementacije |
-| FX-2 — Konfiguracija instrumenata | Tip instrumenta, osnovna i kotirana valuta, stabilan identitet para, odvojeni profili. Stara stock konfiguracija ostaje kompatibilna; različiti parovi s istom osnovnom valutom ne kolidiraju. | Planirano |
+| FX-2 — Konfiguracija instrumenata | Tip instrumenta, osnovna i kotirana valuta, stabilan identitet para, odvojene strategije/smjerovi/timeframeovi/limiti. Stara stock konfiguracija ostaje kompatibilna; različiti parovi s istom osnovnom valutom ne kolidiraju. | Implementirano i lokalno provjereno: 448/448 testova. Forex aktivacija još blokirana. |
 | FX-3 — IBKR ugovori i dijagnostika | CASH/IDEALPRO ugovor iz konfiguracije, contract details i precizna dijagnostika; SPY zadržava STK/SMART. Read-only provjera bez naloga. | Planirano |
 | FX-4 — Prikupljanje i backfill | FX sesija i dostupni quote/history izvori, trajna pohrana s podrijetlom, gapovi i neovisnost o dopuštenju trgovanja. Ne izmišljati trade volumen. | Planirano |
 | FX-5 — Kratki agregati i featurei | Definirani quote-derived barovi, as-of i warmup pravila, dostupnost featurea i verzije; jednakost live/replay na istom inputu. | Planirano |
@@ -29,7 +29,19 @@ Svaka točka završava odgovarajućim testovima, dokumentacijom i zasebnim commi
 
 Price-based patterni i strategijski kod ponovno se koriste gdje ulazni ugovor odgovara. To ne znači preslikavanje SPY volumena, pragova ili odobrenog modela na FX. Funkcionalnosti koje trebaju nedostupne podatke moraju imati jasan razlog blokade ili zasebno verzioniranu FX alternativu, bez uklanjanja njihove dioničke verzije.
 
-## Utvrđene tehničke obveze za FX-2 do FX-12
+## FX-2 — konfiguracija i identitet
+
+Primjer [forex-instruments.example.json](../TradingBot.Web/forex-instruments.example.json) sadrži SPY, EUR/USD i EUR/GBP. To je primjer, ne automatski učitana konfiguracija; stvarni `appsettings.json` nije promijenjen. Kod primjene u postojeću konfiguraciju treba zadržati ostale instrumente i urediti cijeli `TradingSettings:Instruments` popis. .NET konfiguracijski provideri spajaju nizove po indeksima, pa se primjer ne smije naslijepo dodati kao djelomični override postojećeg popisa.
+
+- `SecurityType` je jedini konfiguracijski odabir tipa: `STK` → `InstrumentType.Stock`, `CASH` → `InstrumentType.Forex`. Nema drugog neovisnog polja tipa koje bi moglo proturječiti brokerskom tipu.
+- Za forex su obvezni `BaseCurrency` (npr. `EUR`), postojeći `Currency` kao kotirana valuta (npr. `USD`) i `Exchange=IDEALPRO`. Valute moraju imati tri ASCII slova i biti različite. Ovo je provjera strukture, ne potvrda da broker podržava svaki takav kod.
+- `Symbol` je interna oznaka cijelog para: `EURUSD`. Može se izostaviti i izvesti iz valuta; `EUR/USD` i `EUR.USD` normaliziraju se na isti par. Sam `EUR` nije dovoljan. `ConfiguredInstrument.BrokerSymbol` zasebno vraća `EUR` za budući FX adapter; SPY i dalje vraća `SPY`. `DisplaySymbol` prikazuje `EUR/USD`, a `QuoteCurrency` izlaže postojeći `Currency`.
+- `InstrumentId` ostaje eksplicitni, stabilni identitet, npr. `FX-CASH-EUR-USD-IDEALPRO`. Isti brokerski ugovor ne smije se duplicirati pod drugim ID-jem. Interni simboli ostaju jedinstveni dok ostatak toka ima symbol-based pozivatelje; EUR/USD i EUR/GBP zato mogu zajedno postojati. Signal ID uključuje instrument i strategiju.
+- Svaki FX zapis zahtijeva eksplicitni `StrategyIds`; ne nasljeđuje stock strategiju. Smjerovi, timeframeovi i limiti ostaju zasebni po instrumentu. Izostavljena stock strategija i smjer i dalje znače `deterministic-patterns` i `Long`. Izričito navedeni nizovi više ne dobivaju dopisane zadane elemente pri JSON bindingu. Time se uklanja i postojeća lažna greška duplicirane zadane SPY strategije.
+- Registry sprema normalizirani par u postojeća polja `Symbol`, `Currency`, `SecurityType` i `Exchange`, bez migracije baze. Čitanje nakon restarta vraća tip i obje valute. Stock configuration hash ostaje nepromijenjen. Promjena para ili prijelaz stock/FX pod postojećim FX identitetom odbija se prije upisa; za drugi ugovor treba novi ID kako se ne bi pomiješali povijest i modeli.
+- Privremena FX-2 zaštita odbija `Enabled=true` ili `TradingEnabled=true`, i kroz options validaciju i pri normalizaciji za izravne pozivatelje. Time CASH ne može slučajno završiti u postojećem STK adapteru. FX-3/FX-4 trebaju zamijeniti samo blokadu prikupljanja provjerenim FX putem; dopuštenje trgovanja ostaje zasebno do kasnijih točaka. Postojeće SPY prikupljanje radi neovisno o trading dopuštenju.
+
+## Utvrđene tehničke obveze za FX-3 do FX-12
 
 1. U brokerskom adapteru graditi ugovor iz konfiguriranog instrumenta. Sada `IbkrBrokerService.BuildStockContract` za podatke, povijest, detalje ugovora i naloge uvijek stvara `STK/SMART/USD`. Za EUR/USD treba eksplicitno `Symbol=EUR`, `SecType=CASH`, `Exchange=IDEALPRO`, `Currency=USD`, uz provjeru jednog točnog ugovora i zaštitu od zamjene simbola. `IbkrDiagnosticsService` sada kao podržan prepoznaje samo `STK/SMART/USD`.
 2. Uvesti FX pravila za količinu u osnovnoj valuti, minimalnu/promjenjivu veličinu naloga, preciznost cijene, USD protuvrijednost, bid/ask smjer i proviziju; potvrditi ih iz paper contract details i stvarnih callbackova prije slanja naloga. Postojeći `PositionSizer` i replay trošak `CommissionPerShare` pretpostavljaju dionice. FX trošak i risk moraju biti izraženi dosljedno u USD i provjereni na primjeru malog računa, bez pretpostavke da se bilo koja veličina može poslati.
@@ -37,4 +49,4 @@ Price-based patterni i strategijski kod ponovno se koriste gdje ulazni ugovor od
 4. Dodati zasebne EUR/USD strategijske pragove za spread, volatilnost, SL/TP i trošak, s provjerom live/replay feature jednakosti i vremenskom evaluacijom modela. Isti strategijski kod može se konfigurirati za više instrumenata, ali model, pragovi i odobrenje trebaju biti vezani uz instrument/strategiju i verziju skupa.
 5. Provesti deterministički FX replay cijelog entry/fill/exit ciklusa s FX količinom i troškom, zatim automatizirane fake-broker testove, AnalysisOnly shadow uzorak i na kraju zasebno odobren mali IBKR paper test. Ne proglašavati točke 25, 30 ili 31 dovršenima na temelju samog FX feeda.
 
-Nakon FX-1 sljedeća je zasebno odobrena FX-2 konfiguracija. Read-only instrument/contract/data tok uvodi se kroz FX-2 do FX-4 uz `TradingEnabled=false` i testove koji dokazuju da SPY ostaje dionički ugovor, a EUR/USD forex ugovor. Nalog se ne šalje u toj fazi.
+Sljedeća zasebna točka je FX-3: stvarni IBKR ugovori i dijagnostika iz normalizirane konfiguracije. Read-only contract/data tok dovršava se kroz FX-3/FX-4 uz `TradingEnabled=false` i testove koji dokazuju da SPY ostaje dionički ugovor, a EUR/USD forex ugovor. Nalog se ne šalje u toj fazi.

@@ -89,6 +89,7 @@ namespace TradingBot.Application.Configuration
 
             var instrumentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var contracts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var instrument in Instruments!)
             {
                 if (instrument == null)
@@ -107,23 +108,28 @@ namespace TradingBot.Application.Configuration
                     errors.Add($"Duplicate InstrumentId '{label}'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(instrument.Symbol))
+                ValidateInstrumentType(instrument, label, errors);
+                var symbol = NormalizeSymbol(instrument);
+                if (string.IsNullOrWhiteSpace(symbol))
                 {
                     errors.Add($"Instrument '{label}' requires Symbol.");
                 }
-                else if (!symbols.Add(instrument.Symbol.Trim()))
+                else if (!symbols.Add(symbol))
                 {
-                    errors.Add($"Duplicate Symbol '{instrument.Symbol.Trim()}' is not supported by the current symbol-based broker adapter.");
+                    errors.Add($"Duplicate Symbol '{symbol}' is not supported by the current symbol-based pipeline. Use a unique canonical symbol per instrument.");
                 }
+                var contract = InstrumentIdentity.ContractKey(instrument.SecurityType, symbol, instrument.Exchange, instrument.Currency);
+                if (!contracts.Add(contract)) errors.Add($"Duplicate contract '{contract}' under instrument '{label}'.");
 
                 if (string.IsNullOrWhiteSpace(instrument.Exchange)) errors.Add($"Instrument '{label}' requires Exchange.");
                 if (string.IsNullOrWhiteSpace(instrument.Currency)) errors.Add($"Instrument '{label}' requires Currency.");
                 if (string.IsNullOrWhiteSpace(instrument.SecurityType)) errors.Add($"Instrument '{label}' requires SecurityType.");
                 if (instrument.TradingEnabled && !instrument.Enabled) errors.Add($"Instrument '{label}' cannot enable trading while disabled.");
-                if (instrument.AllowedDirections is not { Length: > 0 }) errors.Add($"Instrument '{label}' requires at least one allowed direction.");
+                if (instrument.AllowedDirections is { Length: 0 }) errors.Add($"Instrument '{label}' requires at least one allowed direction.");
                 if (instrument.AllowedDirections?.Any(direction => !Enum.IsDefined(direction)) == true) errors.Add($"Instrument '{label}' contains an unsupported trade direction.");
-                if (NormalizeValues(instrument.StrategyIds).Count == 0) errors.Add($"Instrument '{label}' requires at least one StrategyId.");
-                if (NormalizeValues(instrument.StrategyIds).Count != (instrument.StrategyIds?.Count(value => !string.IsNullOrWhiteSpace(value)) ?? 0)) errors.Add($"Instrument '{label}' contains duplicate StrategyIds.");
+                var strategyIds = GetStrategyIds(instrument);
+                if (NormalizeValues(strategyIds).Count == 0) errors.Add($"Instrument '{label}' requires at least one StrategyId.");
+                if (NormalizeValues(strategyIds).Count != strategyIds.Count(value => !string.IsNullOrWhiteSpace(value))) errors.Add($"Instrument '{label}' contains duplicate StrategyIds.");
                 if (instrument.MaximumPositionValue is <= 0m) errors.Add($"Instrument '{label}' MaximumPositionValue must be greater than zero when configured.");
                 if (instrument.MaximumHoldingSeconds is <= 0) errors.Add($"Instrument '{label}' MaximumHoldingSeconds must be greater than zero when configured.");
 
@@ -153,23 +159,70 @@ namespace TradingBot.Application.Configuration
 
         private ConfiguredInstrument ToConfiguredInstrument(InstrumentSettings instrument)
         {
+            // Also protect non-web callers from accidentally passing CASH into the current STK broker path.
+            var errors = new List<string>();
+            ValidateInstrumentType(instrument, instrument.InstrumentId, errors);
+            if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors));
             var timeframes = instrument.MarketDataTimeframes?.Any(value => !string.IsNullOrWhiteSpace(value)) == true
                 ? instrument.MarketDataTimeframes
                 : MarketDataTimeframes;
 
             return new ConfiguredInstrument(
                 instrument.InstrumentId.Trim(),
-                instrument.Symbol.Trim().ToUpperInvariant(),
+                NormalizeSymbol(instrument),
                 instrument.Exchange.Trim().ToUpperInvariant(),
                 instrument.Currency.Trim().ToUpperInvariant(),
                 instrument.SecurityType.Trim().ToUpperInvariant(),
                 instrument.Enabled,
                 instrument.TradingEnabled,
-                (instrument.AllowedDirections ?? Array.Empty<TradeDirection>()).Distinct().ToArray(),
-                NormalizeValues(instrument.StrategyIds),
+                (instrument.AllowedDirections ?? new[] { TradeDirection.Long }).Distinct().ToArray(),
+                NormalizeValues(GetStrategyIds(instrument)),
                 NormalizeTimeframes(timeframes),
                 instrument.MaximumPositionValue,
                 instrument.MaximumHoldingSeconds);
+        }
+
+        private static string NormalizeSymbol(InstrumentSettings instrument)
+        {
+            if (InstrumentIdentity.GetInstrumentType(instrument.SecurityType) != InstrumentType.Forex)
+                return InstrumentIdentity.Normalize(instrument.Symbol);
+            return string.IsNullOrWhiteSpace(instrument.Symbol)
+                ? InstrumentIdentity.Normalize(instrument.BaseCurrency) + InstrumentIdentity.Normalize(instrument.Currency)
+                : InstrumentIdentity.NormalizeForexSymbol(instrument.Symbol);
+        }
+
+        private static string[] GetStrategyIds(InstrumentSettings instrument) => instrument.StrategyIds
+            ?? (InstrumentIdentity.GetInstrumentType(instrument.SecurityType) == InstrumentType.Forex
+                ? Array.Empty<string>() : new[] { PipelineContractVersions.DefaultStrategyId });
+
+        private static void ValidateInstrumentType(InstrumentSettings instrument, string label, List<string> errors)
+        {
+            var type = InstrumentIdentity.GetInstrumentType(instrument.SecurityType);
+            if (type == InstrumentType.Unknown)
+            {
+                errors.Add($"Instrument '{label}' has unsupported SecurityType; use STK or CASH.");
+                return;
+            }
+            if (type == InstrumentType.Stock)
+            {
+                if (!string.IsNullOrWhiteSpace(instrument.BaseCurrency))
+                    errors.Add($"Stock instrument '{label}' must not specify forex BaseCurrency.");
+                return;
+            }
+
+            var basis = InstrumentIdentity.Normalize(instrument.BaseCurrency);
+            var quote = InstrumentIdentity.Normalize(instrument.Currency);
+            if (NormalizeValues(instrument.StrategyIds).Count == 0)
+                errors.Add($"Forex instrument '{label}' requires explicit StrategyIds; stock strategy defaults are not inherited.");
+            if (!InstrumentIdentity.IsCurrencyCode(basis)) errors.Add($"Forex instrument '{label}' requires a three-letter BaseCurrency.");
+            if (!InstrumentIdentity.IsCurrencyCode(quote)) errors.Add($"Forex instrument '{label}' requires a three-letter quote Currency.");
+            if (basis == quote) errors.Add($"Forex instrument '{label}' requires different base and quote currencies.");
+            if (NormalizeSymbol(instrument) != basis + quote)
+                errors.Add($"Forex instrument '{label}' Symbol must match BaseCurrency + Currency ('{basis}{quote}'); omit Symbol to derive it.");
+            if (InstrumentIdentity.Normalize(instrument.Exchange) != "IDEALPRO")
+                errors.Add($"Forex instrument '{label}' requires Exchange=IDEALPRO.");
+            if (instrument.Enabled || instrument.TradingEnabled)
+                errors.Add($"Forex instrument '{label}' must keep Enabled=false and TradingEnabled=false until the FX broker/data and execution integrations are implemented (FX-3 onward).");
         }
 
         private static IReadOnlyList<string> NormalizeValues(IEnumerable<string>? values)

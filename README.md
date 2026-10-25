@@ -133,6 +133,13 @@ and verifies that a missing or changed API DLL fails validation. No TWS connecti
 
 ## Configuration
 
+The additive forex configuration example is [forex-instruments.example.json](TradingBot.Web/forex-instruments.example.json).
+`SecurityType=CASH`, `BaseCurrency=EUR`, `Currency=USD` and `Exchange=IDEALPRO` describe EUR/USD;
+the internal symbol is `EURUSD`, separate from the future broker symbol `EUR`. Each pair has its own
+stable ID and explicit strategies. FX-2 supports configuration/registry only: forex entries must remain
+disabled until their broker and data integrations are implemented. Stock defaults remain compatible.
+The example is not loaded automatically. See [FX-2 rules and rollout](docs/EURUSD_READINESS.md#fx-2--konfiguracija-i-identitet).
+
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.
 - Supply account-specific configuration and API keys through environment variables or your local secret configuration. Keep shared settings free of credentials.

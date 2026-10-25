@@ -17,6 +17,7 @@ namespace TradingBot.Infrastructure
         public static IServiceCollection AddInfrastructure(this IServiceCollection services)
         {
             services.AddSingleton<IClock, SystemClock>();
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TradingSettings>, TradingInstrumentOptionsValidator>());
 
             services.TryAddSingleton<IbkrBrokerService>();
             services.TryAddSingleton<IIbkrAdapter>(sp => sp.GetRequiredService<IbkrBrokerService>());
