@@ -40,6 +40,10 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 29 — Automatizirani end-to-end test | Implementirano i lokalno provjereno | Ponovljiv SQLite/fake-broker tok obuhvaća onboarding, backfill, feature/pattern, lokalni LightGBM model, strategiju, risk, arbitražu, BUY/fill, zaštitu i izlaz. Stop, target, timer, djelomični fill, odbijanje, prekid, restart i dva istodobna instrumentna signala imaju provjere naloga, pozicije i rezervacija. Lokalno 391/391 testova; stvarni IBKR paper test ostaje točka 31. |
 | 30 — Shadow provjera i performanse | U tijeku | Read-only IBKR probe, pragovi, SQLite procjena odluka i lokalni multi-instrument load test implementirani. TWS API veza je potvrđena, ali SPY/QQQ tickovi nisu dostupni (10089/10189). Stvarni AnalysisOnly uzorak i usporedba po strategiji čekaju zdrav feed i spreman instrument/model. [Mjerenje i preostali koraci](SHADOW_READINESS.md). |
 
+## Dogovor za SPY nakon FX nadogradnje — 25.10.2026.
+
+Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX točaka](EURUSD_READINESS.md#dogovoreni-povratak-na-spy-nakon-fx-točaka--25102026): najprije read-only provjera povijesnih SPY SIP transakcija/kotacija starijih od 15 minuta i ograničenog IEX live feeda, zatim plan uvoza u postojeći Parquet/replay i konfigurabilnog izvora. Uplata 500 USD IBKR-u nije preduvjet za taj istraživački put. Pristup novog pružatelja još nije testiran, integracija nije implementirana i pretplata nije kupljena. Povijesni razvoj/testiranje strategija ne potvrđuje IBKR paper izvršenje; točke 25/30/31 ostaju u postojećem statusu. FX-3 je sljedeća zasebna razvojna točka.
+
 ## Obvezni IBKR DLL u repozitoriju — 25.10.2026.
 
 - Prema zahtjevu korisnika, službeni `CSharpAPI.dll` verzije `10.49.02.0` dodan je u `third_party/ibkr/10.49.02`, uz SHA-256 identitet, licencu i arhivu pripadajućeg C# izvora. Ovisnost se povlači običnim Git cloneom; ne ovisi o lokalnoj `C:\TWS API` instalaciji.
