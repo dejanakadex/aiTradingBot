@@ -745,6 +745,7 @@ namespace TradingBot.Infrastructure.Services
                 remainingQuantity = status.RemainingQuantity,
                 commission = status.Commission,
                 commissionUpdate = status.IsCommissionUpdate,
+                commissionCurrency = status.CommissionCurrency,
                 message = status.Message
             }, JsonOptions);
         }

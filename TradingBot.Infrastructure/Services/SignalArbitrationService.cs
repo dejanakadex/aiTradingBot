@@ -278,6 +278,11 @@ namespace TradingBot.Infrastructure.Services
             await MutateAsync(arbitrationId, cancellationToken, record =>
             {
                 if (!IsActive(record.Status)) return (record.Status, record.Reason);
+                // Rejecting a duplicate plan must not erase an existing broker allocation.
+                // Submission remains blocked by the caller; only fill/cancel reconciliation can release exposure.
+                if (record.Status is SignalArbitrationStatus.Submitted or SignalArbitrationStatus.PartiallyFilled or SignalArbitrationStatus.Filled
+                    || (record.Status == SignalArbitrationStatus.Submitting && reason.StartsWith("Duplicate approved trade plan", StringComparison.Ordinal)))
+                    return (record.Status, record.Reason);
                 reservationId = record.ReservationId;
                 return (SignalArbitrationStatus.Rejected, reason);
             }).ConfigureAwait(false);

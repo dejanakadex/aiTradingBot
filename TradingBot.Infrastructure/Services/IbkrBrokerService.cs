@@ -14,7 +14,7 @@ using TradingBot.Infrastructure.Options;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IIbkrRuntimeDiagnostics, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, ITickMarketDataService, IDisposable
+    public sealed partial class IbkrBrokerService : DefaultEWrapper, IIbkrAdapter, IIbkrRuntimeDiagnostics, IForexBrokerRules, IOrderExecutionService, IOrderModificationService, IAccountService, IPositionService, IMarketDataService, ITickMarketDataService, IDisposable
     {
         private static readonly TimeSpan BrokerResponseTimeout = TimeSpan.FromSeconds(10);
         private static readonly string[] AccountSummaryTags = ["NetLiquidation", "AvailableFunds", "BuyingPower", "MaintMarginReq"];
@@ -34,6 +34,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly ConcurrentDictionary<int, ContractDetailsRequest> _contractRequests = new();
         private readonly ConcurrentDictionary<string, int> _marketDataErrors = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, decimal> _commissionsByExecutionId = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, string> _commissionCurrenciesByExecutionId = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, OrderStatusDto> _executionsById = new(StringComparer.OrdinalIgnoreCase);
 
         private EReaderSignal? _signal;
@@ -49,12 +50,15 @@ namespace TradingBot.Infrastructure.Services
         private readonly IReadOnlyList<ConfiguredInstrument> _instruments;
 
         public IbkrBrokerService(IbkrOptions options, ILogger<IbkrBrokerService> logger,
-            IOptions<MarketDataCollectionSettings>? collectionSettings = null, IOptions<TradingSettings>? tradingSettings = null)
+            IOptions<MarketDataCollectionSettings>? collectionSettings = null, IOptions<TradingSettings>? tradingSettings = null,
+            IOptions<ForexExecutionSettings>? forexExecution = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _tickQueueCapacity = collectionSettings?.Value.TickQueueCapacity ?? 8192;
             _instruments = (tradingSettings?.Value ?? new TradingSettings()).GetConfiguredInstruments();
+            _fxTrading = tradingSettings?.Value ?? new TradingSettings();
+            _fxExecution = forexExecution?.Value ?? new ForexExecutionSettings();
         }
 
         public bool IsConnected => _client?.IsConnected() == true;
@@ -93,6 +97,7 @@ namespace TradingBot.Infrastructure.Services
                 _nextOrderId = 0;
                 _apiHandshake = NewTcs<bool>();
                 _marketDataErrors.Clear();
+                _fxSubmittedOrders.Clear();
             }
 
             await PublishConnectionStatusAsync(ConnectionStatus.Connecting).ConfigureAwait(false);
@@ -178,6 +183,7 @@ namespace TradingBot.Infrastructure.Services
                 _managedAccountsReceived = false;
                 _configuredAccountRecognized = null;
                 _marketDataErrors.Clear();
+                _fxSubmittedOrders.Clear();
             }
 
             await PublishReadinessAsync(false).ConfigureAwait(false);
@@ -188,10 +194,11 @@ namespace TradingBot.Infrastructure.Services
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             EnsureOrderMutationAllowed();
-            var contract = BuildStockOperationContract(request.Symbol, "FX order execution awaits FX-8/FX-9.");
+            var contract = await BuildOperationContractAsync(request, null, cancellationToken).ConfigureAwait(false);
             var client = GetConnectedClient();
             var orderId = GetNextOrderId();
             var order = BuildOrder(orderId, request);
+            if (contract.SecType == "CASH") _fxSubmittedOrders[orderId] = request;
             var confirmation = NewTcs<OrderStatusDto>();
 
             if (!_pendingOrderConfirmations.TryAdd(orderId, confirmation))
@@ -247,7 +254,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             EnsureOrderMutationAllowed();
-            var contract = BuildStockOperationContract(request.Symbol, "FX order execution awaits FX-8/FX-9.");
+            var contract = await BuildOperationContractAsync(request, brokerOrderId, cancellationToken).ConfigureAwait(false);
             if (!int.TryParse(brokerOrderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var orderId) || orderId <= 0)
             {
                 throw new ArgumentException("A valid numeric IBKR broker order id is required for order modification.", nameof(brokerOrderId));
@@ -588,7 +595,7 @@ namespace TradingBot.Infrastructure.Services
         public override void accountSummary(int reqId, string account, string tag, string value, string currency)
         {
             if (!_accountRequests.TryGetValue(reqId, out var request)) return;
-            request.Record(account, tag, value);
+            request.Record(account, tag, value, currency);
         }
 
         public override void accountSummaryEnd(int reqId)
@@ -599,7 +606,7 @@ namespace TradingBot.Infrastructure.Services
         public override void accountSummaryProtoBuf(IBApi.protobuf.AccountSummary accountSummaryProto)
         {
             if (!_accountRequests.TryGetValue(accountSummaryProto.ReqId, out var request)) return;
-            request.Record(accountSummaryProto.Account, accountSummaryProto.Tag, accountSummaryProto.Value);
+            request.Record(accountSummaryProto.Account, accountSummaryProto.Tag, accountSummaryProto.Value, accountSummaryProto.Currency);
         }
 
         public override void accountSummaryEndProtoBuf(IBApi.protobuf.AccountSummaryEnd accountSummaryEndProto)
@@ -612,7 +619,8 @@ namespace TradingBot.Infrastructure.Services
             RecordPosition(new PositionDto
             {
                 AccountId = account,
-                Symbol = contract.Symbol ?? string.Empty,
+                Symbol = CanonicalBrokerSymbol(contract.Symbol, contract.SecType, contract.Currency),
+                SecurityType = contract.SecType, Currency = contract.Currency, ContractId = contract.ConId,
                 Quantity = pos,
                 AveragePrice = ToDecimal(avgCost)
             });
@@ -623,7 +631,8 @@ namespace TradingBot.Infrastructure.Services
             RecordPosition(new PositionDto
             {
                 AccountId = positionProto.Account ?? string.Empty,
-                Symbol = positionProto.Contract?.Symbol ?? string.Empty,
+                Symbol = CanonicalBrokerSymbol(positionProto.Contract?.Symbol, positionProto.Contract?.SecType, positionProto.Contract?.Currency),
+                SecurityType = positionProto.Contract?.SecType, Currency = positionProto.Contract?.Currency, ContractId = positionProto.Contract?.ConId,
                 Quantity = ToDecimal(positionProto.Position_),
                 AveragePrice = ToDecimal(positionProto.AvgCost)
             });
@@ -647,7 +656,8 @@ namespace TradingBot.Infrastructure.Services
                 BrokerOrderId = orderId.ToString(CultureInfo.InvariantCulture),
                 Status = "Submitted",
                 TimestampUtc = DateTime.UtcNow,
-                Symbol = contract.Symbol,
+                Symbol = CanonicalBrokerSymbol(contract.Symbol, contract.SecType, contract.Currency),
+                AccountId = order.Account, LimitPrice = ToNullableDecimal(order.LmtPrice),
                 RemainingQuantity = order.TotalQuantity,
                 Side = order.Action,
                 OrderType = order.OrderType,
@@ -665,7 +675,8 @@ namespace TradingBot.Infrastructure.Services
                 BrokerOrderId = openOrderProto.OrderId.ToString(CultureInfo.InvariantCulture),
                 Status = "Submitted",
                 TimestampUtc = DateTime.UtcNow,
-                Symbol = openOrderProto.Contract?.Symbol,
+                Symbol = CanonicalBrokerSymbol(openOrderProto.Contract?.Symbol, openOrderProto.Contract?.SecType, openOrderProto.Contract?.Currency),
+                AccountId = openOrderProto.Order?.Account, LimitPrice = ToNullableDecimal(openOrderProto.Order?.LmtPrice ?? 0d),
                 RemainingQuantity = ToDecimal(openOrderProto.Order?.TotalQuantity),
                 Side = openOrderProto.Order?.Action,
                 OrderType = openOrderProto.Order?.OrderType,
@@ -758,7 +769,10 @@ namespace TradingBot.Infrastructure.Services
                 BrokerOrderId = orderId.ToString(CultureInfo.InvariantCulture),
                 Status = NormalizeOrderStatus(status, filled, remaining),
                 TimestampUtc = DateTime.UtcNow,
-                Symbol = _openOrders.TryGetValue(orderId, out var openOrder) ? openOrder.Symbol : null,
+                Symbol = _openOrders.TryGetValue(orderId, out var openOrder) ? openOrder.Symbol
+                    : _fxSubmittedOrders.TryGetValue(orderId, out var submitted) ? submitted.Symbol : null,
+                AccountId = openOrder?.AccountId, Side = openOrder?.Side, OrderType = openOrder?.OrderType,
+                RequestedQuantity = openOrder?.RequestedQuantity, LimitPrice = openOrder?.LimitPrice, StopPrice = openOrder?.StopPrice,
                 FilledQuantity = filled,
                 RemainingQuantity = remaining,
                 AverageFillPrice = ToNullableDecimal(avgFillPrice),
@@ -793,13 +807,15 @@ namespace TradingBot.Infrastructure.Services
                 BrokerOrderId = orderId.ToString(CultureInfo.InvariantCulture),
                 Status = remaining > 0m ? "PartiallyFilled" : "Unknown",
                 TimestampUtc = ParseIbkrExecutionTime(execution.Time),
-                Symbol = contract.Symbol,
+                Symbol = CanonicalBrokerSymbol(contract.Symbol, contract.SecType, contract.Currency),
+                AccountId = execution.AcctNumber,
                 FilledQuantity = execution.CumQty,
                 IndividualFillQuantity = execution.Shares,
                 RemainingQuantity = remaining,
                 AverageFillPrice = ToNullableDecimal(execution.AvgPrice),
                 LastFillPrice = ToNullableDecimal(execution.Price),
                 Commission = _commissionsByExecutionId.TryGetValue(execution.ExecId ?? string.Empty, out var commission) ? commission : null,
+                CommissionCurrency = _commissionCurrenciesByExecutionId.GetValueOrDefault(execution.ExecId ?? string.Empty),
                 BrokerExecutionId = execution.ExecId,
                 Message = execution.Side
             };
@@ -814,6 +830,7 @@ namespace TradingBot.Infrastructure.Services
             var executionId = commissionAndFeesReport.ExecId;
             var commission = ToDecimal(commissionAndFeesReport.CommissionAndFees);
             _commissionsByExecutionId[executionId] = commission;
+            _commissionCurrenciesByExecutionId[executionId] = commissionAndFeesReport.Currency;
             if (_executionsById.TryGetValue(executionId, out var execution))
             {
                 _ = InvokeOrderFilledAsync(new OrderStatusDto
@@ -829,6 +846,8 @@ namespace TradingBot.Infrastructure.Services
                     AverageFillPrice = execution.AverageFillPrice,
                     LastFillPrice = execution.LastFillPrice,
                     Commission = commission,
+                    CommissionCurrency = commissionAndFeesReport.Currency,
+                    AccountId = execution.AccountId,
                     BrokerExecutionId = executionId,
                     IsCommissionUpdate = true,
                     Message = "Late IBKR commission update."
@@ -979,13 +998,6 @@ namespace TradingBot.Infrastructure.Services
             if (matches.Length != 1)
                 throw new ArgumentException("A unique configured instrument with matching symbol and identity is required.", nameof(symbol));
             return matches[0];
-        }
-
-        private Contract BuildStockOperationContract(string symbol, string fxReason, string? instrumentId = null)
-        {
-            var instrument = ResolveInstrument(symbol, instrumentId);
-            if (instrument.InstrumentType == InstrumentType.Forex) throw new NotSupportedException(fxReason);
-            return IbkrContractFactory.Create(instrument);
         }
 
         private void EnsureOrderMutationAllowed()
@@ -1259,6 +1271,7 @@ namespace TradingBot.Infrastructure.Services
         {
             private readonly string _requestedAccountId;
             private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, decimal>> _values = new(StringComparer.OrdinalIgnoreCase);
+            private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _currencies = new(StringComparer.OrdinalIgnoreCase);
 
             public AccountSummaryRequest(string requestedAccountId)
             {
@@ -1267,11 +1280,12 @@ namespace TradingBot.Infrastructure.Services
 
             public TaskCompletionSource<AccountInfo> Completion { get; } = NewTcs<AccountInfo>();
 
-            public void Record(string account, string tag, string value)
+            public void Record(string account, string tag, string value, string currency)
             {
                 if (!decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var decimalValue)) return;
                 var accountValues = _values.GetOrAdd(account, _ => new ConcurrentDictionary<string, decimal>(StringComparer.OrdinalIgnoreCase));
                 accountValues[tag] = decimalValue;
+                _currencies.GetOrAdd(account, _ => new(StringComparer.OrdinalIgnoreCase))[tag] = currency;
             }
 
             public AccountInfo Build()
@@ -1290,6 +1304,8 @@ namespace TradingBot.Infrastructure.Services
                 return new AccountInfo
                 {
                     AccountId = accountId ?? string.Empty,
+                    Currency = _currencies.TryGetValue(accountId ?? "", out var currencies)
+                        && AccountSummaryTags.All(tag => currencies.TryGetValue(tag, out var currency) && currency == "USD") ? "USD" : null,
                     NetLiquidation = values.TryGetValue("NetLiquidation", out var netLiquidation) ? netLiquidation : 0m,
                     AvailableFunds = values.TryGetValue("AvailableFunds", out var availableFunds) ? availableFunds : 0m,
                     BuyingPower = values.TryGetValue("BuyingPower", out var buyingPower) ? buyingPower : 0m,

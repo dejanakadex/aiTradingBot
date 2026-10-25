@@ -145,6 +145,8 @@ namespace TradingBot.Infrastructure.Services
             }
 
             if (!strategyDecision.Approved) reasons.Add("Strategy decision is not approved.");
+            if (strategyDecision.Context?.PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns, StringComparison.Ordinal) == true)
+                reasons.Add("FX requires ForexPaperPreparationService; stock sizing cannot approve an FX signal.");
             if (strategyDecision.TradeSignal == null) reasons.Add("Trade signal is unavailable.");
             if (!strategyDecision.EntryMin.HasValue || strategyDecision.EntryMin <= 0m) reasons.Add("Entry price is unavailable.");
             if (!strategyDecision.StopPrice.HasValue || strategyDecision.StopPrice <= 0m) reasons.Add("Stop price is unavailable.");

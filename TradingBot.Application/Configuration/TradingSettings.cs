@@ -8,6 +8,8 @@ namespace TradingBot.Application.Configuration
         public bool Enabled { get; set; } = false;
         public TradingOperatingMode OperatingMode { get; set; } = TradingOperatingMode.AnalysisOnly;
         public bool LiveTradingExplicitlyEnabled { get; set; } = false;
+        // Separate opt-in; does not bypass registry, risk, paper-environment or order gates.
+        public bool ForexPaperExecutionEnabled { get; set; } = false;
         public string[] Symbols { get; set; } = new[] { "SPY" };
         public InstrumentSettings[] Instruments { get; set; } = Array.Empty<InstrumentSettings>();
         public string[] MarketDataTimeframes { get; set; } = new[] { "1m", "5m", "15m" };
@@ -195,7 +197,7 @@ namespace TradingBot.Application.Configuration
             ?? (InstrumentIdentity.GetInstrumentType(instrument.SecurityType) == InstrumentType.Forex
                 ? Array.Empty<string>() : new[] { PipelineContractVersions.DefaultStrategyId });
 
-        private static void ValidateInstrumentType(InstrumentSettings instrument, string label, List<string> errors)
+        private void ValidateInstrumentType(InstrumentSettings instrument, string label, List<string> errors)
         {
             var type = InstrumentIdentity.GetInstrumentType(instrument.SecurityType);
             if (type == InstrumentType.Unknown)
@@ -221,8 +223,8 @@ namespace TradingBot.Application.Configuration
                 errors.Add($"Forex instrument '{label}' Symbol must match BaseCurrency + Currency ('{basis}{quote}'); omit Symbol to derive it.");
             if (InstrumentIdentity.Normalize(instrument.Exchange) != "IDEALPRO")
                 errors.Add($"Forex instrument '{label}' requires Exchange=IDEALPRO.");
-            if (instrument.TradingEnabled)
-                errors.Add($"Forex instrument '{label}' must keep TradingEnabled=false until FX execution is implemented (FX-8/FX-9). Collection may be enabled independently.");
+            if (instrument.TradingEnabled && (!ForexPaperExecutionEnabled || OperatingMode != TradingOperatingMode.PaperTrading || quote != "USD"))
+                errors.Add($"Forex instrument '{label}' must keep TradingEnabled=false unless ForexPaperExecutionEnabled, PaperTrading and USD quote currency are configured. Collection may be enabled independently.");
         }
 
         private static IReadOnlyList<string> NormalizeValues(IEnumerable<string>? values)

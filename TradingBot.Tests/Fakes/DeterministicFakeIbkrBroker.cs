@@ -29,10 +29,12 @@ namespace TradingBot.Tests.Fakes
         private int _nextOrderId = 1;
         private int _nextExecutionId = 1;
 
-        public DeterministicFakeIbkrBroker(string accountId = "DU123", bool isPaperAccount = true)
+        private readonly IClock? _clock;
+        public DeterministicFakeIbkrBroker(string accountId = "DU123", bool isPaperAccount = true, IClock? clock = null)
         {
             AccountId = accountId;
             IsPaperAccount = isPaperAccount;
+            _clock = clock;
         }
 
         public string AccountId { get; set; }
@@ -133,6 +135,7 @@ namespace TradingBot.Tests.Fakes
             return Task.FromResult(new AccountInfo
             {
                 AccountId = AccountId,
+                Currency = "USD",
                 NetLiquidation = NetLiquidation,
                 AvailableFunds = AvailableFunds,
                 BuyingPower = BuyingPower,
@@ -291,7 +294,7 @@ namespace TradingBot.Tests.Fakes
                         FilledQuantity = existing.FilledQuantity,
                         RemainingQuantity = existing.RemainingQuantity,
                         AverageFillPrice = existing.AverageFillPrice,
-                        TimestampUtc = DateTime.UtcNow,
+                        TimestampUtc = (_clock?.UtcNow ?? DateTime.UtcNow),
                         Message = "Fake broker cancelled remaining quantity."
                     };
                     _openOrders.Remove(existing);
@@ -414,8 +417,9 @@ namespace TradingBot.Tests.Fakes
                 AverageFillPrice = averagePrice,
                 LastFillPrice = lastPrice,
                 Commission = executionId == null ? null : Scenario.CommissionPerFill,
+                CommissionCurrency = executionId == null ? null : "USD",
                 BrokerExecutionId = executionId,
-                TimestampUtc = DateTime.UtcNow,
+                TimestampUtc = (_clock?.UtcNow ?? DateTime.UtcNow),
                 Symbol = request.Symbol,
                 Side = request.Side,
                 OrderType = request.Type,

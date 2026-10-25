@@ -212,6 +212,11 @@ try
         .Validate(settings => settings.Validate().Count == 0, "ForexRisk contains invalid profiles.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexExecutionSettings>()
+        .Bind(builder.Configuration.GetSection("ForexExecution"))
+        .Validate(settings => { settings.Validate(); return true; }, "Invalid FX execution settings.")
+        .ValidateOnStart();
+
     builder.Services.AddHealthChecks()
         .AddCheck("web", () => HealthCheckResult.Healthy("Web application is running."), tags: new[] { "live" })
         .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "dependency", "ready" })

@@ -17,6 +17,18 @@ namespace TradingBot.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("TradingBot.Persistence.ForexExecutionProofRecord", b =>
+            {
+                b.Property<Guid>("ReservationId").ValueGeneratedOnAdd().HasColumnType("TEXT");
+                b.Property<string>("InstrumentId").IsRequired().HasColumnType("TEXT");
+                b.Property<DateTime>("CreatedUtc").HasColumnType("TEXT");
+                b.Property<string>("RequestJson").IsRequired().HasColumnType("TEXT");
+                b.Property<string>("AssessmentJson").IsRequired().HasColumnType("TEXT");
+                b.HasKey("ReservationId");
+                b.HasIndex("InstrumentId");
+                b.ToTable("ForexExecutionProofRecords");
+            });
+
             modelBuilder.Entity("TradingBot.Persistence.AiAnalysisRecord", b =>
                 {
                     b.Property<int>("Id")

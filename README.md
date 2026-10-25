@@ -218,8 +218,14 @@ stock sizing and reservation behavior are preserved. Optional [forex-risk.exampl
 profiles are not loaded automatically. Callers must supply a uniquely confirmed contract, reviewed order rules,
 a fresh reconciled portfolio including pending commitments, paired bid/ask and required USD conversion quotes.
 Missing inputs block the assessment. `Passed` is a research result; `ExecutionAuthorized` is always false.
-There is no automatic FX-7 risk routing or broker reservation yet. FX-9 must integrate fresh assessment with
-atomic reservations and the existing execution lifecycle. See [FX-8 inputs, evidence and limits](docs/EURUSD_READINESS.md#fx-8--veličina-risk-i-troškovi).
+FX-9 adds `ForexPaperPreparationService.PrepareAsync` for an explicitly approved FX plan: fresh broker rules,
+account/portfolio inputs, the shared atomic reservation store and a durable assessment proof. The existing final
+execution gate refreshes these inputs before the existing order/arbitration/exit lifecycle sends a paper order.
+It supports long USD-quoted pairs with a verified USD account summary. `ForexPaperExecutionEnabled` defaults to false;
+PaperReady, verified paper reconciliation, reviewed `ForexExecution:Profiles` limits and sufficient risk capacity are also required.
+FX-7 shadow signals still do not automatically become orders: FX model approval/replay is FX-10, onboarding is FX-11.
+FixedBracket, FX ATR trailing and the independent seconds timer have simulator coverage. Real IBKR fills and
+venue acceptance of partial-size exits remain unverified until FX-12. See [FX-9 setup and limitations](docs/EURUSD_READINESS.md#fx-9--nalozi-i-pozicije).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

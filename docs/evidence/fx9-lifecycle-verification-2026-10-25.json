@@ -1,0 +1,19 @@
+{
+  "phase": "FX-9",
+  "date": "2026-10-25",
+  "baselineCommit": "5d57eb86ff4316f4203073ed42337683b5303f0c",
+  "branch": "trading-bot-v2",
+  "restore": "passed",
+  "releaseBuild": { "errors": 0, "warnings": 0 },
+  "solutionTests": { "passed": 638, "failed": 0, "skipped": 0, "newFx9Cases": 36 },
+  "testSuites": ["ForexPaperLifecycleTests", "IbkrForexLifecycleAdapterTests"],
+  "requiredIbkrDllAndPublish": "passed outside sandbox; initial sandbox publish failed without MSBuild diagnostic output",
+  "sqliteUpgradeAndModelSnapshot": "passed",
+  "brokerConnected": false,
+  "realOrdersSent": 0,
+  "activeConfigurationChanged": false,
+  "simulation": ["FixedBracket stop/target/timer", "AtrTrailing stop/trailing/timer", "fractional base-unit partial fills and cancel", "restart and retained capacity", "rejection and ambiguous acceptance", "duplicate and concurrent preparation", "shared stock/FX capacity", "final quote/funds/freshness/opt-in gates", "legacy/protobuf CASH callbacks", "early/late commission currency"],
+  "limits": ["explicit prepared plans only; FX-7 automatic order routing remains blocked", "long USD-quoted CASH pairs and confirmed USD account summary", "reviewed size limits and broker market rules required", "unknown fees/currency/exposures block new entries", "below-minimum residual exits fail closed and need reconciliation", "real broker order acceptance, fees, margin and partial-size exit permission unverified"],
+  "nextPhase": "FX-10",
+  "stillOpen": [25, 30, 31]
+}

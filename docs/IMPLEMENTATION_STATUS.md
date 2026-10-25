@@ -65,7 +65,18 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | FX-6 — Patterni i bodovanje | Implementirano i lokalno provjereno | Osam cjenovnih patterna, zasebni FX pragovi/verzije, eksplicitno nedostupan volumen i odbijanje VWAP-a, zapis svih procjena bez stock labela. 543/543 testova; stvarni live FX pattern tok nije potvrđen. |
 | FX-7 — Strategije i signali | Implementirano i lokalno provjereno | Automatski FX shadow tok, zajednički kod odabira sa stock signalima, verzijska odobrenja, freshness/spread/volatility gateovi i trajni cooldown/checkpoint. 561/561 testova; stvarni živi FX signal nije potvrđen. |
 | FX-8 — Veličina, risk i troškovi | Implementirano i lokalno provjereno | Deterministička read-only procjena base units, pregledanih broker pravila, USD troškova/riska i valutnih krakova. 602/602 testova; bez stvarne provizije/margine/filla. Integracija rezervacija i izvršavanja pripada FX-9. |
-| FX-9 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); sljedeći su FX nalozi/lifecycle uz FX-aware risk rezervacije. |
+| FX-9 — Nalozi i pozicije | Implementirano i provjereno simulacijom, uz navedene granice | Eksplicitna paper priprema, zajednička atomska rezervacija/proof, finalni FX refresh, CASH callbackovi i postojeći lifecycle oba izlazna profila. 638/638 testova; stvarni broker fill/exit još nije potvrđen. |
+| FX-10 do FX-12 | Planirano | Sljedeće: FX replay, labele i modeli; zatim onboarding/shadow i zasebni stvarni paper E2E. |
+
+### FX-9 — Nalozi i pozicije
+
+Provjera 25.10.2026., polazni commit `5d57eb8` na `trading-bot-v2`. [Pravila i granice](EURUSD_READINESS.md#fx-9--nalozi-i-pozicije), [dokaz provjere](evidence/fx9-lifecycle-verification-2026-10-25.json).
+
+- `ForexPaperPreparationService` osvježava potvrđeni ugovor/market-rule, pregledane limite, račun, pozicije, otvorene naloge, pending rezervacije, dnevne gubitke/provizije i upareni quote. U istoj transakciji/gateu kao stock kapacitet sprema FX rezervaciju i `ForexExecutionProofRecords`; migracija čuva postojeće zapise.
+- Postojeća arbitraža, finalni `ScalpingExecutionGate`, `ApprovedOrderExecutionBackgroundService`, `OrderManager` i `ExitManagementService` provode slanje i izlaz. FX zahtijeva izričiti opt-in, PaperReady, reconciled verified-paper, long USD par i potvrđen USD account summary. Promijenjeni forecast, pravila, cijena, veličina ili kapacitet blokiraju slanje. FX-7 shadow signali još se ne šalju automatski; FX-10 mora povezati odobreni model.
+- EURUSD/EURGBP callbackovi čuvaju cijeli par i decimalne base units. Dodani su protobuf execution/commission callbackovi i valuta provizije. ATR trailing koristi FX cjenovne featuree i bid; sekundni timer i restart koriste postojeći trajni deadline. Aktivna/ambiguous FX rezervacija ne istječe vremenski prije razrješenja izloženosti.
+- **638/638 solution testova**, uključujući **36 novih slučajeva**: oba profila, SL/TP/timer, partial/cancel, restart, odbijanje i nepoznato prihvaćanje naloga, duplikati/konkurentna priprema, stock+FX kapacitet, finalni gate, oba callback protokola, market-rule, valuta računa/provizije i migracija. Restore i Release build prolaze, **0 upozorenja / 0 grešaka**. Required-DLL publish i negativne DLL provjere prolaze izvan sandboxa; početni sandbox publish ponovno nije dao MSBuild dijagnostiku.
+- Nema nove brokerske veze, naloga ili izmjene aktivnih postavki/odobrenja. Stvarno prihvaćanje CASH bracket/stop naloga, rezidualne količine ispod pregledanog minimuma, stvarne provizije i margin/cash ponašanje ostaju za FX-12. Ostale valute računa i cross-par izvršavanje ostaju blokirani. Nedostupni trailing podaci zadržavaju postojeći stop i ne ukidaju timer. Točke 25/30/31 ostaju otvorene. GitHub CI provjerava se nakon pusha.
 
 ### FX-8 — Veličina, risk i troškovi
 

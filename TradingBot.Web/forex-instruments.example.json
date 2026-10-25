@@ -2,6 +2,7 @@
   "TradingSettings": {
     "Enabled": false,
     "OperatingMode": "AnalysisOnly",
+    "ForexPaperExecutionEnabled": false,
     "LiveTradingExplicitlyEnabled": false,
     "Instruments": [
       {

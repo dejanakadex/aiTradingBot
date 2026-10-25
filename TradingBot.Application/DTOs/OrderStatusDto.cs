@@ -14,6 +14,9 @@ namespace TradingBot.Application.DTOs
         public decimal? AverageFillPrice { get; init; }
         public decimal? LastFillPrice { get; init; }
         public decimal? Commission { get; init; }
+        public string? CommissionCurrency { get; init; }
+        public string? AccountId { get; init; }
+        public decimal? LimitPrice { get; init; }
         public string? BrokerExecutionId { get; init; }
         public bool IsCommissionUpdate { get; init; }
         public string? Symbol { get; init; }

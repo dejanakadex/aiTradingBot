@@ -21,6 +21,7 @@ namespace TradingBot.Infrastructure
 
             services.TryAddSingleton<IbkrBrokerService>();
             services.TryAddSingleton<IIbkrAdapter>(sp => sp.GetRequiredService<IbkrBrokerService>());
+            services.TryAddSingleton<IForexBrokerRules>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IOrderExecutionService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IOrderModificationService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IAccountService>(sp => sp.GetRequiredService<IbkrBrokerService>());
@@ -49,7 +50,9 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IRiskManagementService, RiskManagementService>();
             services.AddTransient<IPositionSizer, PositionSizer>();
             services.AddSingleton<ForexRiskService>();
-            services.AddSingleton<IPortfolioRiskService, PortfolioRiskService>();
+            services.AddSingleton<PortfolioRiskService>();
+            services.AddSingleton<IPortfolioRiskService>(sp => sp.GetRequiredService<PortfolioRiskService>());
+            services.AddSingleton<ForexPaperPreparationService>();
             services.AddSingleton<ISignalArbitrationService, SignalArbitrationService>();
             services.AddTransient<IRiskEngine, RiskEngine>();
             services.AddSingleton<IOrderManager, OrderManager>();

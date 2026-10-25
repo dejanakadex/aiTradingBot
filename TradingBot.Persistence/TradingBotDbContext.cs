@@ -17,6 +17,7 @@ namespace TradingBot.Persistence
         public DbSet<AiApiUsageRecord> AiApiUsageRecords { get; set; }
         public DbSet<StrategyDecisionRecord> StrategyDecisionRecords { get; set; }
         public DbSet<RiskDecisionRecord> RiskDecisionRecords { get; set; }
+        public DbSet<ForexExecutionProofRecord> ForexExecutionProofRecords { get; set; }
         public DbSet<Trade> Trades { get; set; }
         public DbSet<OrderRecord> OrderRecords { get; set; }
         public DbSet<ExecutionRecord> ExecutionRecords { get; set; }
@@ -376,6 +377,12 @@ namespace TradingBot.Persistence
                 b.Property(x => x.InstrumentId).UseCollation("NOCASE");
                 b.Property(x => x.Symbol).UseCollation("NOCASE");
                 b.Property(x => x.Version).IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<ForexExecutionProofRecord>(b =>
+            {
+                b.HasKey(x => x.ReservationId);
+                b.HasIndex(x => x.InstrumentId);
             });
 
             modelBuilder.Entity<PortfolioRiskReservationAuditRecord>(b =>

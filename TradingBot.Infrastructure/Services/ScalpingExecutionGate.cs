@@ -26,6 +26,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly IbkrSettings _ibkrSettings;
         private readonly IClock _clock;
         private readonly ILogger<ScalpingExecutionGate> _logger;
+        private readonly ForexPaperPreparationService? _forex;
 
         public ScalpingExecutionGate(
             ILatestMarketDataService latestMarketData,
@@ -40,7 +41,8 @@ namespace TradingBot.Infrastructure.Services
             IOptions<RiskSettings> riskSettings,
             IOptions<IbkrSettings> ibkrSettings,
             IClock clock,
-            ILogger<ScalpingExecutionGate> logger)
+            ILogger<ScalpingExecutionGate> logger,
+            ForexPaperPreparationService? forex = null)
         {
             _latestMarketData = latestMarketData;
             _operatingModeService = operatingModeService;
@@ -55,6 +57,7 @@ namespace TradingBot.Infrastructure.Services
             _ibkrSettings = ibkrSettings.Value;
             _clock = clock;
             _logger = logger;
+            _forex = forex;
         }
 
         public async Task<ScalpingExecutionDecision> EvaluateAsync(ApprovedTradePlan plan, CancellationToken cancellationToken = default)
@@ -74,6 +77,20 @@ namespace TradingBot.Infrastructure.Services
             }
 
             ValidatePlanAge(plan, now, reasons);
+            if (!_tradingSettings.ForexPaperExecutionEnabled && plan.Context.PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns, StringComparison.Ordinal))
+            {
+                decision = ScalpingExecutionDecision.Reject(now, "FX paper execution was disabled.", ["FX paper execution was disabled."]);
+                await PersistAsync(plan, decision, Stopwatch.GetElapsedTime(started), cancellationToken).ConfigureAwait(false);
+                return decision;
+            }
+            if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == plan.Context.InstrumentId && x.InstrumentType == InstrumentType.Forex))
+            {
+                decision = reasons.Count > 0 || _forex == null
+                    ? ScalpingExecutionDecision.Reject(now, "FX execution preparation unavailable or plan expired.", reasons)
+                    : await _forex.RevalidateAsync(plan, cancellationToken).ConfigureAwait(false);
+                await PersistAsync(plan, decision, Stopwatch.GetElapsedTime(started), cancellationToken).ConfigureAwait(false);
+                return decision;
+            }
             var quote = _latestMarketData.Get(plan.Context.InstrumentId) ?? _latestMarketData.Get(plan.StrategyDecision.Symbol);
             ValidateQuote(quote, now, reasons);
 

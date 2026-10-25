@@ -175,6 +175,11 @@ namespace TradingBot.Infrastructure.Background
                     }
                 }
 
+                if (_scalpingExecutionGate == null && _tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == plan.Context.InstrumentId && x.InstrumentType == InstrumentType.Forex))
+                {
+                    await RejectPlanAsync(plan, "FX requires a final FX execution gate.", cancellationToken).ConfigureAwait(false);
+                    return;
+                }
                 var executionDecision = _scalpingExecutionGate == null
                     ? null
                     : await _scalpingExecutionGate.EvaluateAsync(plan, cancellationToken).ConfigureAwait(false);

@@ -10,7 +10,7 @@ using TradingBot.Domain.Models;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class PortfolioRiskService : IPortfolioRiskService
+    public sealed partial class PortfolioRiskService : IPortfolioRiskService
     {
         private readonly IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> _dbFactory;
         private readonly RiskSettings _settings;
@@ -39,6 +39,8 @@ namespace TradingBot.Infrastructure.Services
             CancellationToken cancellationToken = default)
         {
             var context = strategyDecision.Context;
+            if (context?.PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns, StringComparison.Ordinal) == true)
+                return Rejected("FX must use the FX-aware atomic reservation path.");
             if (context == null)
             {
                 return Rejected("Pipeline context is required for an atomic portfolio reservation.");
@@ -280,7 +282,8 @@ namespace TradingBot.Infrastructure.Services
                 {
                     reservation.CommittedAtUtc = now;
                     reservation.BrokerOrderId = brokerOrderId;
-                    reservation.ExpiresAtUtc = now.AddSeconds(_settings.CommittedReservationTimeoutSeconds);
+                    reservation.ExpiresAtUtc = await db.ForexExecutionProofRecords.AnyAsync(x => x.ReservationId == reservation.Id, cancellationToken)
+                        ? DateTime.MaxValue : now.AddSeconds(_settings.CommittedReservationTimeoutSeconds);
                 }
                 else
                 {

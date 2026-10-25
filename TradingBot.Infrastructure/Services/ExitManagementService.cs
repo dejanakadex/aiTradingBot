@@ -17,7 +17,7 @@ using TradingBot.Domain.Models;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class ExitManagementService : IExitManagementService, IDisposable
+    public sealed partial class ExitManagementService : IExitManagementService, IDisposable
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
         {
@@ -33,6 +33,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly IOperatingModeService _operatingModeService;
         private readonly ITradingEngineStatusService _statusService;
         private readonly IFeatureEngine _featureEngine;
+        private readonly IClock _clock;
         private readonly ExitStrategySettings _settings;
         private readonly TradingSettings _tradingSettings;
         private readonly ILogger<ExitManagementService> _logger;
@@ -50,7 +51,7 @@ namespace TradingBot.Infrastructure.Services
             IOptions<ExitStrategySettings> settings,
             IOptions<TradingSettings> tradingSettings,
             ILogger<ExitManagementService> logger,
-            ISignalArbitrationService? signalArbitrationService = null)
+            ISignalArbitrationService? signalArbitrationService = null, IClock? clock = null)
         {
             _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -62,6 +63,7 @@ namespace TradingBot.Infrastructure.Services
             _tradingSettings = tradingSettings?.Value ?? new TradingSettings();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _signalArbitrationService = signalArbitrationService;
+            _clock = clock ?? new SystemClock();
 
             _executionService.OrderStatusUpdated += OnOrderStatusUpdatedAsync;
             _executionService.OrderFilled += OnOrderFilledAsync;
@@ -125,8 +127,8 @@ namespace TradingBot.Infrastructure.Services
                     TrailingAtrTimeframe = NormalizeTimeframe(_settings.TrailingAtrTimeframe),
                     TrailingAtrMultiplier = _settings.TrailingAtrMultiplier,
                     MaximumHoldingSeconds = ResolveMaximumHoldingSeconds(plan, approvedHoldingSeconds),
-                    OpenedUtc = DateTime.UtcNow,
-                    UpdatedUtc = DateTime.UtcNow,
+                    OpenedUtc = _clock.UtcNow,
+                    UpdatedUtc = _clock.UtcNow,
                     RawJson = JsonSerializer.Serialize(new
                     {
                         plan.Pattern,
@@ -173,7 +175,7 @@ namespace TradingBot.Infrastructure.Services
                     FilledQuantity = effectiveFilled,
                     RemainingQuantity = persistedEntry?.RemainingQuantity ?? entryOrder.RemainingQuantity,
                     AverageFillPrice = persistedEntry?.AverageFillPrice ?? entryOrder.AverageFillPrice,
-                    TimestampUtc = firstExecutionUtc ?? persistedEntry?.UpdatedUtc ?? DateTime.UtcNow,
+                    TimestampUtc = firstExecutionUtc ?? persistedEntry?.UpdatedUtc ?? _clock.UtcNow,
                     Message = "Entry already reported filled during submission."
                 }, cancellationToken).ConfigureAwait(false);
             }
@@ -210,6 +212,7 @@ namespace TradingBot.Infrastructure.Services
         public async Task ProcessExpiredPositionsAsync(DateTime asOfUtc, CancellationToken cancellationToken = default)
         {
             var nowUtc = NormalizeUtc(asOfUtc);
+            await ProcessForexTrailingAsync(nowUtc, cancellationToken).ConfigureAwait(false);
             await using var lookupDb = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             var ids = await lookupDb.ExitManagementRecords.AsNoTracking()
                 .Where(x => x.ExitDeadlineUtc.HasValue && x.ExitDeadlineUtc.Value <= nowUtc
@@ -253,7 +256,7 @@ namespace TradingBot.Infrastructure.Services
                     {
                         _logger.LogError(ex, "Timed exit broker request outcome is unknown for {Symbol} entry {EntryBrokerOrderId}.",
                             record.Symbol, record.EntryBrokerOrderId);
-                        record.TimeExitDeferredUtc ??= DateTime.UtcNow;
+                        record.TimeExitDeferredUtc ??= _clock.UtcNow;
                         record.TimeExitDeferredReason = "Broker cancellation or exit submission outcome is unknown; reconciliation required.";
                         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                         SetTimedExitDegraded(record.TimeExitDeferredReason);
@@ -308,7 +311,7 @@ namespace TradingBot.Infrastructure.Services
             }
             if (legacyOpenEntries.Count > 0) await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            var restoreNowUtc = DateTime.UtcNow;
+            var restoreNowUtc = _clock.UtcNow;
             var unsafeRecords = await db.ExitManagementRecords
                 .Where(x => x.State != ExitManagementState.Closed
                     && (x.State == ExitManagementState.Faulted
@@ -345,6 +348,7 @@ namespace TradingBot.Infrastructure.Services
         public async Task ProcessMarketCandleAsync(Candle candle, CancellationToken cancellationToken = default)
         {
             if (candle == null) throw new ArgumentNullException(nameof(candle));
+            if (_tradingSettings.GetConfiguredInstruments().Any(x => x.Symbol == candle.Symbol && x.InstrumentType == InstrumentType.Forex)) return;
             if (_settings.Mode != ExitStrategyMode.AtrTrailing) return;
 
             var timeframe = NormalizeTimeframe(_settings.TrailingAtrTimeframe);
@@ -418,11 +422,11 @@ namespace TradingBot.Infrastructure.Services
                     if (record.State == ExitManagementState.EntryCancelPending && IsCancelled(status.Status))
                     {
                         record.EntryRemainingQuantity = 0m;
-                        record.EntryCancelConfirmedUtc = DateTime.UtcNow;
+                        record.EntryCancelConfirmedUtc = _clock.UtcNow;
                         if (record.FilledQuantity <= record.ExitedQuantity)
                         {
                             record.State = ExitManagementState.Closed;
-                            record.ClosedUtc = DateTime.UtcNow;
+                            record.ClosedUtc = _clock.UtcNow;
                             if (record.TradeId.HasValue)
                             {
                                 var trade = await db.Trades.SingleOrDefaultAsync(x => x.Id == record.TradeId.Value, cancellationToken).ConfigureAwait(false);
@@ -460,14 +464,14 @@ namespace TradingBot.Infrastructure.Services
                     && IsCancelled(status.Status))
                 {
                     record.ProtectedQuantity = 0m;
-                    record.ProtectiveStopCancelConfirmedUtc = DateTime.UtcNow;
+                    record.ProtectiveStopCancelConfirmedUtc = _clock.UtcNow;
                     await SubmitAfterExitCancellationsAsync(db, record, cancellationToken).ConfigureAwait(false);
                 }
                 else if (record.TakeProfitBrokerOrderId == brokerOrderId
                     && record.State == ExitManagementState.ExitCancelPending
                     && IsCancelled(status.Status))
                 {
-                    record.TakeProfitCancelConfirmedUtc = DateTime.UtcNow;
+                    record.TakeProfitCancelConfirmedUtc = _clock.UtcNow;
                     await SubmitAfterExitCancellationsAsync(db, record, cancellationToken).ConfigureAwait(false);
                 }
                 else if (IsCancelled(status.Status)
@@ -567,15 +571,15 @@ namespace TradingBot.Infrastructure.Services
 
             if (record.FilledQuantity == 0m)
             {
-                var firstFillUtc = status.TimestampUtc == default ? DateTime.UtcNow : NormalizeUtc(status.TimestampUtc);
-                if (firstFillUtc > DateTime.UtcNow) firstFillUtc = DateTime.UtcNow;
+                var firstFillUtc = status.TimestampUtc == default ? _clock.UtcNow : NormalizeUtc(status.TimestampUtc);
+                if (firstFillUtc > _clock.UtcNow) firstFillUtc = _clock.UtcNow;
                 record.OpenedUtc = firstFillUtc;
                 if (record.MaximumHoldingSeconds is > 0)
                     record.ExitDeadlineUtc = firstFillUtc.AddSeconds(record.MaximumHoldingSeconds.Value);
             }
 
             record.FilledQuantity = status.FilledQuantity;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
             if (_signalArbitrationService != null && record.SignalId.HasValue)
             {
                 await _signalArbitrationService.RecordEntryFillAsync(record.SignalId.Value, status.FilledQuantity, cancellationToken).ConfigureAwait(false);
@@ -658,7 +662,7 @@ namespace TradingBot.Infrastructure.Services
                 if (ex is BrokerOrderStateUnknownException)
                 {
                     intent.Status = OrderStatus.PendingBrokerConfirmation;
-                    intent.UpdatedUtc = DateTime.UtcNow;
+                    intent.UpdatedUtc = _clock.UtcNow;
                 }
                 await MarkFaultedAsync(db, record, $"Initial protective stop submission failed: {ex.Message}", cancellationToken).ConfigureAwait(false);
                 return;
@@ -677,7 +681,7 @@ namespace TradingBot.Infrastructure.Services
             record.ProtectedQuantity = record.FilledQuantity;
             if (record.State != ExitManagementState.Faulted)
                 record.State = ExitManagementState.InitialProtection;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
             if (_signalArbitrationService != null && record.SignalId.HasValue)
             {
                 await _signalArbitrationService.RegisterExitOrderAsync(record.SignalId.Value, brokerOrderId, record.FilledQuantity, cancellationToken).ConfigureAwait(false);
@@ -689,7 +693,7 @@ namespace TradingBot.Infrastructure.Services
             TradingBot.Persistence.TradingBotDbContext db,
             TradingBot.Persistence.ExitManagementRecord record,
             Candle candle,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, decimal? forexAtr = null)
         {
             var marketPrice = candle.Close;
             record.HighestPriceSinceEntry = Math.Max(record.HighestPriceSinceEntry, candle.High);
@@ -715,7 +719,7 @@ namespace TradingBot.Infrastructure.Services
 
             if (rMultiple < _settings.TrailingActivationR) return;
 
-            var currentAtr = await CalculateAtrAsync(db, record.Symbol, candle, cancellationToken).ConfigureAwait(false);
+            var currentAtr = forexAtr ?? await CalculateAtrAsync(db, record.Symbol, candle, cancellationToken).ConfigureAwait(false);
             if (currentAtr == null || currentAtr <= 0m) return;
 
             var trailingStop = record.HighestPriceSinceEntry - (currentAtr.Value * _settings.TrailingAtrMultiplier);
@@ -738,6 +742,19 @@ namespace TradingBot.Infrastructure.Services
             decimal? currentAtr,
             CancellationToken cancellationToken)
         {
+            if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == record.InstrumentId && x.InstrumentType == InstrumentType.Forex))
+            {
+                var proof = await (from p in db.ForexExecutionProofRecords
+                    join r in db.PortfolioRiskReservationRecords on p.ReservationId equals r.Id
+                    where r.SignalId == record.SignalId select p).SingleOrDefaultAsync(cancellationToken);
+                var rules = proof == null ? null : JsonSerializer.Deserialize<ForexRiskRequest>(proof.RequestJson)?.Rules;
+                if (rules == null)
+                {
+                    await MarkFaultedAsync(db, record, "FX stop update has no durable broker rules.", cancellationToken);
+                    return false;
+                }
+                proposedStop = ForexRiskService.RoundPrice(proposedStop, false, rules.PriceBands);
+            }
             if (proposedStop <= record.CurrentProtectiveStop) return false;
             if (proposedStop >= marketPrice) return false;
 
@@ -800,7 +817,7 @@ namespace TradingBot.Infrastructure.Services
 
             record.CurrentProtectiveStop = newStop;
             record.ProtectedQuantity = record.FilledQuantity - record.ExitedQuantity;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
             await AddAuditAsync(db, record, oldStop, newStop, reason, marketPrice, currentAtr, cancellationToken).ConfigureAwait(false);
             return true;
         }
@@ -830,7 +847,7 @@ namespace TradingBot.Infrastructure.Services
                 ParentBrokerOrderId = record.EntryBrokerOrderId,
                 Role = "TakeProfitModify",
                 ClientOrderKey = $"exit:{record.EntryBrokerOrderId}:TakeProfitModify",
-                CreatedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = _clock.UtcNow,
                 Transmit = true
             };
             OrderStatusDto status;
@@ -870,7 +887,7 @@ namespace TradingBot.Infrastructure.Services
 
             record.ExitReason = reason;
             record.ExitRequestedQuantity = remaining;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
 
             if (record.EntryRemainingQuantity > 0m && !record.EntryCancelConfirmedUtc.HasValue)
             {
@@ -913,7 +930,7 @@ namespace TradingBot.Infrastructure.Services
             if (record.State == ExitManagementState.EntryCancelPending) return;
             record.ExitReason = reason;
             record.State = ExitManagementState.EntryCancelPending;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             var current = _statusService.Current;
             _statusService.SetState(TradingEngineState.Degraded, false,
@@ -963,7 +980,7 @@ namespace TradingBot.Infrastructure.Services
                 Quantity = remaining,
                 Side = "SELL",
                 Type = "MARKET",
-                CreatedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = _clock.UtcNow,
                 Role = reason,
                 ClientOrderKey = $"exit:{record.EntryBrokerOrderId}:{reason}",
                 Transmit = true
@@ -986,7 +1003,7 @@ namespace TradingBot.Infrastructure.Services
                 record.ExitRequestedQuantity = remaining;
                 record.ExitReason = reason;
                 record.State = ExitManagementState.ExitSubmitted;
-                record.UpdatedUtc = DateTime.UtcNow;
+                record.UpdatedUtc = _clock.UtcNow;
                 if (_signalArbitrationService != null && record.SignalId.HasValue && !string.IsNullOrWhiteSpace(brokerOrderId))
                 {
                     await _signalArbitrationService.RegisterExitOrderAsync(record.SignalId.Value, brokerOrderId, remaining, cancellationToken).ConfigureAwait(false);
@@ -999,7 +1016,7 @@ namespace TradingBot.Infrastructure.Services
                 if (intent != null && ex is BrokerOrderStateUnknownException)
                 {
                     intent.Status = OrderStatus.PendingBrokerConfirmation;
-                    intent.UpdatedUtc = DateTime.UtcNow;
+                    intent.UpdatedUtc = _clock.UtcNow;
                 }
                 await MarkFaultedAsync(db, record, $"Managed exit submission failed: {ex.Message}", cancellationToken).ConfigureAwait(false);
             }
@@ -1031,7 +1048,7 @@ namespace TradingBot.Infrastructure.Services
             }
             var remaining = Math.Max(0m, record.FilledQuantity - record.ExitedQuantity);
             record.ProtectedQuantity = Math.Min(record.ProtectedQuantity, remaining);
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
 
             if (record.TradeId.HasValue)
             {
@@ -1041,7 +1058,7 @@ namespace TradingBot.Infrastructure.Services
                     trade.Size = remaining;
                     if (remaining == 0m && record.EntryRemainingQuantity == 0m)
                     {
-                        trade.ClosedUtc = status.TimestampUtc == default ? DateTime.UtcNow : status.TimestampUtc;
+                        trade.ClosedUtc = status.TimestampUtc == default ? _clock.UtcNow : status.TimestampUtc;
                         trade.ExitPrice = status.AverageFillPrice ?? status.LastFillPrice;
                     }
                 }
@@ -1057,7 +1074,7 @@ namespace TradingBot.Infrastructure.Services
                     return;
                 }
                 record.State = ExitManagementState.Closed;
-                record.ClosedUtc = status.TimestampUtc == default ? DateTime.UtcNow : status.TimestampUtc;
+                record.ClosedUtc = status.TimestampUtc == default ? _clock.UtcNow : status.TimestampUtc;
                 await CancelSiblingExitOrdersAsync(record, brokerOrderId, cancellationToken).ConfigureAwait(false);
                 return;
             }
@@ -1143,9 +1160,9 @@ namespace TradingBot.Infrastructure.Services
                 record.State = ExitManagementState.TimeExitDeferred;
                 record.ExitReason = MaximumHoldingExitReason;
                 record.ExitRequestedQuantity = record.FilledQuantity - record.ExitedQuantity;
-                record.TimeExitDeferredUtc ??= DateTime.UtcNow;
+                record.TimeExitDeferredUtc ??= _clock.UtcNow;
                 record.TimeExitDeferredReason = reason;
-                record.UpdatedUtc = DateTime.UtcNow;
+                record.UpdatedUtc = _clock.UtcNow;
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
             SetTimedExitDegraded(reason);
@@ -1200,7 +1217,7 @@ namespace TradingBot.Infrastructure.Services
             return false;
         }
 
-        private static OrderRequestDto BuildProtectiveStopRequest(
+        private OrderRequestDto BuildProtectiveStopRequest(
             TradingBot.Persistence.ExitManagementRecord record,
             decimal quantity,
             decimal stopPrice,
@@ -1213,7 +1230,7 @@ namespace TradingBot.Infrastructure.Services
                 Side = "SELL",
                 Type = "STOP",
                 StopPrice = stopPrice,
-                CreatedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = _clock.UtcNow,
                 Role = role,
                 ClientOrderKey = $"exit:{record.EntryBrokerOrderId}:{role}",
                 ParentBrokerOrderId = string.IsNullOrWhiteSpace(record.TakeProfitBrokerOrderId)
@@ -1237,7 +1254,7 @@ namespace TradingBot.Infrastructure.Services
                 .ConfigureAwait(false);
             if (existing != null) return existing;
 
-            var now = DateTime.UtcNow;
+            var now = _clock.UtcNow;
             var intent = new TradingBot.Persistence.OrderRecord
             {
                 IntentId = Guid.NewGuid(),
@@ -1286,7 +1303,7 @@ namespace TradingBot.Infrastructure.Services
 
             intent.BrokerOrderId = brokerOrderId;
             intent.Status = ParseOrderStatus(status.Status);
-            intent.UpdatedUtc = DateTime.UtcNow;
+            intent.UpdatedUtc = _clock.UtcNow;
             intent.FilledQuantity = Math.Max(intent.FilledQuantity, status.FilledQuantity);
             intent.RemainingQuantity = status.RemainingQuantity;
             intent.AverageFillPrice = status.AverageFillPrice ?? intent.AverageFillPrice;
@@ -1328,8 +1345,8 @@ namespace TradingBot.Infrastructure.Services
                     Role = role,
                     ParentBrokerOrderId = request.ParentBrokerOrderId ?? string.Empty,
                     Symbol = request.Symbol,
-                    CreatedUtc = DateTime.UtcNow,
-                    UpdatedUtc = DateTime.UtcNow,
+                    CreatedUtc = _clock.UtcNow,
+                    UpdatedUtc = _clock.UtcNow,
                     Status = ParseOrderStatus(status.Status),
                     Side = request.Side,
                     OrderType = request.Type,
@@ -1346,7 +1363,7 @@ namespace TradingBot.Infrastructure.Services
             {
                 existing.Symbol = string.IsNullOrWhiteSpace(existing.Symbol) ? request.Symbol : existing.Symbol;
                 existing.Status = ParseOrderStatus(status.Status);
-                existing.UpdatedUtc = DateTime.UtcNow;
+                existing.UpdatedUtc = _clock.UtcNow;
                 existing.RequestedQuantity = request.Quantity;
                 existing.RemainingQuantity = status.RemainingQuantity;
                 existing.FilledQuantity = Math.Max(existing.FilledQuantity, status.FilledQuantity);
@@ -1380,7 +1397,7 @@ namespace TradingBot.Infrastructure.Services
                 CurrentAtr = currentAtr,
                 CurrentRMultiple = CalculateRMultiple(record, marketPrice),
                 ExitManagementState = record.State.ToString(),
-                TimestampUtc = DateTime.UtcNow
+                TimestampUtc = _clock.UtcNow
             });
 
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -1401,12 +1418,12 @@ namespace TradingBot.Infrastructure.Services
             CancellationToken cancellationToken)
         {
             record.State = ExitManagementState.Faulted;
-            record.UpdatedUtc = DateTime.UtcNow;
+            record.UpdatedUtc = _clock.UtcNow;
             record.RawJson = JsonSerializer.Serialize(new
             {
                 previous = record.RawJson,
                 faultReason = reason,
-                faultedAtUtc = DateTime.UtcNow
+                faultedAtUtc = _clock.UtcNow
             }, JsonOptions);
 
             _statusService.SetState(TradingEngineState.Degraded, false, "Exit management fault. Trading disabled.", new[] { reason });
