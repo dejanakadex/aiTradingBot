@@ -207,6 +207,11 @@ try
         .Validate(settings => settings.Validate().Count == 0, "ForexSignals contains invalid signal profiles.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexRiskSettings>()
+        .Bind(builder.Configuration.GetSection("ForexRisk"))
+        .Validate(settings => settings.Validate().Count == 0, "ForexRisk contains invalid profiles.")
+        .ValidateOnStart();
+
     builder.Services.AddHealthChecks()
         .AddCheck("web", () => HealthCheckResult.Healthy("Web application is running."), tags: new[] { "live" })
         .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "dependency", "ready" })

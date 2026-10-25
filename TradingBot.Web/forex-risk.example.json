@@ -1,0 +1,23 @@
+{
+  "ForexRisk": {
+    "Profiles": [
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "StrategyId": "eurusd-patterns",
+        "PipSize": 0.0001,
+        "MaximumCurrencyExposureUsd": 1000,
+        "MaximumSpreadBps": 2,
+        "MaximumSnapshotAgeSeconds": 5,
+        "MaximumRulesAgeHours": 24,
+        "CommissionPerOrderBps": 0.20,
+        "MinimumCommissionPerOrderUsd": 2,
+        "EntryCommissionOrders": 1,
+        "ExitCommissionOrders": 1,
+        "CommissionScheduleSource": "https://www.interactivebrokers.com/en/pricing/commissions-spot-currencies.php",
+        "SlippagePerSidePips": 0.1,
+        "SafetyBufferBps": 0.5,
+        "MinimumNetEdgeBps": 1
+      }
+    ]
+  }
+}

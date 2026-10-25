@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-25",
+  "scope": "FX-8 deterministic read-only sizing, risk and cost assessment",
+  "branch": "trading-bot-v2",
+  "startingCommit": "ef54b3317518374e8d300b66a4be16fe655cd6f2",
+  "restore": "passed",
+  "releaseBuild": { "warnings": 0, "errors": 0 },
+  "tests": { "passed": 602, "failed": 0, "skipped": 0, "newFx8Cases": 41 },
+  "testCommand": "dotnet test TradingBot.sln -c Release --no-build --no-restore",
+  "requiredIbkrPublishVerification": "passed outside sandbox; first sandbox publish returned failure without MSBuild diagnostics",
+  "verified": [
+    "base units, fractional size step, minimum and maximum without rounding quantity up",
+    "long/short research prices and multi-band tick rounding",
+    "matching contract, venue and market rule; unknown and stale rules block",
+    "EURUSD and EURGBP USD valuation, EUR account, inverse USD conversion",
+    "minimum/proportional round-trip commission and conservative multiple-order costs",
+    "spread, slippage, safety buffer and expected net edge",
+    "stop-risk, buying power and per-instrument caps",
+    "mixed stock/FX pending gross, net, strategy, correlation and currency exposure",
+    "daily loss, position count, reconciliation and timestamp gates",
+    "100 USD synthetic account rejection; explicitly allowed tiny odd-lot fails costs",
+    "configuration snapshot and deterministic input fingerprint"
+  ],
+  "stockBaselinePreserved": true,
+  "activeConfigurationChanged": false,
+  "brokerConnectionOpened": false,
+  "ordersSent": false,
+  "actualFxExecutionRulesConfirmed": false,
+  "actualFxCommissionMarginOrFillConfirmed": false,
+  "automaticFx7RiskRoutingImplemented": false,
+  "atomicFxPortfolioReservationImplemented": false,
+  "nextStep": "FX-9 broker rules and refreshed portfolio inputs, atomic FX-aware reservations, orders and lifecycle integration"
+}

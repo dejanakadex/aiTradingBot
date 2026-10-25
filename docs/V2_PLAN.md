@@ -96,4 +96,6 @@ API ključevi i broker računi ostaju lokalna konfiguracija i ne upisuju se u Gi
 
 ## Aditivni EUR/USD nastavak
 
+FX-8 dodaje determinističku read-only procjenu količine u osnovnoj valuti, USD riska, troškova i valutne izloženosti, uz postojeće monetarne risk limite. FX-9 mora integrirati osvježeni broker/portfolio snapshot i atomsku rezervaciju s postojećim lifecycleom; FX-8 `Passed` nije order approval. Puna FX simulacija i labele ostaju FX-10, a stvarni paper dokaz FX-12.
+
 [Plan FX-1 do FX-12](EURUSD_READINESS.md) proširuje postojeću infrastrukturu na konfigurirane valutne parove, uz zadržavanje SPY-a i ostalih dionica. Izvodi se jedna odobrena točka po jedna. [FX-1 matrica i regresijska osnova](STOCK_COMPATIBILITY_BASELINE.md) bilježe aktivne patterne, indikatore, strategije, oba izlazna profila i granice trenutnog replaya. FX rad ne zatvara automatski točke 25, 30 ili 31 niti omogućuje live ili short izvršavanje. Aktualni dokaz provjere svake točke vodi se u [statusu implementacije](IMPLEMENTATION_STATUS.md).

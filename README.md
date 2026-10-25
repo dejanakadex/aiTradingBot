@@ -197,7 +197,7 @@ accepted/rejected evaluation in the existing SQLite research tables. `ForexPatte
 is the deterministic, storage-free entry point for the same canonical input and as-of time.
 Volume is explicitly unavailable and excluded from scoring; VWAP patterns are rejected with a reason.
 FX research records have no stock labels. Automatic shadow signal routing/cooldown is described below; FX costs/labels
-and full trade replay remain FX-8/FX-10. These services do not publish orders or start a broker connection.
+and full trade replay are handled separately by FX-8/FX-10. These services do not publish orders or start a broker connection.
 See [FX-6 scope and evidence](docs/EURUSD_READINESS.md#fx-6--patterni-i-bodovanje).
 
 FX-7 adds an opt-in automatic **shadow signal** worker, independent of tick collection and trading permission.
@@ -210,6 +210,16 @@ direction, confidence and exact approved signal/pattern/feature versions. The pa
 bar, not independently updated latest bid/ask fields. SQLite stores every decision and restores cooldown/checkpoints.
 Accepted decisions have `DecisionStage=FxShadowSignal`; they are never published to the stock order/model pipeline.
 No active configuration or approval is changed by adding these files. See [FX-7 setup, evidence and limits](docs/EURUSD_READINESS.md#fx-7--strategije-i-signali).
+
+FX-8 adds the explicit, deterministic `ForexRiskService.Evaluate(ForexRiskRequest)` assessment.
+It sizes in base-currency units, rounds to reviewed broker increments, converts risk/costs/exposure to USD,
+and includes minimum commissions, spread and slippage. Existing `RiskSettings` monetary limits are reused;
+stock sizing and reservation behavior are preserved. Optional [forex-risk.example.json](TradingBot.Web/forex-risk.example.json)
+profiles are not loaded automatically. Callers must supply a uniquely confirmed contract, reviewed order rules,
+a fresh reconciled portfolio including pending commitments, paired bid/ask and required USD conversion quotes.
+Missing inputs block the assessment. `Passed` is a research result; `ExecutionAuthorized` is always false.
+There is no automatic FX-7 risk routing or broker reservation yet. FX-9 must integrate fresh assessment with
+atomic reservations and the existing execution lifecycle. See [FX-8 inputs, evidence and limits](docs/EURUSD_READINESS.md#fx-8--veličina-risk-i-troškovi).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

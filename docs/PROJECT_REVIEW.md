@@ -5,6 +5,8 @@ Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_
 
 ## Sažetak
 
+Naknadna dopuna 25.10.2026., FX-8: uveden je zaseban deterministički FX sizing/risk/cost servis. Primjenjuje postojeće monetarne limite u USD i pregledana brokerska pravila, uz minimalne provizije i oba valutna kraka. To ne zatvara izvorni nalaz o povezivanju komponenti: automatsko sastavljanje reconciled portfelja, FX-aware atomske rezervacije i order lifecycle integracija pripadaju FX-9; nema nove potvrde stvarnog izvršavanja. Detalji i dokazi vode se u [FX planu](EURUSD_READINESS.md#fx-8--veličina-risk-i-troškovi) i [statusu](IMPLEMENTATION_STATUS.md).
+
 Projekt već ima povezanu aplikacijsku arhitekturu: prikupljanje barova, feature/pattern obradu, AI analyzer i critic, strategiju, risk engine, naloge, upravljanje izlazom, SQLite i Blazor dashboard. Nije potreban novi projekt od nule.
 
 Glavni problem su prijelazi između tih komponenti. Postoje provjere u pojedinačnim servisima koje produkcijski tok ne hrani potrebnim podacima ili koje ne pokrivaju stvarni redoslijed broker callbackova. Prioritet su ispravno izvršavanje, pouzdana evidencija i ponovljiv replay prije dodavanja modela.

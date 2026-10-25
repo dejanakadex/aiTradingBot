@@ -64,7 +64,18 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | FX-5 — Kratki agregati i featurei | Implementirano i lokalno provjereno | Upareni quote MIDPOINT 1s/5s/15s agregati, as-of/warmup pravila, zasebna verzija i nedostupni volumenski featurei. 521/521 testova; 40 identičnih feature frameova nakon Parquet replaya. Stvarni živi FX-5 tok nije potvrđen. |
 | FX-6 — Patterni i bodovanje | Implementirano i lokalno provjereno | Osam cjenovnih patterna, zasebni FX pragovi/verzije, eksplicitno nedostupan volumen i odbijanje VWAP-a, zapis svih procjena bez stock labela. 543/543 testova; stvarni live FX pattern tok nije potvrđen. |
 | FX-7 — Strategije i signali | Implementirano i lokalno provjereno | Automatski FX shadow tok, zajednički kod odabira sa stock signalima, verzijska odobrenja, freshness/spread/volatility gateovi i trajni cooldown/checkpoint. 561/561 testova; stvarni živi FX signal nije potvrđen. |
-| FX-8 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); sljedeće su FX veličina, risk i troškovi, FX-8. |
+| FX-8 — Veličina, risk i troškovi | Implementirano i lokalno provjereno | Deterministička read-only procjena base units, pregledanih broker pravila, USD troškova/riska i valutnih krakova. 602/602 testova; bez stvarne provizije/margine/filla. Integracija rezervacija i izvršavanja pripada FX-9. |
+| FX-9 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); sljedeći su FX nalozi/lifecycle uz FX-aware risk rezervacije. |
+
+### FX-8 — Veličina, risk i troškovi
+
+Provjera 25.10.2026., polazni commit `ef54b33` na `trading-bot-v2`. [Pravila, ulazi i granice](EURUSD_READINESS.md#fx-8--veličina-risk-i-troškovi), [dokaz provjere](evidence/fx8-risk-verification-2026-10-25.json).
+
+- `ForexRiskService` registriran je u DI-u uz opcionalne `ForexRisk` profile po instrumentu/strategiji. Koristi postojeće USD monetarne `RiskSettings` limite i instrumentni limit, ali ne propušta FX kroz stock sizing/reservation pretpostavke. Aktivna konfiguracija i stock servisi nisu promijenjeni.
+- Količina u osnovnoj valuti zaokružuje se dolje, cijene po pregledanim razredima; provjeravaju se ConId, ruta/market-rule ID, min/max/korak, starost pravila i quote/portfolio/tečaj ulaza. Ne tumači se indicative/suggested size kao izvršivo pravilo.
+- Uključeni su minimalna/postotna provizija ulaza i izlaza, više naloga, spread, slippage, buffer, pip vrijednost, stop-risk i neto prednost u USD. Cross-par i račun u drugoj valuti koriste konzervativni bid/ask preračun. Oba valutna kraka i postojeća/pending portfeljna izloženost ulaze u limite. Mali račun ne dobiva izuzeće.
+- **602/602 solution testova**, uključujući **41 novi FX-8 slučaj**. Restore prolazi; Release build **0 upozorenja / 0 grešaka**. Required-DLL/publish i negativne provjere nedostajućeg/promijenjenog DLL-a prolaze izvan sandboxa (prvi sandbox publish nije dao MSBuild dijagnostiku). Stock regresije prolaze. GitHub CI provjerava se nakon pusha.
+- Ovo je eksplicitni read-only API s `fx-risk-v1` i hashom punog ulaza/postavki. `Passed` nije odobrenje naloga, `ExecutionAuthorized=false`; nema automatske rezervacije ili FX-7 signal/risk routinga. Potpun broker snapshot, stvarna izvršiva pravila i atomska rezervacija s lifecycleom slijede u **FX-9**. FX trade replay/labele su FX-10. Nema nove broker veze, stvarnih FX provizija, margine ni fillova. Točke 25/30/31 ostaju otvorene.
 
 ### FX-7 — Strategije i signali
 
