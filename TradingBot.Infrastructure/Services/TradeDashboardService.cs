@@ -22,6 +22,7 @@ namespace TradingBot.Infrastructure.Services
         public async Task<IReadOnlyList<TradeDashboardRow>> GetTradesAsync(int take = 200, CancellationToken cancellationToken = default)
         {
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var instruments = await db.InstrumentRegistryRecords.AsNoTracking().ToListAsync(cancellationToken);
             var rows = await db.Trades.AsNoTracking()
                 .OrderByDescending(t => t.OpenedUtc)
                 .Take(Math.Clamp(take, 1, 1000))
@@ -39,6 +40,9 @@ namespace TradingBot.Infrastructure.Services
 
             return rows.Select(t =>
             {
+                var matches = instruments.Where(x => x.Symbol == t.Symbol).ToArray();
+                var instrument = matches.Length == 1 ? matches[0] : null;
+                var basis = instrument == null ? null : InstrumentIdentity.GetBaseCurrency(instrument.SecurityType, instrument.Symbol, instrument.Currency);
                 var gross = t.ExitPrice.HasValue ? (t.ExitPrice.Value - t.EntryPrice) * t.Size : 0m;
                 var fees = ExtractDecimal(t.Notes, "fees") ?? ExtractDecimal(t.Notes, "commission") ?? 0m;
                 var net = gross - fees;
@@ -46,6 +50,9 @@ namespace TradingBot.Infrastructure.Services
                 {
                     TimestampUtc = t.OpenedUtc,
                     Symbol = t.Symbol,
+                    QuantityUnit = instrument == null ? "unknown" : basis ?? "shares",
+                    PriceUnit = instrument == null ? "unknown" : basis == null ? instrument.Currency : $"{instrument.Currency}/{basis}",
+                    ProfitCurrency = instrument?.Currency ?? "unknown",
                     Pattern = ExtractString(t.Notes, "pattern") ?? "Unknown",
                     AiConfidence = ExtractDecimal(t.Notes, "aiConfidence"),
                     Entry = t.EntryPrice,

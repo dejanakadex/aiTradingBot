@@ -1,0 +1,62 @@
+@page "/instruments"
+@using TradingBot.Application.DTOs
+@using TradingBot.Domain.Enums
+@inject TradingBot.Application.Interfaces.IInstrumentRegistryService Registry
+@inject TradingBot.Application.Interfaces.IInstrumentRolloutService Rollout
+@inject TradingBot.Application.Interfaces.ILatestMarketDataService Latest
+
+<PageTitle>Instruments &amp; readiness</PageTitle>
+<section class="table-page">
+    <h1>Instruments &amp; readiness</h1>
+    <p>Collection runs independently of trading. Readiness does not enable orders. FX paper fills require separate validation.</p>
+    <button class="btn btn-secondary" @onclick="RefreshAsync">Refresh</button>
+    @if (_error != null) { <p role="alert">@_error</p> }
+    @foreach (var item in _instruments)
+    {
+        var quote = Latest.Get(item.InstrumentId);
+        var evaluation = _evaluations.GetValueOrDefault(item.InstrumentId);
+        <section class="panel">
+            <h2>@item.DisplaySymbol — @item.Status</h2>
+            <dl>
+                <dt>Instrument</dt><dd>@item.InstrumentId · @item.SecurityType · @item.Exchange</dd>
+                <dt>Collection configured</dt><dd>@item.CollectionEnabled</dd>
+                <dt>Trading requested</dt><dd>@item.TradingRequested</dd>
+                <dt>Quantity unit</dt><dd>@item.QuantityUnit</dd>
+                <dt>Bid / Ask (@item.PriceUnit)</dt><dd>@Price(quote?.Bid) / @Price(quote?.Ask)</dd>
+                <dt>Quote time (UTC)</dt><dd>@(quote?.BidTimeUtc?.ToString("u") ?? "Unavailable")</dd>
+                <dt>Data basis</dt><dd>@(item.InstrumentType == InstrumentType.Forex ? "Bid/ask → short midpoint bars; minute MIDPOINT history; trade volume/VWAP unavailable" : "Trades, quotes and trade volume")</dd>
+                <dt>Strategies</dt><dd>@string.Join(", ", item.StrategyIds)</dd>
+                <dt>Onboarding</dt><dd>@item.StatusReason</dd>
+                <dt>Latest assessment (UTC)</dt><dd>@(evaluation?.EvaluatedAtUtc.ToString("u") ?? "Pending")</dd>
+                <dt>Shadow observations / passed</dt><dd>@(evaluation?.ShadowDecisionCount ?? 0) / @(evaluation?.ApprovedShadowDecisionCount ?? 0)</dd>
+                <dt>Shadow criteria</dt><dd>@(evaluation?.ShadowCriteriaPassed == true ? "Passed" : "Pending / blocked")</dd>
+            </dl>
+            @if (evaluation != null)
+            {
+                <ul>@foreach (var reason in evaluation.Reasons) { <li>@reason</li> }</ul>
+            }
+        </section>
+    }
+</section>
+@code {
+    private IReadOnlyList<InstrumentRegistrySnapshot> _instruments = [];
+    private Dictionary<string, InstrumentRolloutEvaluation> _evaluations = [];
+    private string? _error;
+    protected override Task OnInitializedAsync() => RefreshAsync();
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            _instruments = await Registry.GetAllAsync();
+            var values = new Dictionary<string, InstrumentRolloutEvaluation>();
+            foreach (var item in _instruments)
+            {
+                var recent = (await Rollout.GetRecentAsync(item.InstrumentId, 1)).FirstOrDefault();
+                if (recent != null) values[item.InstrumentId] = recent;
+            }
+            _evaluations = values; _error = null;
+        }
+        catch { _error = "Readiness could not be loaded. Check the application's diagnostic log."; }
+    }
+    private static string Price(decimal? value) => value?.ToString("0.########") ?? "Unavailable";
+}

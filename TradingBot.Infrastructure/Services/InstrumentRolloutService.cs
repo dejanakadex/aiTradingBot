@@ -22,6 +22,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly string _labelVersion;
         private readonly string _featureVersion;
         private readonly string _evaluationVersion;
+        private readonly ForexRolloutService? _forex;
 
         public InstrumentRolloutService(
             IDbContextFactory<TradingBotDbContext> dbFactory,
@@ -32,7 +33,8 @@ namespace TradingBot.Infrastructure.Services
             IClock clock,
             IOptions<CandidateLabelingSettings>? labelSettings = null,
             IOptions<CanonicalFeatureSettings>? featureSettings = null,
-            IOptions<ResearchEvaluationSettings>? evaluationSettings = null)
+            IOptions<ResearchEvaluationSettings>? evaluationSettings = null,
+            ForexRolloutService? forex = null)
         {
             _dbFactory = dbFactory;
             _registry = registry;
@@ -40,6 +42,7 @@ namespace TradingBot.Infrastructure.Services
             _settings = settings.Value;
             _tradingSettings = tradingSettings.Value;
             _clock = clock;
+            _forex = forex;
             _labelVersion = CandidateLabelVersion.Create(labelSettings?.Value ?? new CandidateLabelingSettings());
             _featureVersion = new FeatureEngine(featureSettings?.Value ?? new CanonicalFeatureSettings()).FeatureVersion;
             _evaluationVersion = ResearchEvaluationVersion.Create(evaluationSettings?.Value ?? new ResearchEvaluationSettings());
@@ -61,6 +64,9 @@ namespace TradingBot.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(instrumentId)) throw new ArgumentException("Instrument ID is required.", nameof(instrumentId));
             var instrument = await _registry.GetAsync(instrumentId, cancellationToken).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Instrument '{instrumentId}' is not registered.");
+            if (instrument.InstrumentType == InstrumentType.Forex)
+                return await (_forex ?? throw new InvalidOperationException("FX rollout service is required."))
+                    .EvaluateAsync(instrument, applyTransitions, cancellationToken);
             var now = ToUtc(_clock.UtcNow);
             var windowStart = now.AddHours(-_settings.LookbackHours);
 
@@ -315,6 +321,7 @@ namespace TradingBot.Infrastructure.Services
             var instrument = await _registry.GetAsync(instrumentId, cancellationToken).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Instrument '{instrumentId}' is not registered.");
             if (instrument.Version != request.ExpectedVersion) throw new InvalidOperationException($"Instrument version is {instrument.Version}, expected {request.ExpectedVersion}.");
+            if (instrument.InstrumentType == InstrumentType.Forex) throw new InvalidOperationException("FX live approval is not supported; actual paper validation is a separate step.");
             if (instrument.Status != InstrumentOnboardingStatus.PaperReady) throw new InvalidOperationException("Only a PaperReady instrument can receive manual live approval.");
             var evaluation = await EvaluateAsync(instrumentId, false, cancellationToken).ConfigureAwait(false);
             if (!evaluation.PaperCriteriaPassed) throw new InvalidOperationException($"Paper rollout criteria have not passed: {string.Join(" ", evaluation.Reasons)}");

@@ -54,6 +54,8 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<ForexTradeSimulator>();
             services.AddSingleton<ForexModelDecisionService>();
             services.AddSingleton<ForexModelExecutionService>();
+            services.AddSingleton<ForexShadowService>();
+            services.AddSingleton<ForexRolloutService>();
             services.AddSingleton<PortfolioRiskService>();
             services.AddSingleton<IPortfolioRiskService>(sp => sp.GetRequiredService<PortfolioRiskService>());
             services.AddSingleton<ForexPaperPreparationService>();

@@ -20,7 +20,8 @@ public static class ShadowDecisionAssessor
         await using var db = new TradingBotDbContext(options);
 
         var decisions = await db.ScalpingExecutionDecisionRecords.AsNoTracking()
-            .Where(x => x.EvaluatedAtUtc >= startUtc && x.EvaluatedAtUtc <= endUtc)
+            .Where(x => x.EvaluatedAtUtc >= startUtc && x.EvaluatedAtUtc <= endUtc
+                && x.SelectedPolicy != TradingBot.Infrastructure.Services.ForexShadowService.Policy)
             .OrderBy(x => x.EvaluatedAtUtc).Take(100001).ToArrayAsync(cancellationToken);
         var candidates = await db.ResearchCandidateRecords.AsNoTracking()
             .Where(x => x.ReplayRunId == null && x.CreatedAtUtc >= startUtc && x.CreatedAtUtc <= endUtc)

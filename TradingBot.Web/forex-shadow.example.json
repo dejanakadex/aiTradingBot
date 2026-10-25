@@ -1,0 +1,151 @@
+{
+  "TradingSettings": {
+    "Enabled": false,
+    "OperatingMode": "AnalysisOnly",
+    "LiveTradingExplicitlyEnabled": false,
+    "Instruments": [
+      {
+        "InstrumentId": "US-STK-SPY-SMART",
+        "Symbol": "SPY",
+        "SecurityType": "STK",
+        "Exchange": "SMART",
+        "Currency": "USD",
+        "Enabled": false,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "deterministic-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ]
+      },
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "Symbol": "EURUSD",
+        "BaseCurrency": "EUR",
+        "Currency": "USD",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Enabled": true,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "eurusd-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ],
+        "MaximumHoldingSeconds": 60
+      },
+      {
+        "InstrumentId": "FX-CASH-EUR-GBP-IDEALPRO",
+        "BaseCurrency": "EUR",
+        "Currency": "GBP",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Enabled": false,
+        "TradingEnabled": false,
+        "AllowedDirections": [
+          "Long"
+        ],
+        "StrategyIds": [
+          "eurgbp-patterns"
+        ],
+        "MarketDataTimeframes": [
+          "1m"
+        ],
+        "MaximumHoldingSeconds": 45
+      }
+    ]
+  },
+  "ForexPatterns": {
+    "Profiles": [
+      {
+        "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "StrategyId": "eurusd-patterns",
+        "IntervalSeconds": 5,
+        "Directions": [
+          "Long",
+          "Short"
+        ],
+        "MinimumConsecutiveCandles": 26,
+        "RequirePriceFeatureWarmup": true,
+        "EngulfingSupportProximityPercent": 0.0003,
+        "Geometry": {
+          "MinimumTradeSetupQuality": 0.6,
+          "Hammer": {
+            "MinPullbackPercent": 0.0001,
+            "SupportProximityPercent": 0.0003
+          },
+          "ShootingStar": {
+            "MinPullbackPercent": 0.0001,
+            "SupportProximityPercent": 0.0003
+          },
+          "BullishEngulfing": {
+            "RequireVolumeConfirmation": false,
+            "MinPullbackPercent": 0.0001
+          },
+          "BearishEngulfing": {
+            "RequireVolumeConfirmation": false,
+            "MinPullbackPercent": 0.0001
+          },
+          "DoubleBottom": {
+            "MaxLowDiffPercent": 0.0003,
+            "MinReboundPercent": 0.0002,
+            "ConfirmationTolerancePercent": 0.0001
+          },
+          "DoubleTop": {
+            "MaxLowDiffPercent": 0.0003,
+            "MinReboundPercent": 0.0002,
+            "ConfirmationTolerancePercent": 0.0001
+          },
+          "BreakoutAndRetest": {
+            "RequireVolumeConfirmation": false,
+            "RetestTolerancePercent": 0.0003,
+            "MinBreakoutPercent": 0.0001,
+            "MinBouncePercent": 0.0001
+          },
+          "BreakdownAndRetest": {
+            "RequireVolumeConfirmation": false,
+            "RetestTolerancePercent": 0.0003,
+            "MinBreakoutPercent": 0.0001,
+            "MinBouncePercent": 0.0001
+          }
+        }
+      }
+    ]
+  },
+  "ForexSignals": {
+    "Profiles": [
+      {
+        "Selection": {
+          "Enabled": true,
+          "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+          "StrategyId": "eurusd-patterns",
+          "IntervalSeconds": 5,
+          "PatternTypes": [
+            "Hammer",
+            "BullishEngulfing",
+            "DoubleBottom",
+            "BreakoutAndRetest"
+          ],
+          "MinimumBars": 26,
+          "MinimumConfidence": 0.6,
+          "CooldownSeconds": 30,
+          "MaximumSignalAgeSeconds": 10
+        },
+        "MaximumSpreadBps": 2,
+        "MaximumQuoteAgeSeconds": 10,
+        "MaximumAtrToPriceRatio": 0.005,
+        "ApprovedSignalVersion": null,
+        "ApprovedPatternVersion": null,
+        "ApprovedFeatureVersion": null
+      }
+    ]
+  }
+}

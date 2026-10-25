@@ -7,6 +7,9 @@ namespace TradingBot.Domain.Models
     {
         public DateTime TimestampUtc { get; init; }
         public string Symbol { get; init; } = string.Empty;
+        public string QuantityUnit { get; init; } = "unknown";
+        public string PriceUnit { get; init; } = "unknown";
+        public string ProfitCurrency { get; init; } = "unknown";
         public string Pattern { get; init; } = string.Empty;
         public decimal? AiConfidence { get; init; }
         public decimal Entry { get; init; }

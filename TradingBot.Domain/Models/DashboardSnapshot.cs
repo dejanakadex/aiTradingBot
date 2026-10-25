@@ -20,6 +20,8 @@ namespace TradingBot.Domain.Models
         public bool TradingEnabled { get; init; }
         public string CurrentSymbol { get; init; } = string.Empty;
         public decimal? CurrentPrice { get; init; }
+        public string CurrentPriceUnit { get; init; } = "unknown";
+        public string CurrentQuantityUnit { get; init; } = "unknown";
         public decimal CurrentPosition { get; init; }
         public string MarketDataStatus { get; init; } = "No candles yet";
         public string ConfiguredMarketData { get; init; } = string.Empty;

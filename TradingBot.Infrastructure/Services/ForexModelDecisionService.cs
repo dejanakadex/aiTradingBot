@@ -55,6 +55,7 @@ public sealed class ForexModelDecisionService(ForexResearchContract contracts, I
         var metadata = candidate.Metadata.ToDictionary(x => x.Key, x => x.Value);
         metadata["numericalModel"] = modelIdentity; metadata["executionLabelVersion"] = c.Label;
         metadata["modelGrossReturnBps"] = prediction.ExpectedGrossReturnBps.Value.ToString(CultureInfo.InvariantCulture);
+        metadata["modelResidualCostsBps"] = estimatedCosts.ToString(CultureInfo.InvariantCulture);
         var approvedPattern = new PatternCandidate(candidate.PatternType, candidate.Symbol, candidate.Timeframe, candidate.DetectedAtUtc,
             candidate.Confidence, candidate.RelevantPriceLevels, metadata, context, candidate.Direction, candidate.HardConditions, candidate.ScoreComponents, candidate.EvaluationReasons);
         return new()

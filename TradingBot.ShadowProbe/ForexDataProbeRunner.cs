@@ -16,7 +16,7 @@ namespace TradingBot.ShadowProbe;
 /// <summary>Runs only the existing collection services, with an order-blocked adapter and a fresh data directory.</summary>
 public static class ForexDataProbeRunner
 {
-    public static async Task<int> RunAsync(string configPath, string outputPath, int port, int clientId, int seconds)
+    public static async Task<int> RunAsync(string configPath, string outputPath, int port, int clientId, int seconds, bool shadow = false)
     {
         if (port is not (7497 or 4002) || clientId < 0 || seconds is < 5 or > 3600) return 2;
         TradingSettings trading;
@@ -54,6 +54,13 @@ public static class ForexDataProbeRunner
         var backfill = new HistoricalBackfillService(factory, broker, registry, Options.Create(new HistoricalBackfillSettings()),
             clock, NullLogger<HistoricalBackfillService>.Instance, writer);
         var latest = new LatestMarketDataService(trading: tradingOptions);
+        ForexProbeAnalysis? analysis = null;
+        if (shadow)
+        {
+            try { analysis = new ForexProbeAnalysis(configPath, tradingOptions, latest, factory, store, clock, connection); }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+            { Console.Error.WriteLine($"Invalid FX shadow configuration ({ex.GetType().Name}); no broker connection opened."); return 2; }
+        }
         var quality = new MarketDataQualityService(factory, tradingOptions, clock, NullLogger<MarketDataQualityService>.Instance);
         var status = new MarketDataCollectionStatusService();
         using var bus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
@@ -87,7 +94,12 @@ public static class ForexDataProbeRunner
             history = await backfill.FillGapAsync(instrument.InstrumentId, instrument.Symbol, "1m", start, end, timeout.Token);
             await ticks.StartAsync(timeout.Token);
             await bars.StartAsync(timeout.Token);
-            await Task.Delay(TimeSpan.FromSeconds(seconds), timeout.Token);
+            var until = clock.UtcNow.AddSeconds(seconds);
+            while (clock.UtcNow < until)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), timeout.Token);
+                if (analysis != null) await analysis.RunAsync(timeout.Token);
+            }
         }
         catch (Exception ex) { reasons.Add($"Read-only data probe failed ({ex.GetType().Name})."); }
         finally
@@ -108,6 +120,8 @@ public static class ForexDataProbeRunner
         var historyPassed = history?.Success == true && history.BarsInserted > 0 && verification.IsValid && bus.CandleReader.Count == 0
             && candleCount >= history.BarsInserted && validBars.Length >= history.BarsInserted
             && validBars.All(x => x.Volume is null && x.Source.StartsWith("IBKR.Midpoint", StringComparison.Ordinal));
+        var shadowDataObserved = shadow && bidCount > 0 && askCount > 0
+            && await check.ResearchCandidateRecords.AnyAsync(x => x.ReplayRunId == null);
         var report = new
         {
             StartedUtc = started, EndedUtc = clock.UtcNow, ApiVersion = broker.ApiVersion, ServerVersion = server,
@@ -124,12 +138,17 @@ public static class ForexDataProbeRunner
             ForexFiveSecondFeatures = new ForexFeatureService(latest, new FeatureEngine(), tradingOptions,
                 Options.Create(new ShortAggregateSettings())).Compute(instrument.InstrumentId, 5, clock.UtcNow),
             PublishedAnalysisCandles = bus.CandleReader.Count,
-            Scope = "Read-only production collectors and bounded historical MIDPOINT sample; no orders or strategy validation."
+            ShadowAnalysis = analysis == null ? null : await analysis.ReportAsync(),
+            ShadowDataObserved = shadowDataObserved,
+            ShadowPendingReason = shadow && !shadowDataObserved ? "No live quote-to-pattern sample; check session, tick availability and warmup. History success is not shadow success." : null,
+            Scope = shadow ? "AnalysisOnly collectors, FX features and pattern gates in a new database. No trained model is imported, no orders; model readiness cannot pass in this probe."
+                : "Read-only production collectors and bounded historical MIDPOINT sample; no orders or strategy validation."
         };
         await File.WriteAllTextAsync(output, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"FX data report: {output}; isolated SQLite/Parquet: {root}");
         Console.WriteLine($"History/storage={historyPassed}; bars={report.HistoryBars}; bid={bidCount}; ask={askCount}; sessionOpen={report.SessionOpenAtStart}.");
-        return historyPassed && reasons.Count == 0 ? 0 : 1;
+        if (!historyPassed || reasons.Count > 0) return 1;
+        return shadow && !shadowDataObserved ? 3 : 0;
     }
 
     private sealed class ProbeDbFactory(DbContextOptions<TradingBotDbContext> options) : IDbContextFactory<TradingBotDbContext>

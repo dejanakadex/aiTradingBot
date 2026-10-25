@@ -72,6 +72,7 @@ namespace TradingBot.Infrastructure.Services
                 .ConfigureAwait(false);
 
             if (latestCandle != null) symbol = latestCandle.Symbol;
+            var currentInstrument = _tradingSettings.GetConfiguredInstruments().SingleOrDefault(x => x.Symbol == symbol);
 
             var trades = await db.Trades.AsNoTracking()
                 .Where(t => t.OpenedUtc >= today || (t.ClosedUtc.HasValue && t.ClosedUtc.Value >= today))
@@ -204,6 +205,8 @@ namespace TradingBot.Infrastructure.Services
                 TradingEnabled = status.TradingEnabled && _tradingSettings.Enabled,
                 CurrentSymbol = symbol,
                 CurrentPrice = latestCandle?.Close,
+                CurrentPriceUnit = currentInstrument == null ? "unknown" : currentInstrument.BaseCurrency is { } basis ? $"{currentInstrument.Currency}/{basis}" : currentInstrument.Currency,
+                CurrentQuantityUnit = currentInstrument == null ? "unknown" : currentInstrument.BaseCurrency ?? "shares",
                 CurrentPosition = position,
                 MarketDataStatus = GetMarketDataStatus(latestCandle),
                 ConfiguredMarketData = $"{string.Join(",", GetConfiguredSymbols())} / {string.Join(",", GetConfiguredTimeframes())}",

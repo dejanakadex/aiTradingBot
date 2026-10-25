@@ -14,6 +14,8 @@ namespace TradingBot.Application.DTOs
         public string? BaseCurrency => InstrumentIdentity.GetBaseCurrency(SecurityType, Symbol, Currency);
         public string QuoteCurrency => Currency;
         public string DisplaySymbol => BaseCurrency is { } basis ? $"{basis}/{Currency}" : Symbol;
+        public string QuantityUnit => BaseCurrency ?? "shares";
+        public string PriceUnit => BaseCurrency is { } basis ? $"{Currency}/{basis}" : Currency;
         public bool ConfiguredEnabled { get; init; }
         public bool TradingRequested { get; init; }
         public InstrumentOnboardingStatus Status { get; init; }

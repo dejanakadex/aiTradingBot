@@ -1,6 +1,6 @@
 # EUR/USD — priprema nastavka
 
-Status 25.10.2026.: **FX-1 do FX-10 programski su provedeni uz granice opisane niže**. Stvarni paper TWS potvrdio je ugovore i ograničeni EUR/USD MIDPOINT povijesni uzorak s SQLite/Parquet pohranom. Agregati, featurei, patterni, signali, risk, long USD paper lifecycle te FX replay/labele/modeli provjereni su lokalno; stvarni cijeli tok i fillovi još nisu potvrđeni. Prikupljanje radi uz `TradingEnabled=false`; primjeri ostaju u `AnalysisOnly`. FX-10 dodaje zaseban, zadano isključen opt-in za odobren model → FX-9 paper put. Nema produkcijskog odobrenog EUR/USD modela. Ovaj dokument ne potvrđuje profitabilnost.
+Status 25.10.2026.: **FX-1 do FX-11 programski su provedeni uz granice opisane niže**. Stvarni paper TWS potvrdio je ugovore i ograničeni EUR/USD MIDPOINT povijesni uzorak s SQLite/Parquet pohranom. Agregati, featurei, patterni, signali, risk, long USD paper lifecycle te FX replay/labele/modeli provjereni su lokalno; stvarni cijeli tok i fillovi još nisu potvrđeni. Prikupljanje radi uz `TradingEnabled=false`; primjeri ostaju u `AnalysisOnly`. FX-10 dodaje zaseban, zadano isključen opt-in za odobren model → FX-9 paper put. Nema produkcijskog odobrenog EUR/USD modela. Ovaj dokument ne potvrđuje profitabilnost.
 
 ## Što je već provjereno
 
@@ -24,7 +24,7 @@ Svaka točka završava odgovarajućim testovima, dokumentacijom i zasebnim commi
 | FX-8 — Veličina, risk i troškovi | Količina u osnovnoj valuti, brokerovi koraci/minimumi, pip/tick preciznost, provizije, valutno preračunavanje i izloženost. Mali račun nije izuzeće od gateova. | Implementirano i lokalno provjereno; read-only procjena, bez stvarnog izvršenja |
 | FX-9 — Nalozi i pozicije | FX entry/fill/partial/cancel/exit/restart/reconciliation u postojećem lifecycleu; oba FixedBracket i AtrTrailing profila, neovisni sekundni timer. Short izvršavanje nije automatski uključeno. | Implementirano i provjereno simulacijom: 638/638 testova. Long USD paper put; stvarni broker dokaz i rezidualni minimumi čekaju FX-12. |
 | FX-10 — Replay, labele i modeli | FX izvršenje i troškovi, SL/TP/timer labele, vremenska evaluacija bez leakagea, dataset/model verzije i operativno odobrenje po paru/strategiji. Preostali produkcijski replay paritet pratiti i kroz točku 25. | Implementirano i provjereno lokalnom simulacijom. [Ugovor, postupak i granice](FX10_RESEARCH.md); nema stvarnog IBKR fill/model dokaza. |
-| FX-11 — Onboarding, UI i shadow | Automatsko prikupljanje/backfill, odvojeni research/shadow/paper uvjeti, točne valutne jedinice u UI-ju, fake-broker E2E i mješovita regresija te AnalysisOnly mjerenje. | Planirano |
+| FX-11 — Onboarding, UI i shadow | Automatsko prikupljanje/backfill, odvojeni research/shadow/paper uvjeti, točne valutne jedinice u UI-ju, fake-broker E2E i mješovita regresija te AnalysisOnly mjerenje. | Implementirano i lokalno provjereno: 680/680 testova. Stvarni model shadow uzorak još nedostaje; veza/povijest ponovno potvrđeni. [Postupak i granice](FX11_ONBOARDING.md). |
 | FX-12 — Stvarni IBKR paper E2E | Zasebno odobren ograničen test stvarnih callbackova: entry, zaštita, izlaz i usklađivanje; trajni dokaz rezultata i preostalih ograničenja. | Planirano |
 
 Price-based patterni i strategijski kod ponovno se koriste gdje ulazni ugovor odgovara. To ne znači preslikavanje SPY volumena, pragova ili odobrenog modela na FX. Funkcionalnosti koje trebaju nedostupne podatke moraju imati jasan razlog blokade ili zasebno verzioniranu FX alternativu, bez uklanjanja njihove dioničke verzije.
@@ -161,7 +161,11 @@ Implementirano i provjereno simulacijom 25.10.2026.: **638/638 testova**, 36 nov
 
 Dodani su `ForexResearchContract`, `ForexTradeSimulator` i FX način postojećeg replaya, s eksplicitnim historijskim pravilima i hipotetskom likvidnošću. ModelOps podržava `fx-contract`/`fx-replay`; isti SQLite evaluation/model workflow sada prihvaća zasebne FX execution labele. Lokalni LightGBM model uz net-win vjerojatnost daje regresijsku prognozu izvršnog prinosa, uz purged walk-forward, netaknuti holdout, auditirano odobrenje i rollback. Opt-in `ForexModelDecisionService`/`ForexModelExecutionService` spaja taj model s FX-9; stock put ostaje odvojen. Detaljan opis, uvjeti i primjeri nalaze se u [FX-10 runbooku](FX10_RESEARCH.md). Ovo nadopunjuje povijesne napomene FX-5 do FX-9 koje su najavljivale taj spoj.
 
-## Preostale tehničke obveze za FX-11 do FX-12
+## FX-11 — onboarding, UI i shadow
+
+Implementirani su FX-specific rollout dokazi, odvojeno AnalysisOnly mjerenje model prijedloga, automatski gateovi i suspenzija uz nastavak prikupljanja te valutne jedinice u UI-ju. Svježi startup/restart, mješoviti stock/FX tok, quote→feature→signal→model audit i neispravni dokazi pokriveni su punom regresijom od 680 testova. Stvarna proba potvrdila je TWS i 60 MIDPOINT barova, ali zatvorena sesija nije dala tickove; stvarni model shadow ostaje otvoren. [Detaljan postupak i kriteriji](FX11_ONBOARDING.md).
+
+## Preostale tehničke obveze za stvarni FX shadow i FX-12
 
 1. FX-3/FX-4 sada imaju CASH/IDEALPRO ugovore i zaseban quote/MIDPOINT podatkovni put, a FX-5 zasebne kratke agregate i lokalno potvrđen feature replay paritet. Ostaje stvarna provjera produkcijskog živog toka tijekom otvorene sesije i dužeg backfilla.
 2. FX-9 je spojio FX-8 izračun, osvježavanje, rezervaciju i lifecycle za navedeni uži paper opseg. Stvarno potvrditi izvršiva pravila, marginu, provizije i rezidualne izlaze prije paper odobrenja. Za druge valute računa/cross-parove potrebna je dodatna izvršna integracija; stock `PositionSizer` i replay `CommissionPerShare` ne smiju obrađivati FX po dioničkim pretpostavkama.
@@ -169,4 +173,4 @@ Dodani su `ForexResearchContract`, `ForexTradeSimulator` i FX način postojećeg
 4. Pragovi i modeli postoje kao verzionirani profili po paru/strategiji; treba ih provjeriti i kalibrirati na odgovarajućim stvarnim podacima. Sintetska uspješnost testa nije prednost strategije.
 5. Ograničeni FX execution replay i fake-broker put postoje. Ostaju produkcijski replay paritet točke 25, AnalysisOnly shadow uzorak i zasebno odobren mali IBKR paper test. Točke 25, 30 i 31 ostaju otvorene.
 
-Sljedeća razvojna točka je **FX-11: onboarding, UI i shadow**. Primjeri i aktualna odobrenja ostaju bez trgovanja; stvarni paper test zahtijeva zasebnu pripremu i odobrenje u FX-12.
+Prije stvarnog paper testa treba prikupiti kvalitetan živi FX uzorak i provesti opisani model/shadow postupak. Sljedeća odvojena točka je **FX-12: stvarni IBKR paper E2E**, uz zasebnu pripremu i odobrenje. Primjeri i aktualna odobrenja ostaju bez trgovanja.

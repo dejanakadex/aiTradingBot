@@ -8,6 +8,8 @@ Nastavak: točke 19–24 i 26–29 lokalno su implementirane i testirane; točka
 
 Osnova: [detaljni pregled i nalazi R01–R16](PROJECT_REVIEW.md). Operativni checkpointi vode se u [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
+FX nastavak 25.10.2026.: programski FX-1–FX-11 i lokalna regresija završeni su do onboardinga, valutnog prikaza i AnalysisOnly model mjerenja. Stvarni model shadow uzorak ostaje otvoren; read-only TWS veza/povijest potvrđeni su, naloga nije bilo. FX-12 zahtijeva zasebnu pripremu i odobrenje. [FX-11 kriteriji i dokazi](FX11_ONBOARDING.md).
+
 ## Cilj i granice
 
 Cilj više nije jedan long SPY trade. Sustav treba podržati više konfiguriranih instrumenata, više strategija/signala, više istovremenih pozicija i velik broj malih intraday tradeova kada statistički potvrđena prilika pokriva spread, proviziju, slippage i sigurnosni buffer.

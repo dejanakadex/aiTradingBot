@@ -36,12 +36,12 @@
                         <td>@trade.Symbol</td>
                         <td>@trade.Pattern</td>
                         <td>@FormatPercent(trade.AiConfidence)</td>
-                        <td>@trade.Entry.ToString("0.####")</td>
-                        <td>@(trade.Exit?.ToString("0.####") ?? "-")</td>
-                        <td>@trade.Quantity.ToString("0.####")</td>
-                        <td>@trade.GrossProfitLoss.ToString("0.00")</td>
+                        <td>@trade.Entry.ToString("0.########") @trade.PriceUnit</td>
+                        <td>@(trade.Exit?.ToString("0.########") ?? "-") @trade.PriceUnit</td>
+                        <td>@trade.Quantity.ToString("0.####") @trade.QuantityUnit</td>
+                        <td>@trade.GrossProfitLoss.ToString("0.00") @trade.ProfitCurrency</td>
                         <td>@trade.Fees.ToString("0.00")</td>
-                        <td>@trade.NetProfitLoss.ToString("0.00")</td>
+                        <td>@trade.NetProfitLoss.ToString("0.00") @trade.ProfitCurrency</td>
                         <td>@trade.TradeResult</td>
                     </tr>
                 }

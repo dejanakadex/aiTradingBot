@@ -73,8 +73,8 @@
             <h2>Market</h2>
             <dl>
                 <dt>Symbol</dt><dd>@(_snapshot?.CurrentSymbol ?? "-")</dd>
-                <dt>Price</dt><dd>@FormatMoney(_snapshot?.CurrentPrice)</dd>
-                <dt>Position</dt><dd>@FormatNumber(_snapshot?.CurrentPosition)</dd>
+                <dt>Price</dt><dd>@(_snapshot?.CurrentPrice?.ToString("0.########") ?? "-") @_snapshot?.CurrentPriceUnit</dd>
+                <dt>Position</dt><dd>@FormatNumber(_snapshot?.CurrentPosition) @_snapshot?.CurrentQuantityUnit</dd>
                 <dt>Data</dt><dd>@(_snapshot?.MarketDataStatus ?? "No candles yet")</dd>
                 <dt>Configured</dt><dd>@(_snapshot?.ConfiguredMarketData ?? "-")</dd>
                 <dt>Latest candle</dt><dd>@FormatDateTime(_snapshot?.LatestCandleUtc)</dd>

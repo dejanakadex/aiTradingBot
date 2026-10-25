@@ -223,8 +223,8 @@ namespace TradingBot.Infrastructure.Services
             return Hash(canonical.ToString());
         }
 
-        private static string ComputeOutputHash(ResearchEvaluationRunRecord item) => Hash(
-            $"{item.RunKey}|{item.SelectedConfidenceThreshold.ToString(CultureInfo.InvariantCulture)}|{item.PreHoldoutMetricsJson}|{item.WalkForwardMetricsJson}|{item.HoldoutMetricsJson}|{item.PreHoldoutThresholdsJson}|{item.FoldsJson}|{item.CostSensitivityJson}|{item.SegmentsJson}");
+        internal static string ComputeOutputHash(ResearchEvaluationRunRecord item) => Hash(
+            $"{item.RunKey}|{item.SelectedConfidenceThreshold.ToString("G29", CultureInfo.InvariantCulture)}|{item.PreHoldoutMetricsJson}|{item.WalkForwardMetricsJson}|{item.HoldoutMetricsJson}|{item.PreHoldoutThresholdsJson}|{item.FoldsJson}|{item.CostSensitivityJson}|{item.SegmentsJson}");
 
         private static ResearchEvaluationRunSnapshot ToSnapshot(ResearchEvaluationRunRecord item) => new(
             item.Id, item.RunKey, item.ReplayRunId, item.InstrumentId, item.StrategyId, item.HorizonSeconds,

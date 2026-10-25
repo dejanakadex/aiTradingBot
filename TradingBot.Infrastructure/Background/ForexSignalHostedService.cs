@@ -13,7 +13,7 @@ namespace TradingBot.Infrastructure.Background;
 /// <summary>Collection-independent signals; optional paper routing remains behind explicit model and FX-9 gates.</summary>
 public sealed class ForexSignalHostedService(ForexSignalTriggerService signals, ILatestMarketDataService latest,
     IOptions<ForexSignalSettings> settings, IIbkrConnectionService connection, IClock clock, ILogger<ForexSignalHostedService> logger,
-    ForexModelExecutionService? execution = null) : BackgroundService
+    ForexModelExecutionService? execution = null, ForexShadowService? shadow = null) : BackgroundService
 {
     public async Task RunOnceAsync(DateTime nowUtc, CancellationToken token = default)
     {
@@ -22,10 +22,13 @@ public sealed class ForexSignalHostedService(ForexSignalTriggerService signals, 
         foreach (var instrumentId in settings.Value.Profiles.Where(x => x.Selection.Enabled).Select(x => x.Selection.InstrumentId).Distinct())
         {
             var candidates = await signals.ProcessAsync(instrumentId, nowUtc, token).ConfigureAwait(false);
-            if (execution == null) continue;
             foreach (var candidate in candidates)
             {
-                try { await execution.ProcessAsync(candidate, token); }
+                try
+                {
+                    if (shadow != null) await shadow.ObserveAsync(candidate, token);
+                    if (execution != null) await execution.ProcessAsync(candidate, token);
+                }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
                 catch (Exception ex) { logger.LogWarning(ex, "FX model/paper gate blocked {Instrument}/{Strategy}; collection continues.", candidate.InstrumentId, candidate.StrategyId); }
             }
