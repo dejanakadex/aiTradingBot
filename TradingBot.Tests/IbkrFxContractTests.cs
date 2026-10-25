@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using IBApi;
@@ -186,6 +187,50 @@ public sealed class IbkrFxContractTests
         Assert.Contains("read-only", modify.Message);
         var cancel = await Assert.ThrowsAsync<InvalidOperationException>(() => broker.CancelOrderAsync("1"));
         Assert.Contains("read-only", cancel.Message);
+    }
+
+    [Fact]
+    public void ProtocolCultureIsRestoredWhenDecoderThrows()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("hr-HR");
+            Assert.Throws<FormatException>(() => IbkrBrokerService.ProcessProtocolMessages(() => throw new FormatException()));
+            Assert.Equal("hr-HR", CultureInfo.CurrentCulture.Name);
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    }
+
+    [Theory]
+    [InlineData("hr-HR", "0.00005", "EURUSD", "0.00005")]
+    [InlineData("de-DE", "0.00005", "EURGBP", "0.00005")]
+    [InlineData("en-US", "0.00005", "EURUSD", "0.00005")]
+    [InlineData("hr-HR", "0.01", "SPY", "0.01")]
+    public void OfficialProtobufDecoderPreservesTickPrecisionAcrossCultures(string culture, string wireTick,
+        string symbol, string expectedTick)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+            ContractDetails? decoded = null;
+            var decode = typeof(Contract).Assembly.GetType("IBApi.EDecoderUtils")!
+                .GetMethod("decodeContractDetails", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+            IbkrBrokerService.ProcessProtocolMessages(() => decoded = (ContractDetails)decode.Invoke(null,
+                [new IBApi.protobuf.Contract(), new IBApi.protobuf.ContractDetails
+                {
+                    MinTick = wireTick, MinSize = "0.01", SizeIncrement = "0.01"
+                }, false])!);
+            Assert.Equal(culture, CultureInfo.CurrentCulture.Name);
+            Assert.NotNull(decoded);
+            decoded.Contract = Details(Instrument(symbol)).Contract;
+            var result = IbkrContractFactory.Evaluate(Instrument(symbol), [decoded]);
+            Assert.Equal("Confirmed", result.Status);
+            Assert.Equal(decimal.Parse(expectedTick, CultureInfo.InvariantCulture), result.Metadata!.MinimumTick);
+            Assert.Equal(0.01m, result.Metadata.MinimumSize);
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
     }
 
     [Fact]

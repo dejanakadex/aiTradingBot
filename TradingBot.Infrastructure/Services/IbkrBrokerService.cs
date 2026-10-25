@@ -901,7 +901,7 @@ namespace TradingBot.Infrastructure.Services
                 try
                 {
                     signal.waitForSignal();
-                    reader.processMsgs();
+                    ProcessProtocolMessages(reader.processMsgs);
                 }
                 catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -911,6 +911,20 @@ namespace TradingBot.Infrastructure.Services
                     return;
                 }
             }
+        }
+
+        internal static void ProcessProtocolMessages(Action processMessages)
+        {
+            // IBKR 10.49 protobuf double decoding uses CurrentCulture (Util.StringToDoubleMax).
+            // The wire format always uses '.', even on a Croatian/German Windows installation.
+            // Scope the workaround to decoding; never change the application's default/UI culture.
+            var previous = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+                processMessages();
+            }
+            finally { CultureInfo.CurrentCulture = previous; }
         }
 
         private EClientSocket GetConnectedClient()

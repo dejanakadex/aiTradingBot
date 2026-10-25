@@ -1,0 +1,116 @@
+{
+  "StartedUtc": "2026-10-25T12:23:08.6111255Z",
+  "EndedUtc": "2026-10-25T12:23:08.8081997Z",
+  "ApiVersion": "10.49.2.0",
+  "ServerVersion": 225,
+  "Port": 7497,
+  "Instruments": [
+    {
+      "InstrumentId": "US-STK-SPY-SMART",
+      "Symbol": "SPY",
+      "RequestedContract": {
+        "Symbol": "SPY",
+        "SecurityType": "STK",
+        "Exchange": "SMART",
+        "Currency": "USD"
+      },
+      "Result": {
+        "Status": "Confirmed",
+        "ContractId": 756733,
+        "PrimaryExchange": "ARCA",
+        "ErrorCode": null,
+        "MatchCount": 1,
+        "Metadata": {
+          "Contract": {
+            "Symbol": "SPY",
+            "SecurityType": "STK",
+            "Exchange": "SMART",
+            "Currency": "USD"
+          },
+          "LocalSymbol": "SPY",
+          "ValidExchanges": "SMART,AMEX,NYSE,CBOE,PHLX,ISE,CHX,ARCA,NASDAQ,DRCTEDGE,BEX,BATS,EDGEA,BYX,IEX,EDGX,FOXRIVER,PEARL,NYSENAT,LTSE,MEMX,IBEOS,OVERNIGHT,TPLUS0,PSX,T24X,TXSE",
+          "MinimumTick": 0.01,
+          "MinimumSize": 0.0001,
+          "SizeIncrement": 0.0001,
+          "SuggestedSizeIncrement": 40,
+          "MarketRuleIds": "4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563,4563",
+          "TimeZoneId": "US/Eastern",
+          "TradingHours": "20261025:CLOSED;20261026:0400-20261026:2000;20261027:0400-20261027:2000;20261028:0400-20261028:2000;20261029:0400-20261029:2000;20261030:0400-20261030:2000",
+          "LiquidHours": "20261025:CLOSED;20261026:0930-20261026:1600;20261027:0930-20261027:1600;20261028:0930-20261028:1600;20261029:0930-20261029:1600;20261030:0930-20261030:1600"
+        }
+      }
+    },
+    {
+      "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "Symbol": "EURUSD",
+      "RequestedContract": {
+        "Symbol": "EUR",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Currency": "USD"
+      },
+      "Result": {
+        "Status": "Confirmed",
+        "ContractId": 12087792,
+        "PrimaryExchange": null,
+        "ErrorCode": null,
+        "MatchCount": 1,
+        "Metadata": {
+          "Contract": {
+            "Symbol": "EUR",
+            "SecurityType": "CASH",
+            "Exchange": "IDEALPRO",
+            "Currency": "USD"
+          },
+          "LocalSymbol": "EUR.USD",
+          "ValidExchanges": "IDEALPRO",
+          "MinimumTick": 0.00005,
+          "MinimumSize": 0.01,
+          "SizeIncrement": 0.01,
+          "SuggestedSizeIncrement": 0.01,
+          "MarketRuleIds": "3188",
+          "TimeZoneId": "US/Eastern",
+          "TradingHours": ";20261025:1715-20261026:1700;20261026:1715-20261027:1700;20261027:1715-20261028:1700;20261028:1715-20261029:1700;20261029:1715-20261030:1700",
+          "LiquidHours": ";20261025:1715-20261026:1700;20261026:1715-20261027:1700;20261027:1715-20261028:1700;20261028:1715-20261029:1700;20261029:1715-20261030:1700"
+        }
+      }
+    },
+    {
+      "InstrumentId": "FX-CASH-EUR-GBP-IDEALPRO",
+      "Symbol": "EURGBP",
+      "RequestedContract": {
+        "Symbol": "EUR",
+        "SecurityType": "CASH",
+        "Exchange": "IDEALPRO",
+        "Currency": "GBP"
+      },
+      "Result": {
+        "Status": "Confirmed",
+        "ContractId": 12087807,
+        "PrimaryExchange": null,
+        "ErrorCode": null,
+        "MatchCount": 1,
+        "Metadata": {
+          "Contract": {
+            "Symbol": "EUR",
+            "SecurityType": "CASH",
+            "Exchange": "IDEALPRO",
+            "Currency": "GBP"
+          },
+          "LocalSymbol": "EUR.GBP",
+          "ValidExchanges": "IDEALPRO",
+          "MinimumTick": 0.00005,
+          "MinimumSize": 0.01,
+          "SizeIncrement": 0.01,
+          "SuggestedSizeIncrement": 0.01,
+          "MarketRuleIds": "3188",
+          "TimeZoneId": "US/Eastern",
+          "TradingHours": ";20261025:1715-20261026:1700;20261026:1715-20261027:1700;20261027:1715-20261028:1700;20261028:1715-20261029:1700;20261029:1715-20261030:1700",
+          "LiquidHours": ";20261025:1715-20261026:1700;20261026:1715-20261027:1700;20261027:1715-20261028:1700;20261028:1715-20261029:1700;20261029:1715-20261030:1700"
+        }
+      }
+    }
+  ],
+  "Passed": true,
+  "Reasons": []
+}
