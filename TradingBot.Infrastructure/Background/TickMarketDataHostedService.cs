@@ -175,6 +175,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
             catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                if (instrument.InstrumentType == InstrumentType.Forex) _latest.ResetForexAggregates(instrument.InstrumentId);
                 var now = _clock.UtcNow;
                 var start = gapStart ?? now;
                 if (start <= now)

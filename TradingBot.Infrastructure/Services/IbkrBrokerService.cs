@@ -1462,6 +1462,14 @@ namespace TradingBot.Infrastructure.Services
 
             public void PublishQuote(long epochSeconds, double bidPrice, double askPrice, decimal bidSize, decimal askSize)
             {
+                if (!_allowTrades)
+                {
+                    var received = DateTime.UtcNow;
+                    var pair = $"IBKR:FXQ:{_sessionId}:{Interlocked.Increment(ref _nextId)}";
+                    PublishEvent(MarketDataEventKind.Bid, epochSeconds, bidPrice, bidSize, pair + ":bid", received);
+                    PublishEvent(MarketDataEventKind.Ask, epochSeconds, askPrice, askSize, pair + ":ask", received);
+                    return;
+                }
                 if (!_allowTrades || _lastBid != (bidPrice, bidSize))
                 {
                     Publish(MarketDataEventKind.Bid, epochSeconds, bidPrice, bidSize);
@@ -1475,6 +1483,9 @@ namespace TradingBot.Infrastructure.Services
             }
 
             public void Publish(MarketDataEventKind kind, long epochSeconds, double price, decimal size)
+                => PublishEvent(kind, epochSeconds, price, size, null, DateTime.UtcNow);
+
+            private void PublishEvent(MarketDataEventKind kind, long epochSeconds, double price, decimal size, string? eventId, DateTime received)
             {
                 if (!_allowTrades && kind == MarketDataEventKind.Trade) return;
                 if (_disposed != 0 || !double.IsFinite(price) || price <= 0 || price >= (double)decimal.MaxValue || (_allowTrades && size < 0)) return;
@@ -1484,12 +1495,12 @@ namespace TradingBot.Infrastructure.Services
                 var id = Interlocked.Increment(ref _nextId);
                 var marketEvent = new CanonicalMarketDataEvent
                 {
-                    EventId = $"IBKR:TBT:{_sessionId}:{id}",
+                    EventId = eventId ?? $"IBKR:TBT:{_sessionId}:{id}",
                     InstrumentId = InstrumentId,
                     Symbol = Symbol,
                     Kind = kind,
                     EventTimeUtc = eventTime,
-                    ReceivedTimeUtc = DateTime.UtcNow,
+                    ReceivedTimeUtc = received,
                     Source = _source,
                     Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture),
                     Size = size < 0 || size == decimal.MaxValue ? null : size,

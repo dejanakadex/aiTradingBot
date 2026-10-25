@@ -5,6 +5,7 @@ public sealed class ShortAggregateSettings
     public int[] IntervalsSeconds { get; set; } = [5, 15];
     public int AllowedLatenessSeconds { get; set; } = 2;
     public int MaxCompletedPerInterval { get; set; } = 512;
+    public int ForexMaximumQuoteAgeSeconds { get; set; } = 2;
 
     public IReadOnlyList<string> GetValidationErrors()
     {
@@ -17,6 +18,8 @@ public sealed class ShortAggregateSettings
             errors.Add("ShortAggregates:AllowedLatenessSeconds must be between 0 and 15.");
         if (MaxCompletedPerInterval < 2)
             errors.Add("ShortAggregates:MaxCompletedPerInterval must be at least 2.");
+        if (ForexMaximumQuoteAgeSeconds < 0 || ForexMaximumQuoteAgeSeconds > 30)
+            errors.Add("ShortAggregates:ForexMaximumQuoteAgeSeconds must be between 0 and 30.");
         return errors;
     }
 }

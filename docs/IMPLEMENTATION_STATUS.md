@@ -61,7 +61,19 @@ Korisnik je prihvatio [povratak na besplatni Alpaca podatkovni test nakon FX to�
 | FX-2 — Konfiguracija i identitet valutnih parova | Implementirano i lokalno provjereno | STK/CASH tip, osnovna/kotirana valuta, jedinstveni simbol para i eksplicitne FX strategije; registry restart i zaštita od promjene ugovora pod istim ID-jem. 448/448 lokalnih testova; forex je još disabled. |
 | FX-3 — IBKR ugovori i dijagnostika | Implementirano i stvarno read-only provjereno | Konfigurirani ugovori, contract-details dijagnostika i CLI; ispravljen regionalni decimalni parsing službenog dekodera. 481/481 testova; paper TWS potvrdio SPY/EURUSD/EURGBP. Nema potvrde podataka ili izvršavanja. |
 | FX-4 — Prikupljanje i povijesna dopuna | Implementirano; stvarna povijest/storage provjereni, live tickovi čekaju otvorenu sesiju | BidAsk + MIDPOINT profil, null volumen, FX kalendar i trajni SQLite/Parquet/backfill. 501/501 lokalnih testova; dva uzastopna read-only paper TWS pokušaja spremila po 60 stvarnih barova. Nema potvrde aktualnih tickova ili izvršavanja. |
-| FX-5 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-5 kratki agregati i featurei su sljedeća razvojna točka. |
+| FX-5 — Kratki agregati i featurei | Implementirano i lokalno provjereno | Upareni quote MIDPOINT 1s/5s/15s agregati, as-of/warmup pravila, zasebna verzija i nedostupni volumenski featurei. 521/521 testova; 40 identičnih feature frameova nakon Parquet replaya. Stvarni živi FX-5 tok nije potvrđen. |
+| FX-6 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-6 patterni i bodovanje su sljedeća razvojna točka. |
+
+### FX-5 — Kratki agregati i featurei
+
+Provjera 25.10.2026., polazni shared commit `e06b292` (radni `9d26e95`, identično stablo). [Točan ugovor i granice](EURUSD_READINESS.md#fx-5--kratki-quote-agregati-i-featurei).
+
+- Zasebni FX put u postojećem latest-data servisu gradi finalne UTC midpoint agregate iz oba dijela istog BidAsk callbacka. Novi `.v2` izvor, zajednički pair ID i receive vrijeme već stanu u postojeći canonical/Parquet ugovor. Stock agregati ostaju trade-based; FX nema lažni trade/volumen.
+- 5s/15s zadani i opcionalni 1s intervali, dopušteno kašnjenje, freshness, deterministički tie redoslijed, ograničeni bufferi, brojači odbačenih/nepotpunih/kasnih quoteova. Ne popunjavaju se praznine niti prepravljaju završeni barovi. Poznato neispravan quote isključuje svoj otvoreni prozor; reconnect/sesija resetira zagrijavanje.
+- Postojeći feature engine i FacioQuo ponovno se koriste kroz eksplicitni FX midpoint ugovor. Cjenovni indikatori dobivaju FX verziju i as-of kontrolu dostupnosti; volumen/VWAP ostaju null s razlogom. Gap resetira kontinuitet zagrijavanja. Feature verzija uključuje aggregate pravila i timeframe; stock feature i short-replay fingerprint nisu zamijenjeni.
+- Postojeći replay dobio je odvojeni read-only `ReplayForexFeaturesAsync`: zdrav v2 Parquet input, receive-time virtualni sat, input SHA-256 i svi feature frameovi, bez operational DB/pattern/order poziva. Generički stock trade replay odbija FX do FX-6/FX-10. Ovo ne zatvara puni FX backtest ili točku 25.
+- **521/521 lokalnih solution testova**, 20 novih slučajeva. Sva feature polja na 40 sintetičkih barova numerički su jednaka između live servisa i stvarnog Parquet replaya; ponavljanje, raniji cutoff, nedostupan volumen, gap/reconnect, 1s/5s/15s i istodobni EUR/USD/EUR/GBP/SPY pokriveni su testovima. Release build ima **0 upozorenja / 0 grešaka**. Publish i required-DLL provjera prolaze; prvi sandbox publish završio je bez compiler dijagnostike, a ponavljanje izvan sandboxa prošlo je bez izmjene koda. GitHub CI prati se nakon pusha.
+- ShadowProbe izvještaj proširen je brojem FX agregata, dijagnostikom i feature snapshotom za buduću read-only probu u otvorenoj sesiji. Nije otvarana nova broker veza ni slan nalog. FX-4 historical uzorak nije dokaz živih FX-5 featurea; ta provjera ostaje odvojena. Sljedeće: FX-6, uz obvezni `TradingEnabled=false`.
 
 ### FX-4 — Prikupljanje i povijesna dopuna
 

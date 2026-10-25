@@ -10,13 +10,16 @@ namespace TradingBot.Infrastructure.Services
     public sealed class LatestMarketDataService : ILatestMarketDataService
     {
         private readonly ShortAggregateSettings _settings;
+        private readonly HashSet<string> _forexIds;
         private readonly ConcurrentDictionary<string, InstrumentState> _states = new(StringComparer.OrdinalIgnoreCase);
 
-        public LatestMarketDataService(IOptions<ShortAggregateSettings>? settings = null)
+        public LatestMarketDataService(IOptions<ShortAggregateSettings>? settings = null, IOptions<TradingSettings>? trading = null)
         {
             _settings = settings?.Value ?? new ShortAggregateSettings();
             var errors = _settings.GetValidationErrors();
             if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors), nameof(settings));
+            _forexIds = (trading?.Value ?? new TradingSettings()).GetConfiguredInstruments()
+                .Where(x => x.InstrumentType == InstrumentType.Forex).Select(x => x.InstrumentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         public void Apply(CanonicalMarketDataEvent marketEvent)
@@ -27,6 +30,13 @@ namespace TradingBot.Infrastructure.Services
             {
                 AdvanceState(state, ToUtc(marketEvent.ReceivedTimeUtc));
                 state.Symbol = marketEvent.Symbol;
+                if (_forexIds.Contains(marketEvent.InstrumentId))
+                {
+                    state.Forex ??= new ForexQuoteAggregator(_settings);
+                    if (marketEvent.Kind is MarketDataEventKind.Bid or MarketDataEventKind.Ask) state.Forex.Apply(marketEvent);
+                    // A midpoint bar is not a last trade, and CASH never feeds the stock trade aggregator.
+                    if (marketEvent.Kind is MarketDataEventKind.Trade or MarketDataEventKind.Bar) return;
+                }
                 switch (marketEvent.Kind)
                 {
                     case MarketDataEventKind.Bid:
@@ -90,6 +100,25 @@ namespace TradingBot.Infrastructure.Services
             return bySymbol == null ? null : Snapshot(bySymbol);
         }
 
+        public IReadOnlyList<ForexQuoteBar> GetCompletedForexAggregates(string instrumentId, int intervalSeconds, DateTime asOfUtc, int count = 100)
+        {
+            if (count <= 0 || !_settings.IntervalsSeconds.Contains(intervalSeconds)) throw new ArgumentOutOfRangeException(nameof(count));
+            if (!_states.TryGetValue(instrumentId, out var state)) return [];
+            lock (state.Sync) return state.Forex?.Get(intervalSeconds, ToUtc(asOfUtc), count) ?? [];
+        }
+
+        public ForexAggregateDiagnostics GetForexDiagnostics(string instrumentId)
+        {
+            if (!_states.TryGetValue(instrumentId, out var state)) return new(0, 0, 0);
+            lock (state.Sync) return state.Forex?.Diagnostics ?? new(0, 0, 0);
+        }
+
+        public void ResetForexAggregates(string instrumentId)
+        {
+            if (_states.TryGetValue(instrumentId, out var state))
+                lock (state.Sync) state.Forex?.Reset();
+        }
+
         public IReadOnlyList<LatestMarketDataSnapshot> GetAll() => _states.Values
             .OrderBy(item => item.Symbol)
             .Select(Snapshot)
@@ -141,6 +170,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (nowUtc <= state.LastAdvanceUtc) return;
             state.LastAdvanceUtc = nowUtc;
+            state.Forex?.Advance(nowUtc);
             foreach (var interval in _settings.IntervalsSeconds)
             {
                 var cutoff = nowUtc.AddSeconds(-_settings.AllowedLatenessSeconds);
@@ -234,6 +264,7 @@ namespace TradingBot.Infrastructure.Services
             public Dictionary<int, DateTime> ClosedThroughUtc { get; } = new();
             public DateTime LastAdvanceUtc { get; set; }
             public long LateShortAggregateTrades { get; set; }
+            public ForexQuoteAggregator? Forex { get; set; }
             private readonly HashSet<string> _seenTradeIds = new(StringComparer.Ordinal);
             private readonly Queue<string> _recentTradeIds = new();
 

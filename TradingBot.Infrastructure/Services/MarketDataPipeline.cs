@@ -78,7 +78,7 @@ namespace TradingBot.Infrastructure.Services
                 Microsoft.Extensions.Options.Options.Create(_settings),
                 _clock,
                 NullLogger<MarketDataQualityService>.Instance);
-            _latestMarketData = latestMarketData ?? new LatestMarketDataService();
+            _latestMarketData = latestMarketData ?? new LatestMarketDataService(trading: Microsoft.Extensions.Options.Options.Create(_settings));
             _datasetSink = datasetSink;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 

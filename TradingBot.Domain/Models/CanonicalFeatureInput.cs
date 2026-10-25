@@ -4,6 +4,7 @@ namespace TradingBot.Domain.Models
     {
         public IReadOnlyList<Candle> Candles { get; init; } = Array.Empty<Candle>();
         public DateTime AsOfUtc { get; init; }
+        public bool ForexMidpoint { get; init; }
         public decimal? Bid { get; init; }
         public DateTime? BidTimeUtc { get; init; }
         public decimal? Ask { get; init; }

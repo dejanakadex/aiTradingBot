@@ -22,6 +22,7 @@ namespace TradingBot.Infrastructure.Services
             var canonicalSettings = JsonSerializer.Serialize(_settings, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             var settingsHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalSettings))).ToLowerInvariant();
             FeatureVersion = $"{PipelineContractVersions.Features}+config-{settingsHash}";
+            ForexFeatureVersion = $"features-fx-midpoint-v1+config-{settingsHash}";
         }
 
         public FeatureEngine(int emaShort = 12, int emaLong = 26, int rsi = 14, int atr = 14, int volAvg = 20)
@@ -37,6 +38,7 @@ namespace TradingBot.Infrastructure.Services
         }
 
         public string FeatureVersion { get; }
+        public string ForexFeatureVersion { get; }
 
         public MarketFeatures ComputeFeatures(IReadOnlyList<Candle> candles)
         {
@@ -56,7 +58,8 @@ namespace TradingBot.Infrastructure.Services
 
             var asOfUtc = ToUtc(input.AsOfUtc);
             var candles = input.Candles
-                .Where(item => item.TimestampUtc <= asOfUtc)
+                .Where(item => item.TimestampUtc <= asOfUtc
+                    && (!input.ForexMidpoint || item.ReceivedTimeUtc <= asOfUtc && item.IsFinal && item.QualityStatus == MarketDataQualityStatus.Healthy))
                 .GroupBy(item => item.TimestampUtc)
                 .Select(group => group
                     .OrderBy(item => item.ReceivedTimeUtc)
@@ -70,10 +73,22 @@ namespace TradingBot.Infrastructure.Services
                 .OrderBy(item => item.TimestampUtc)
                 .ToArray();
             if (candles.Length == 0) throw new InvalidOperationException("No candles are available at or before AsOfUtc.");
-            if (candles.Any(item => !item.HasTradeVolume))
-                throw new NotSupportedException("Quote-derived features require FX-5; missing trade volume must not be interpreted as zero.");
+            if (!input.ForexMidpoint && candles.Any(item => !item.HasTradeVolume))
+                throw new NotSupportedException("Missing trade volume requires the explicit ForexMidpoint feature contract.");
+            if (input.ForexMidpoint && candles.Any(item => item.HasTradeVolume
+                || !(item.Source.StartsWith(ForexQuoteAggregator.CandleSource, StringComparison.Ordinal) || item.Source == "IBKR.Midpoint")))
+                throw new ArgumentException("ForexMidpoint requires quote-derived bars with unavailable trade volume.", nameof(input));
 
             ValidateSeriesIdentity(candles);
+            if (input.ForexMidpoint)
+            {
+                if (candles.Any(x => x.Source != candles[0].Source))
+                    throw new ArgumentException("Forex feature input cannot mix historical midpoint and quote aggregate contracts.", nameof(input));
+                var interval = Interval(candles[^1].Timeframe);
+                var first = candles.Length - 1;
+                while (first > 0 && candles[first].TimestampUtc - candles[first - 1].TimestampUtc == interval) first--;
+                candles = candles[first..]; // A gap or session break restarts warm-up; never bridge missing bars.
+            }
             var last = candles[^1];
             var verified = _indicators.Compute(candles, _settings.EmaShortPeriod, _settings.EmaLongPeriod,
                 _settings.RsiPeriod, _settings.AtrPeriod, includeAtr: false);
@@ -81,9 +96,9 @@ namespace TradingBot.Infrastructure.Services
             var emaLong = verified.EmaLong;
             var rsi = verified.Rsi;
             var atr = ComputeAtr(candles, _settings.AtrPeriod);
-            var vwap = ComputeVwap(candles);
-            var volumeAverage = ComputeVolumeAverage(candles, _settings.VolumeAveragePeriod);
-            var volumeRatio = ComputeVolumeRatio(candles, _settings.VolumeAveragePeriod);
+            var vwap = input.ForexMidpoint ? null : ComputeVwap(candles);
+            var volumeAverage = input.ForexMidpoint ? null : ComputeVolumeAverage(candles, _settings.VolumeAveragePeriod);
+            var volumeRatio = input.ForexMidpoint ? null : ComputeVolumeRatio(candles, _settings.VolumeAveragePeriod);
             var priceChangePercent = ComputeReturnPercent(candles, 1);
             var momentumPercent = ComputeReturnPercent(candles, _settings.MomentumLookbackCandles);
             var distanceFromVwapPercent = PercentageDistance(last.Close, vwap);
@@ -99,8 +114,8 @@ namespace TradingBot.Infrastructure.Services
                 ? (emaShort.Value - emaLong.Value) / atr.Value
                 : null;
             var meanReversionZScore = ComputeMeanReversionZScore(candles, _settings.MeanReversionLookbackCandles);
-            var dollarVolume = last.Close * last.Volume;
-            var averageDollarVolume = ComputePriorAverageDollarVolume(candles, _settings.VolumeAveragePeriod);
+            decimal? dollarVolume = input.ForexMidpoint ? null : last.Close * last.Volume;
+            var averageDollarVolume = input.ForexMidpoint ? null : ComputePriorAverageDollarVolume(candles, _settings.VolumeAveragePeriod);
             decimal? normalizedLiquidity = averageDollarVolume is > 0m ? dollarVolume / averageDollarVolume.Value : null;
             var spreadContext = ResolveSpread(input, last, asOfUtc, atr);
             var (regime, regimeReason) = ClassifyRegime(
@@ -111,7 +126,11 @@ namespace TradingBot.Infrastructure.Services
 
             return new MarketFeatures
             {
-                FeatureVersion = FeatureVersion,
+                FeatureVersion = input.ForexMidpoint ? $"{ForexFeatureVersion}+basis-{last.Source}" : FeatureVersion,
+                PriceBasis = input.ForexMidpoint ? "QuoteMidpoint" : "Trade",
+                PriceFeaturesReady = input.ForexMidpoint ? emaShort.HasValue && emaLong.HasValue && rsi.HasValue
+                    && atr.HasValue && volatility.HasValue && momentumPercent.HasValue && meanReversionZScore.HasValue : null,
+                UnavailableFeatures = input.ForexMidpoint ? Unavailable(emaShort, emaLong, rsi, atr, volatility, momentumPercent, meanReversionZScore, spreadContext.Spread) : null,
                 InstrumentId = last.InstrumentId,
                 TimestampUtc = last.TimestampUtc,
                 AsOfUtc = asOfUtc,
@@ -158,6 +177,27 @@ namespace TradingBot.Infrastructure.Services
             {
                 throw new ArgumentException("Canonical feature input must contain one instrument, symbol and timeframe.", nameof(candles));
             }
+        }
+
+        internal static TimeSpan Interval(Timeframe timeframe) => timeframe switch
+        {
+            Timeframe.OneSecond => TimeSpan.FromSeconds(1), Timeframe.FiveSeconds => TimeSpan.FromSeconds(5),
+            Timeframe.FifteenSeconds => TimeSpan.FromSeconds(15), Timeframe.OneMinute => TimeSpan.FromMinutes(1),
+            Timeframe.FiveMinutes => TimeSpan.FromMinutes(5), Timeframe.FifteenMinutes => TimeSpan.FromMinutes(15),
+            Timeframe.OneHour => TimeSpan.FromHours(1), Timeframe.FourHour => TimeSpan.FromHours(4),
+            Timeframe.Daily => TimeSpan.FromDays(1), _ => throw new ArgumentOutOfRangeException(nameof(timeframe))
+        };
+
+        private static IReadOnlyDictionary<string, string> Unavailable(decimal? shortEma, decimal? longEma, decimal? rsi,
+            decimal? atr, decimal? volatility, decimal? momentum, decimal? zScore, decimal? spread)
+        {
+            var reasons = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var name in new[] { "Vwap", "VolumeAverage", "VolumeRatio", "DistanceFromVwapPercent", "DollarVolume", "AverageDollarVolume", "NormalizedLiquidity" })
+                reasons[name] = "Trade volume is unavailable for FX quotes; quote count and size are not substitutes.";
+            foreach (var item in new (string Name, decimal? Value)[] { ("EmaShort", shortEma), ("EmaLong", longEma), ("Rsi", rsi), ("Atr", atr), ("RealizedVolatilityPercent", volatility), ("MomentumPercent", momentum), ("MeanReversionZScore", zScore) })
+                if (!item.Value.HasValue) reasons[item.Name] = "Insufficient consecutive final bars for warm-up.";
+            if (!spread.HasValue) reasons["Spread"] = "A complete, non-crossed, fresh as-of quote is unavailable.";
+            return reasons;
         }
 
         internal static decimal? ComputeEma(IReadOnlyList<Candle> candles, int period)
@@ -295,7 +335,7 @@ namespace TradingBot.Infrastructure.Services
             DateTime? quoteTimeUtc = null;
             decimal? referencePrice = null;
 
-            if (input.Spread is >= 0m)
+            if (input.Spread is >= 0m && (!input.ForexMidpoint || input.SpreadTimeUtc.HasValue))
             {
                 var spreadTimeUtc = input.SpreadTimeUtc.HasValue ? ToUtc(input.SpreadTimeUtc.Value) : asOfUtc;
                 if (IsUsableQuoteTime(spreadTimeUtc, asOfUtc))
@@ -312,12 +352,14 @@ namespace TradingBot.Infrastructure.Services
                 if (IsUsableQuoteTime(bidTimeUtc, asOfUtc) && IsUsableQuoteTime(askTimeUtc, asOfUtc))
                 {
                     spread = input.Ask.Value - input.Bid.Value;
-                    quoteTimeUtc = bidTimeUtc > askTimeUtc ? bidTimeUtc : askTimeUtc;
+                    quoteTimeUtc = input.ForexMidpoint
+                        ? (bidTimeUtc < askTimeUtc ? bidTimeUtc : askTimeUtc)
+                        : (bidTimeUtc > askTimeUtc ? bidTimeUtc : askTimeUtc);
                     referencePrice = (input.Bid.Value + input.Ask.Value) / 2m;
                 }
             }
 
-            if (!referencePrice.HasValue && input.LastTrade is > 0m && input.LastTradeTimeUtc.HasValue)
+            if (!input.ForexMidpoint && !referencePrice.HasValue && input.LastTrade is > 0m && input.LastTradeTimeUtc.HasValue)
             {
                 var tradeTimeUtc = ToUtc(input.LastTradeTimeUtc.Value);
                 if (IsUsableQuoteTime(tradeTimeUtc, asOfUtc)) referencePrice = input.LastTrade;

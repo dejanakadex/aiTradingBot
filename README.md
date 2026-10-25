@@ -171,7 +171,21 @@ FX uses `BidAsk` ticks and `MIDPOINT` bars with `useRTH=0`. Quote sizes are brok
 amounts, not trade volume. Bar volume is `null` in SQLite/Parquet; the additive candle migration preserves
 existing stock rows and indexes. Forex collection follows the New York Sunday 17:15–Friday 17:00 week with
 the daily 17:00–17:15 break, including US DST. Holiday exceptions remain a documented calendar limitation.
-FX feature/pattern publication and execution remain gated for later milestones. See [FX-4 evidence and limits](docs/EURUSD_READINESS.md#fx-4--prikupljanje-i-povijesna-dopuna).
+FX pattern publication and execution remain gated for later milestones. See [FX-4 evidence and limits](docs/EURUSD_READINESS.md#fx-4--prikupljanje-i-povijesna-dopuna).
+
+FX-5 adds separate quote-midpoint aggregates for configured CASH instruments (5s/15s, optionally 1s).
+Both halves must carry the same broker callback identity and receive time; the new source is
+`IBKR.TickByTick.Forex.BidAsk.v2`. Legacy unpaired data is retained but cannot be guessed into a pair.
+`ShortAggregates:ForexMaximumQuoteAgeSeconds` defaults to 2; allowed lateness defaults to 2 seconds.
+Empty/known-invalid windows are not synthesized, and reconnects restart feature warm-up.
+`ForexFeatureService.Compute` reads only final as-of aggregates and uses the existing indicator engine
+with a separate `features-fx-midpoint-v1` contract. Volume/VWAP features remain null with explicit reasons.
+`PriceFeaturesReady` indicates indicator warm-up, not permission to trade.
+`IDeterministicReplayService.ReplayForexFeaturesAsync` replays verified paired Parquet quotes through
+the same services and returns input hash, versions, feature frames and diagnostics; it does not run
+stock patterns or simulate FX orders. The data probe above now includes aggregate counts and a 5s
+feature snapshot. Local synthetic parity is verified; real streaming feature validation remains pending.
+See [FX-5 rules and verification](docs/EURUSD_READINESS.md#fx-5--kratki-quote-agregati-i-featurei).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

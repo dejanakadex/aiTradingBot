@@ -13,5 +13,7 @@ namespace TradingBot.Application.Interfaces
         Task<ReplayRunSnapshot> CancelAsync(Guid replayRunId, CancellationToken cancellationToken = default);
         Task<ReplayRunSnapshot> ProcessBatchAsync(Guid replayRunId, int? maximumEvents = null, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<Guid>> GetRunnableRunIdsAsync(CancellationToken cancellationToken = default);
+        Task<ForexFeatureReplayResult> ReplayForexFeaturesAsync(string instrumentId, DateTime fromUtc, DateTime toUtc,
+            int intervalSeconds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

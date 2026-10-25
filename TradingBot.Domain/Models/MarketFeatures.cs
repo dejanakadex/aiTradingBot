@@ -12,6 +12,9 @@ namespace TradingBot.Domain.Models
         public string Symbol { get; init; } = string.Empty;
         public Timeframe Timeframe { get; init; }
         public int SampleCount { get; init; }
+        public string PriceBasis { get; init; } = "Trade";
+        public bool? PriceFeaturesReady { get; init; }
+        public IReadOnlyDictionary<string, string>? UnavailableFeatures { get; init; }
 
         public decimal? EmaShort { get; init; }
         public decimal? EmaLong { get; init; }

@@ -22,5 +22,8 @@ namespace TradingBot.Application.Interfaces
         IReadOnlyList<ShortIntervalBarSnapshot> GetCompletedShortAggregates(string instrumentId, int intervalSeconds, DateTime asOfUtc, int count = 100);
         LatestMarketDataSnapshot? Get(string instrumentIdOrSymbol);
         IReadOnlyList<LatestMarketDataSnapshot> GetAll();
+        IReadOnlyList<ForexQuoteBar> GetCompletedForexAggregates(string instrumentId, int intervalSeconds, DateTime asOfUtc, int count = 100) => [];
+        ForexAggregateDiagnostics GetForexDiagnostics(string instrumentId) => new(0, 0, 0);
+        void ResetForexAggregates(string instrumentId) { }
     }
 }

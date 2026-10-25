@@ -53,7 +53,7 @@ public static class ForexDataProbeRunner
         await registry.SynchronizeConfiguredAsync();
         var backfill = new HistoricalBackfillService(factory, broker, registry, Options.Create(new HistoricalBackfillSettings()),
             clock, NullLogger<HistoricalBackfillService>.Instance, writer);
-        var latest = new LatestMarketDataService();
+        var latest = new LatestMarketDataService(trading: tradingOptions);
         var quality = new MarketDataQualityService(factory, tradingOptions, clock, NullLogger<MarketDataQualityService>.Instance);
         var status = new MarketDataCollectionStatusService();
         using var bus = new TradingEventBus(new TradingEventBusOptions(), NullLogger<TradingEventBus>.Instance);
@@ -118,6 +118,11 @@ public static class ForexDataProbeRunner
             LiveQuotesConfirmed = bidCount > 0 && askCount > 0 && records.Where(x => x.DataType is "bid" or "ask").All(x => x.CanPersist),
             SessionOpenAtStart = MarketDataSession.IsForexOpen(started), MarketDataErrorCode = marketDataErrorCode,
             TickCoverageGaps = await check.TickCoverageGapRecords.CountAsync(), Reasons = reasons,
+            ForexFiveSecondBars = latest.GetCompletedForexAggregates(instrument.InstrumentId, 5, clock.UtcNow).Count,
+            ForexFifteenSecondBars = latest.GetCompletedForexAggregates(instrument.InstrumentId, 15, clock.UtcNow).Count,
+            ForexAggregateDiagnostics = latest.GetForexDiagnostics(instrument.InstrumentId),
+            ForexFiveSecondFeatures = new ForexFeatureService(latest, new FeatureEngine(), tradingOptions,
+                Options.Create(new ShortAggregateSettings())).Compute(instrument.InstrumentId, 5, clock.UtcNow),
             PublishedAnalysisCandles = bus.CandleReader.Count,
             Scope = "Read-only production collectors and bounded historical MIDPOINT sample; no orders or strategy validation."
         };

@@ -65,6 +65,8 @@ namespace TradingBot.Infrastructure.Services
             if (!_settings.Enabled) throw new InvalidOperationException("Deterministic replay is disabled by configuration.");
             if (request == null) throw new ArgumentNullException(nameof(request));
             var instrumentId = Required(request.InstrumentId, nameof(request.InstrumentId));
+            if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == instrumentId && x.InstrumentType == InstrumentType.Forex))
+                throw new NotSupportedException("FX pattern/trade replay awaits FX-6/FX-10. Use ReplayForexFeaturesAsync for FX-5 research.");
             var strategyId = Required(request.StrategyId, nameof(request.StrategyId));
             var fromUtc = ToUtc(request.FromUtc);
             var toUtc = ToUtc(request.ToUtc);
@@ -567,6 +569,62 @@ namespace TradingBot.Infrastructure.Services
                 && profile.StrategyId.Equals(strategyId, StringComparison.OrdinalIgnoreCase)) ? instrument : null;
         }
 
+        /// <summary>Bounded, read-only FX feature replay; receive time is the virtual clock. Never evaluates stock patterns or fills.</summary>
+        public async Task<ForexFeatureReplayResult> ReplayForexFeaturesAsync(string instrumentId, DateTime fromUtc, DateTime toUtc,
+            int intervalSeconds, CancellationToken cancellationToken = default)
+        {
+            if (!_settings.Enabled) throw new InvalidOperationException("Deterministic replay is disabled by configuration.");
+            fromUtc = ToUtc(fromUtc); toUtc = ToUtc(toUtc);
+            if (fromUtc >= toUtc || toUtc - fromUtc > TimeSpan.FromDays(7)) throw new ArgumentException("FX feature replay requires a positive range of at most seven days.");
+            if (!_shortAggregateSettings.IntervalsSeconds.Contains(intervalSeconds)) throw new ArgumentOutOfRangeException(nameof(intervalSeconds));
+            var instrument = _tradingSettings.GetConfiguredInstruments().Single(x => x.InstrumentId == instrumentId);
+            if (instrument.InstrumentType != InstrumentType.Forex) throw new ArgumentException("FX instrument required.", nameof(instrumentId));
+            var verified = await _datasetStore.VerifyAsync(cancellationToken).ConfigureAwait(false);
+            if (!verified.IsValid) throw new InvalidDataException("Dataset integrity verification failed.");
+            var records = (await _datasetStore.ReadAsync(new DatasetQuery(instrumentId, fromUtc, toUtc, ["bid", "ask"]), cancellationToken).ConfigureAwait(false))
+                .Where(x => x.ReceivedTimeUtc <= toUtc)
+                .OrderBy(x => x.ReceivedTimeUtc).ThenBy(x => x.EventId, StringComparer.Ordinal).ToArray();
+            if (records.Length == 0) throw new InvalidOperationException("No healthy as-of FX quote input exists in the requested range.");
+            if (records.Any(x => !x.IsFinal || !x.CanPersist || x.QualityStatus != "Healthy"))
+                throw new InvalidDataException("FX feature replay requires healthy input; repair or explicitly select a clean coverage range.");
+            if (records.Any(x => x.InstrumentId != instrument.InstrumentId || x.Symbol != instrument.Symbol))
+                throw new InvalidDataException("FX quote identity does not match the configured instrument.");
+            if (records.Any(x => x.Source != ForexQuoteAggregator.QuoteSource))
+                throw new InvalidDataException("FX feature replay requires v2 paired quote provenance; legacy quote halves cannot be inferred.");
+            var latest = new LatestMarketDataService(Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings), Microsoft.Extensions.Options.Options.Create(_tradingSettings));
+            var featureService = new ForexFeatureService(latest, _featureEngine, Microsoft.Extensions.Options.Options.Create(_tradingSettings), Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings));
+            var frames = new List<MarketFeatures>();
+            DateTime lastEnd = default;
+            void Capture(DateTime now)
+            {
+                latest.AdvanceTo(now);
+                var newest = latest.GetCompletedForexAggregates(instrumentId, intervalSeconds, now, 1);
+                if (newest.Count == 0 || newest[0].WindowEndUtc <= lastEnd) return;
+                foreach (var bar in latest.GetCompletedForexAggregates(instrumentId, intervalSeconds, now, _shortAggregateSettings.MaxCompletedPerInterval))
+                {
+                    if (bar.WindowEndUtc <= lastEnd) continue;
+                    var frame = featureService.Compute(instrumentId, intervalSeconds, bar.AvailableAtUtc);
+                    if (frame != null) frames.Add(frame);
+                    lastEnd = bar.WindowEndUtc;
+                }
+            }
+            foreach (var record in records)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Capture(record.ReceivedTimeUtc);
+                latest.Apply(new CanonicalMarketDataEvent
+                {
+                    EventId = record.EventId, InstrumentId = record.InstrumentId, Symbol = record.Symbol,
+                    Kind = record.DataType == "bid" ? MarketDataEventKind.Bid : MarketDataEventKind.Ask,
+                    EventTimeUtc = record.EventTimeUtc, ReceivedTimeUtc = record.ReceivedTimeUtc,
+                    Source = record.Source, Price = record.Price, Size = record.Size, IsFinal = record.IsFinal
+                });
+            }
+            Capture(toUtc); // Close only windows actually available by the requested end, not an arbitrary future flush.
+            return new ForexFeatureReplayResult(ComputeInputHash(records), ForexQuoteAggregator.VersionFor(_shortAggregateSettings), frames,
+                latest.GetForexDiagnostics(instrumentId));
+        }
+
         private static DateTime AvailabilityTime(MarketDatasetRecord record) =>
             record.ReceivedTimeUtc > record.EventTimeUtc ? record.ReceivedTimeUtc : record.EventTimeUtc;
 
@@ -593,7 +651,8 @@ namespace TradingBot.Infrastructure.Services
                 .OrderBy(profile => profile.IntervalSeconds).ToArray();
             var canonical = JsonSerializer.Serialize(new
             {
-                Profiles = profiles, Aggregates = _shortAggregateSettings,
+                Profiles = profiles, Aggregates = new { _shortAggregateSettings.IntervalsSeconds,
+                    _shortAggregateSettings.AllowedLatenessSeconds, _shortAggregateSettings.MaxCompletedPerInterval },
                 instrument.AllowedDirections
             }, JsonOptions);
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
