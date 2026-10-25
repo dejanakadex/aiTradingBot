@@ -144,6 +144,12 @@ namespace TradingBot.Infrastructure.Background
 
         private async Task ProcessPatternCoreAsync(PatternCandidate pattern, CancellationToken cancellationToken)
         {
+            if (pattern.PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns + "+", StringComparison.Ordinal)
+                || _tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == pattern.InstrumentId && x.InstrumentType == InstrumentType.Forex))
+            {
+                _logger.LogWarning("FX candidate {Key} cannot enter the stock model/risk/order decision pipeline before FX-8/FX-9/FX-10.", pattern.PatternKey);
+                return;
+            }
             var key = pattern.PatternKey;
             if (!_processedPatterns.TryAdd(key, 0))
             {

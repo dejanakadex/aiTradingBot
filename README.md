@@ -196,9 +196,20 @@ Their initial thresholds are research starting points, not calibrated trading pa
 accepted/rejected evaluation in the existing SQLite research tables. `ForexPatternDetector.Evaluate`
 is the deterministic, storage-free entry point for the same canonical input and as-of time.
 Volume is explicitly unavailable and excluded from scoring; VWAP patterns are rejected with a reason.
-FX research records have no stock labels. Automatic signal routing/cooldown is FX-7, FX costs/labels
+FX research records have no stock labels. Automatic shadow signal routing/cooldown is described below; FX costs/labels
 and full trade replay remain FX-8/FX-10. These services do not publish orders or start a broker connection.
 See [FX-6 scope and evidence](docs/EURUSD_READINESS.md#fx-6--patterni-i-bodovanje).
+
+FX-7 adds an opt-in automatic **shadow signal** worker, independent of tick collection and trading permission.
+[forex-signals.example.json](TradingBot.Web/forex-signals.example.json) adds `ForexSignals:Profiles` alongside
+matching `ForexPatterns` and configured CASH instruments. The example is disabled and has no approvals.
+Stock and FX use the same deterministic pattern ranking code; thresholds, cooldown and version approvals
+are isolated per instrument/strategy/interval. A one-second worker finalizes eligible bars even without a new tick.
+It checks connection/session state, signal and paired-quote age, spread, warmed-up price features, ATR/price,
+direction, confidence and exact approved signal/pattern/feature versions. The paired quote comes from the completed
+bar, not independently updated latest bid/ask fields. SQLite stores every decision and restores cooldown/checkpoints.
+Accepted decisions have `DecisionStage=FxShadowSignal`; they are never published to the stock order/model pipeline.
+No active configuration or approval is changed by adding these files. See [FX-7 setup, evidence and limits](docs/EURUSD_READINESS.md#fx-7--strategije-i-signali).
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

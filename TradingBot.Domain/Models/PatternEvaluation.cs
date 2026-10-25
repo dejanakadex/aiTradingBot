@@ -18,6 +18,7 @@ namespace TradingBot.Domain.Models
         public IReadOnlyList<PatternScoreComponent> ScoreComponents { get; init; } = Array.Empty<PatternScoreComponent>();
         public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
         public PatternCandidate? Candidate { get; init; }
+        public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
         public bool Accepted => Candidate != null;
         public decimal FinalScore => ScoreComponents.Sum(component => component.WeightedScore);
         public bool IsForexResearch => PatternVersion.StartsWith(PipelineContractVersions.ForexPatterns + "+", StringComparison.Ordinal);

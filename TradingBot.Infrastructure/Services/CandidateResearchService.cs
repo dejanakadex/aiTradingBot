@@ -89,6 +89,11 @@ namespace TradingBot.Infrastructure.Services
                     : outcome == ResearchCandidateOutcome.Blocked
                         ? new[] { "Pattern passed deterministic conditions but was suppressed as a duplicate." }
                         : Array.Empty<string>();
+                if (batch.SignalDecisions.TryGetValue(evaluation.EvaluationKey, out var decision))
+                {
+                    stage = decision.Stage;
+                    reasons = reasons.Concat(decision.Reasons).ToArray();
+                }
                 var record = new ResearchCandidateRecord
                 {
                     RecordKey = recordKey,
@@ -116,7 +121,7 @@ namespace TradingBot.Infrastructure.Services
                     HardConditionsJson = JsonSerializer.Serialize(evaluation.HardConditions, JsonOptions),
                     ScoreComponentsJson = JsonSerializer.Serialize(evaluation.ScoreComponents, JsonOptions),
                     ReasonsJson = JsonSerializer.Serialize(reasons, JsonOptions),
-                    MetadataJson = JsonSerializer.Serialize(candidate?.Metadata ?? new Dictionary<string, string>(), JsonOptions),
+                    MetadataJson = JsonSerializer.Serialize(candidate?.Metadata ?? evaluation.Metadata, JsonOptions),
                     CreatedAtUtc = now,
                     UpdatedAtUtc = now
                 };

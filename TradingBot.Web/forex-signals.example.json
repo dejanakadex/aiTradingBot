@@ -1,0 +1,25 @@
+{
+  "ForexSignals": {
+    "Profiles": [
+      {
+        "Selection": {
+          "Enabled": false,
+          "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+          "StrategyId": "eurusd-patterns",
+          "IntervalSeconds": 5,
+          "PatternTypes": ["Hammer", "BullishEngulfing", "DoubleBottom", "BreakoutAndRetest"],
+          "MinimumBars": 26,
+          "MinimumConfidence": 0.6,
+          "CooldownSeconds": 30,
+          "MaximumSignalAgeSeconds": 10
+        },
+        "MaximumSpreadBps": 2,
+        "MaximumQuoteAgeSeconds": 10,
+        "MaximumAtrToPriceRatio": 0.005,
+        "ApprovedSignalVersion": null,
+        "ApprovedPatternVersion": null,
+        "ApprovedFeatureVersion": null
+      }
+    ]
+  }
+}

@@ -43,6 +43,9 @@ public sealed class ShortSignalSettings
                     instrument.InstrumentId.Equals(profile.InstrumentId, StringComparison.OrdinalIgnoreCase)
                     && instrument.StrategyIds.Contains(profile.StrategyId, StringComparer.OrdinalIgnoreCase)))
                 errors.Add($"ShortSignals profile {profile.InstrumentId}/{profile.StrategyId} is not an enabled configured instrument/strategy.");
+            if (trading?.GetConfiguredInstruments().Any(x => x.InstrumentId.Equals(profile.InstrumentId, StringComparison.OrdinalIgnoreCase)
+                && x.InstrumentType == InstrumentType.Forex) == true)
+                errors.Add("FX signals require ForexSignals profiles; stock ShortSignals cannot route FX candidates.");
         }
         return errors;
     }

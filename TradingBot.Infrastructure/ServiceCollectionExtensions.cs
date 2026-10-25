@@ -71,6 +71,7 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
             services.AddTransient<ForexFeatureService>();
             services.AddTransient<ForexPatternResearchService>();
+            services.AddSingleton<ForexSignalTriggerService>();
             services.AddSingleton<ShortSignalTriggerService>();
             services.AddSingleton<IMarketDataCollectionStatusService, MarketDataCollectionStatusService>();
             services.AddSingleton<IbkrDiagnosticsService>();
@@ -97,6 +98,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService<ExitManagementHostedService>();
             services.AddHostedService<MarketDataSubscriptionHostedService>();
             services.AddHostedService<TickMarketDataHostedService>();
+            services.AddHostedService<ForexSignalHostedService>();
             services.AddHostedService<CandlePatternDetectionBackgroundService>();
             services.AddHostedService<PatternDecisionBackgroundService>();
             services.AddHostedService<ApprovedOrderExecutionBackgroundService>();

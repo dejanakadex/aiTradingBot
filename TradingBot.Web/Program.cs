@@ -202,6 +202,11 @@ try
         .Validate(settings => settings.Validate().Count == 0, "ForexPatterns contains invalid or duplicate research profiles.")
         .ValidateOnStart();
 
+    builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexSignalSettings>()
+        .Bind(builder.Configuration.GetSection("ForexSignals"))
+        .Validate(settings => settings.Validate().Count == 0, "ForexSignals contains invalid signal profiles.")
+        .ValidateOnStart();
+
     builder.Services.AddHealthChecks()
         .AddCheck("web", () => HealthCheckResult.Healthy("Web application is running."), tags: new[] { "live" })
         .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "dependency", "ready" })

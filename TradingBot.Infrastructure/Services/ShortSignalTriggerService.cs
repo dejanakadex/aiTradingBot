@@ -128,12 +128,7 @@ public sealed class ShortSignalTriggerService
                 Directions = instrument.AllowedDirections
             });
             var allowed = profile.PatternTypes.ToHashSet();
-            var selected = batch.Candidates
-                .Where(candidate => allowed.Contains(candidate.PatternType)
-                    && candidate.Confidence >= profile.MinimumConfidence)
-                .OrderByDescending(candidate => candidate.Confidence)
-                .ThenBy(candidate => candidate.PatternType)
-                .FirstOrDefault();
+            var selected = PatternSignalSelection.Select(batch.Candidates, profile);
             if (state.LastPublishedEndUtc != default
                 && bar.WindowEndUtc - state.LastPublishedEndUtc < TimeSpan.FromSeconds(profile.CooldownSeconds))
                 selected = null;
