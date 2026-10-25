@@ -32,6 +32,20 @@ internal static class ModelOpsProgram
             var suppliedDbPath = Required(options, "db");
             if (!Path.IsPathFullyQualified(suppliedDbPath)) throw new ArgumentException("--db must be an absolute path.");
             var dbPath = Path.GetFullPath(suppliedDbPath);
+            if (command == "fx-paper-preflight")
+            {
+                var file = Path.GetFullPath(Required(options, "config"));
+                // Explicit file only: never silently merge secrets or unrelated machine overrides into this offline report.
+                var config = new ConfigurationBuilder().AddJsonFile(file).Build();
+                var report = await ForexPaperPreflight.CheckAsync(config, dbPath, Required(options, "instrument-id"), Required(options, "strategy-id"), DateTime.UtcNow);
+                Print(report);
+                if (options.TryGetValue("output", out var output))
+                {
+                    if (!Path.IsPathFullyQualified(output) || File.Exists(output)) throw new ArgumentException("--output must be a new absolute report path.");
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(report, JsonOptions));
+                }
+                return report.OfflinePrerequisitesPassed ? 0 : 3;
+            }
             if (!File.Exists(dbPath)) throw new ArgumentException($"Database does not exist: {dbPath}");
             var configPath = options.TryGetValue("config", out var configured)
                 ? Path.GetFullPath(configured)
@@ -215,6 +229,7 @@ internal static class ModelOpsProgram
         migrate
         fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC
         fx-contract --instrument-id ID --strategy-id ID
+        fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
         evaluate --instrument-id ID --strategy-id ID --horizon-seconds N --from UTC --to UTC [--replay-run-id GUID]
         train --evaluation-id GUID
         list [--count N]

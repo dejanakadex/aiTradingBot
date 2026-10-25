@@ -12,6 +12,8 @@ FX nastavak 25.10.2026.: programski FX-1–FX-11 i lokalna regresija završeni s
 
 ## Cilj i granice
 
+FX-12 priprema 25.10.2026.: dodan je ponovljiv read-only preflight i [protokol ograničenog paper testa](FX12_PAPER_PROTOCOL.md). Stvarni E2E ostaje otvoren zbog nedovršenih model/shadow i operativnih preduvjeta; offline prolaz ne zamjenjuje FX-9 runtime zaštite. Sljedeći operativni korak je stvarni quote dataset tijekom otvorene sesije, zatim FX-10 model workflow i FX-11 model shadow prije naloga.
+
 Cilj više nije jedan long SPY trade. Sustav treba podržati više konfiguriranih instrumenata, više strategija/signala, više istovremenih pozicija i velik broj malih intraday tradeova kada statistički potvrđena prilika pokriva spread, proviziju, slippage i sigurnosni buffer.
 
 Predviđeni holding je od nekoliko sekundi do nekoliko minuta. To je automatizirani retail scalping, ne HFT: IBKR TWS API i postojeća hosted-service arhitektura nisu namijenjeni submilisekundnom izvršavanju.

@@ -3,6 +3,14 @@ namespace TradingBot.Infrastructure.Options;
 public sealed class ForexExecutionSettings
 {
     public ForexExecutionProfile[] Profiles { get; set; } = [];
+    public void NormalizeBoundTimestamps()
+    {
+        // ConfigurationBinder parses an ISO offset/Z timestamp as Local. Preserve its instant;
+        // offset-free Unspecified values still fail Validate().
+        foreach (var profile in Profiles ?? [])
+            if (profile != null && profile.ReviewedAtUtc.Kind == DateTimeKind.Local)
+                profile.ReviewedAtUtc = profile.ReviewedAtUtc.ToUniversalTime();
+    }
     public void Validate()
     {
         if (Profiles == null || Profiles.Any(x => x == null || string.IsNullOrWhiteSpace(x.InstrumentId)

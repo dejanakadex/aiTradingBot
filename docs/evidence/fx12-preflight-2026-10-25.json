@@ -1,0 +1,55 @@
+{
+  "checkedAtUtc": "2026-10-25T18:41:40.4151033Z",
+  "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+  "strategyId": "eurusd-patterns",
+  "sessionOpen": false,
+  "nextScheduledSessionUtc": "2026-10-25T21:15:00Z",
+  "checks": [
+    {
+      "code": "session",
+      "passed": false,
+      "detail": "Configured FX session is closed."
+    },
+    {
+      "code": "no-live",
+      "passed": true,
+      "detail": "Live mode and live explicit enablement must remain off."
+    },
+    {
+      "code": "instrument",
+      "passed": false,
+      "detail": "An enabled USD-quoted CASH instrument with the selected long strategy is required; collection does not require trading enablement."
+    },
+    {
+      "code": "isolated-execution",
+      "passed": true,
+      "detail": "Other instruments must not be enabled for execution during the bounded pilot; collection may remain enabled."
+    },
+    {
+      "code": "research-contract",
+      "passed": false,
+      "detail": "FX research contract is missing, incomplete or inconsistent. No defaults were approved."
+    },
+    {
+      "code": "reviewed-size-limits",
+      "passed": false,
+      "detail": "Reviewed venue base-unit minimum/maximum and evidence must be present and no older than 24 hours; broker rules still need a live refresh."
+    },
+    {
+      "code": "database",
+      "passed": false,
+      "detail": "An existing operational database is required; this command never creates or migrates one."
+    }
+  ],
+  "scope": "Offline file/database preflight only; no broker connection, migration, approval or order submission.",
+  "offlinePrerequisitesPassed": false,
+  "canSendOrders": false,
+  "runtimeChecksStillRequired": [
+    "Verified paper account and USD summary",
+    "Fresh live paired quotes and healthy current rollout",
+    "Broker size/price rules, margin and partial-size protective exits",
+    "Existing positions/orders reconciled",
+    "Bounded test limits and stop procedure",
+    "Fresh approved signal, FX-9 sizing, costs, reservation and execution guard"
+  ]
+}

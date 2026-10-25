@@ -223,6 +223,7 @@ try
 
     builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexExecutionSettings>()
         .Bind(builder.Configuration.GetSection("ForexExecution"))
+        .PostConfigure(settings => settings.NormalizeBoundTimestamps())
         .Validate(settings => { settings.Validate(); return true; }, "Invalid FX execution settings.")
         .ValidateOnStart();
     builder.Services.AddOptions<TradingBot.Infrastructure.Options.ForexResearchSettings>()

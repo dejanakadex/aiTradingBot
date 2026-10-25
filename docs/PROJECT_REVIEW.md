@@ -5,6 +5,8 @@ Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_
 
 ## Sažetak
 
+Naknadna dopuna 25.10.2026., FX-12 priprema: read-only inventar postojeće konfiguracije/SQLite dokaza i protokol stvarnog paper testa otkrivaju nedostajuće FX profile, bazu na zadanoj lokaciji i zatvorenu sesiju. Offline provjera ne daje dopuštenje naloga; stvarni model shadow, brokerova pravila i entry/fill/zaštita/exit još moraju biti potvrđeni. Ispravljen je UTC binding datuma pregledanih izvršnih pravila. [FX-12 opseg i blokade](FX12_PAPER_PROTOCOL.md). Nema stvarnog naloga ni promjene live enablementa.
+
 Naknadna dopuna 25.10.2026., FX-11: uklonjena je stock-only pretpostavka onboardinga za FX. Model shadow ima zasebne trajne dokaze i gateove po strategiji, a UI prikazuje valutne jedinice i razloge blokade. Operativni startup i cijela regresija prolaze (680/680). TWS veza i 60 MIDPOINT barova ponovno su potvrđeni; nema živog shadow uzorka u zatvorenoj sesiji ni odobrenog produkcijskog modela. [Opseg i granice FX-11](FX11_ONBOARDING.md). Nije omogućen live trading ni proveden stvarni paper nalog.
 
 Naknadna dopuna 25.10.2026., FX-10: dodan je ograničeni bid/ask replay s istim FX agregatima/featureima/signalima, FX izvršnim labelama, vremenskom evaluacijom i zasebnim lokalnim klasifikatorom/regresorom. Model ima ručni approval/rollback i opt-in spoj s FX-9. Dokazi su sintetski Parquet/SQLite, LightGBM i fake broker; nema stvarnog odobrenog modela ni IBKR filla. Hipotetska likvidnost, broker race/disconnect paritet i zajednički portfolio replay ostaju ograničenja; točke 25/30/31 ostaju otvorene. [FX-10 ugovor i operativni postupak](FX10_RESEARCH.md).
