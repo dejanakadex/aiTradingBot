@@ -18,7 +18,6 @@ namespace TradingBot.Infrastructure
         {
             services.AddSingleton<IClock, SystemClock>();
 
-#if IBKR_API_AVAILABLE
             services.TryAddSingleton<IbkrBrokerService>();
             services.TryAddSingleton<IIbkrAdapter>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IOrderExecutionService>(sp => sp.GetRequiredService<IbkrBrokerService>());
@@ -28,23 +27,6 @@ namespace TradingBot.Infrastructure
             services.TryAddSingleton<IMarketDataService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<ITickMarketDataService>(sp => sp.GetRequiredService<IbkrBrokerService>());
             services.TryAddSingleton<IIbkrConnectionService, IbkrConnectionService>();
-#else
-            var hasConcreteIbkrAdapter = services.Any(descriptor => descriptor.ServiceType == typeof(IIbkrAdapter));
-            if (!hasConcreteIbkrAdapter)
-            {
-                services.TryAddSingleton<IIbkrAdapter, UnavailableIbkrAdapter>();
-                services.TryAddSingleton<IIbkrConnectionService, UnavailableIbkrConnectionService>();
-            }
-            else
-            {
-                services.TryAddSingleton<IIbkrConnectionService, IbkrConnectionService>();
-            }
-
-            services.TryAddSingleton<IOrderExecutionService, OrderExecutionService>();
-            services.TryAddSingleton<IAccountService, UnavailableAccountService>();
-            services.TryAddSingleton<IPositionService, UnavailablePositionService>();
-            services.TryAddSingleton<IMarketDataService, MarketDataService>();
-#endif
             services.AddSingleton<ITradingEngineStatusService, TradingEngineStatusService>();
             services.AddSingleton<IOperatingModeService, OperatingModeService>();
             services.AddSingleton<ITradingPipelineStatusService, TradingPipelineStatusService>();

@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <IbkrApiDll>$(MSBuildThisFileDirectory)10.49.02/CSharpAPI.dll</IbkrApiDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.5" />
+    <Reference Include="CSharpAPI">
+      <HintPath>$(IbkrApiDll)</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <None Include="$(MSBuildThisFileDirectory)10.49.02/LICENSE.txt;$(MSBuildThisFileDirectory)10.49.02/README.md;$(MSBuildThisFileDirectory)10.49.02/CSharpAPI-source.zip"
+          Link="third_party/ibkr/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateIbkrApi" BeforeTargets="CollectPackageReferences;PrepareForBuild;ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(IbkrApiDll)')" Code="IBKR001"
+           Text="Required IBKR API DLL is missing: $(IbkrApiDll). Restore third_party/ibkr/10.49.02 from Git. A broker-unavailable build is not supported." />
+    <GetFileHash Files="$(IbkrApiDll)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_IbkrApiHash" />
+    </GetFileHash>
+    <Error Condition="'%(_IbkrApiHash.FileHash)' != '6CAA826F09F5C9860E1729FDAC95E7EAB4E58C9CE1F60DCDE09F4069C9BB8D3D'" Code="IBKR002"
+           Text="IBKR API DLL does not match the reviewed 10.49.02 artifact. Restore it from Git or explicitly review an API version upgrade, including its checksum and tests." />
+  </Target>
+</Project>

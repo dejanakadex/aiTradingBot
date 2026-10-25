@@ -76,11 +76,7 @@ public sealed class IbkrDiagnosticsService
             throw new ArgumentException("Unknown configured instrument.", nameof(probeInstrumentId));
 
         var runtime = _adapter as IIbkrRuntimeDiagnostics;
-#if IBKR_API_AVAILABLE
         var real = _adapter is IbkrBrokerService;
-#else
-        const bool real = false;
-#endif
         var adapterStatus = _adapter is UnavailableIbkrAdapter ? "Unavailable" : real ? "Real" : "Custom";
         var connected = _adapter.IsConnected && _connection.Status == ConnectionStatus.Connected;
         var accountStatus = GetAccountStatus(runtime, connected);

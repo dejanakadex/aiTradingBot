@@ -6,18 +6,12 @@ using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.Interfaces;
 using TradingBot.ShadowProbe;
-#if IBKR_API_AVAILABLE
 using TradingBot.Infrastructure.Options;
 using TradingBot.Infrastructure.Services;
-#endif
 
 var settings = ParseArguments(args);
 if (settings is null) return 2;
 
-#if !IBKR_API_AVAILABLE
-Console.Error.WriteLine("Official CSharpAPI.dll is unavailable; the read-only shadow probe cannot run.");
-return 3;
-#else
 var started = DateTime.UtcNow;
 var thresholds = new ShadowFeedThresholds();
 var accumulators = settings.Symbols.ToDictionary(symbol => symbol,
@@ -103,7 +97,6 @@ Console.WriteLine($"Feed threshold result: {(report.Passed ? "PASS" : "INCOMPLET
 foreach (var result in results)
     Console.WriteLine($"{result.Symbol}: trade={result.TradeTicks}, bid={result.BidTicks}, ask={result.AskTicks}, dropped={result.DroppedEvents}, p95LagMs={result.P95ReceiveLagMilliseconds?.ToString("F0") ?? "n/a"}, marketDataError={result.BrokerMarketDataErrorCode?.ToString() ?? "none"}.");
 return report.Passed ? 0 : 1;
-#endif
 
 static ProbeSettings? ParseArguments(string[] arguments)
 {
@@ -143,7 +136,6 @@ static ProbeSettings? ParseArguments(string[] arguments)
     return new ProbeSettings(port, clientId, seconds, symbols, output, database);
 }
 
-#if IBKR_API_AVAILABLE
 static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subscription,
     ShadowFeedAccumulator accumulator, ConcurrentQueue<string> errors, CancellationToken token)
 {
@@ -158,6 +150,5 @@ static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subs
         errors.Enqueue($"{symbol}: broker tick stream terminated (IOException).");
     }
 }
-#endif
 
 internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath);

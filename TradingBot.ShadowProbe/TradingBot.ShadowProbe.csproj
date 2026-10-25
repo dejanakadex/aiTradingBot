@@ -4,10 +4,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IbkrApiDll Condition="'$(IbkrApiDll)' == ''">C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll</IbkrApiDll>
-  </PropertyGroup>
-  <PropertyGroup Condition="Exists('$(IbkrApiDll)')">
-    <DefineConstants>$(DefineConstants);IBKR_API_AVAILABLE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -15,10 +11,5 @@
     <ProjectReference Include="..\TradingBot.Infrastructure\TradingBot.Infrastructure.csproj" />
     <ProjectReference Include="..\TradingBot.Persistence\TradingBot.Persistence.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="Exists('$(IbkrApiDll)')">
-    <Reference Include="CSharpAPI">
-      <HintPath>$(IbkrApiDll)</HintPath>
-      <Private>true</Private>
-    </Reference>
-  </ItemGroup>
+  <Import Project="../third_party/ibkr/IBKR.Api.targets" />
 </Project>

@@ -92,7 +92,7 @@ Nastavak nakon točke 18 provodi se redom, po jednoj točki. Točka 23 pokriva f
 7. Odobreni numerički model radi lokalno u latency-critical entry putu; LLM ostaje samo za eksplicitno odabrani legacy/offline kontekst i objašnjenja.
 8. Zaštitni izlaz može realizirati kontrolirani gubitak; pravilo „nikad prodati s gubitkom” nije sigurnosno prihvatljivo.
 
-API ključevi, broker računi i službeni IBKR DLL ostaju lokalna konfiguracija i ne upisuju se u Git.
+API ključevi i broker računi ostaju lokalna konfiguracija i ne upisuju se u Git. Prema odluci 25.10.2026. službeni IBKR DLL je obvezna verzionirana ovisnost u `third_party/ibkr`, s licencom, pripadajućim izvorom i provjerom integriteta; obični build više nema fallback način bez njega.
 
 ## Aditivni EUR/USD nastavak
 

@@ -4,6 +4,8 @@ Datum pregleda: 23.–25.10.2026. Polazni shared commit: `d4bf83c` na `trading-b
 
 Ovo je početna osnova za aditivnu EUR/USD nadogradnju. SPY i ostale dionice ostaju podržane. FX-1 dodaje dokumentaciju i regresijske testove; ne mijenja produkcijske servise, postavke, pakete, migracije ni trading dozvole.
 
+Naknadna odluka 25.10.2026.: IBKR DLL je obvezno uključen u repozitorij i stvarni adapter se uvijek kompilira. Spominjanje opcionalnog/fallback builda niže opisuje povijesni FX-1 baseline; za nastavak vrijedi [obvezna IBKR ovisnost](../README.md#required-ibkr-dependency). Provjera se radi sa spremljenim DLL-om, uz negativne provjere nedostajuće/izmijenjene datoteke, bez zasebnog fallback builda.
+
 ## Razine dokaza
 
 - **Implementirano**: funkcionalnost postoji u produkcijskom kodu.

@@ -4,7 +4,7 @@
 
 AI-assisted trading bot (layered .NET 10 LTS solution).
 
-The solution includes an event-driven analysis/strategy/risk pipeline, conditional IBKR
+The solution includes an event-driven analysis/strategy/risk pipeline, required IBKR
 integration, exit management, EF Core persistence (SQLite), and a Blazor dashboard.
 The initial exit profile is a fixed BUY/stop/target bracket; the trailing profile remains selectable. A persisted deadline from the first fill is checked every second without market data. Paper order behavior still requires an actual IBKR paper end-to-end test before it is considered verified.
 The local end-to-end suite drives onboarding through protected exit with SQLite and a deterministic fake broker, including stop, target, timer, partial fill, rejection, disconnect, restart and simultaneous multi-instrument reservation scenarios. It verifies durable order/allocation/audit state and released capacity after closure; it does not substitute for the IBKR paper test.
@@ -127,9 +127,9 @@ CI resolve the same .NET 10 SDK feature band policy.
 Dependabot checks NuGet packages weekly and GitHub Actions monthly, opening update pull
 requests against `trading-bot-v2`.
 
-The standard CI build exercises the broker-unavailable compilation path because the official
-IBKR `CSharpAPI.dll` is not stored in the repository. Use the explicit `IbkrApiDll` build shown
-below to compile and test the real adapter in an environment where the official DLL is installed.
+CI builds and tests the real IBKR adapter using the pinned official DLL stored in the repository.
+It also checks the published application contains the DLL, its runtime dependency and license/source files,
+and verifies that a missing or changed API DLL fails validation. No TWS connection is opened by CI.
 
 ## Configuration
 
@@ -172,28 +172,32 @@ dotnet run --project TradingBot.ModelOps -- rollback --db $dbPath --model-id $pr
 
 `reject` uses the same arguments as `approve`. `list` and `show --model-id` display stored model results; `compare` requires the same instrument, strategy, horizon and pipeline versions. Use `--replay-run-id` with `evaluate` to select replay candidates. Back up and review the real operational database before running `migrate`; this step was verified only on a disposable SQLite database.
 
-### IBKR build prerequisite
+### Required IBKR dependency
 
-The real adapter is compiled only when the official `CSharpAPI.dll` exists. The default
-`IbkrApiDll` path is `C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll`.
-An explicit path can be supplied when building/testing:
+The official `CSharpAPI.dll` version **10.49.02.0** is tracked in
+[`third_party/ibkr/10.49.02`](third_party/ibkr/10.49.02/README.md), together with its source archive,
+license and provenance. A normal Git clone includes it. No separate API installation or
+`C:\TWS API` path is needed for restore/build/publish. `Google.Protobuf` 3.29.5 is restored through NuGet.
 
-```powershell
-dotnet build TradingBot.sln -p:IbkrApiDll="C:\path\to\CSharpAPI.dll"
-dotnet test TradingBot.sln -p:IbkrApiDll="C:\path\to\CSharpAPI.dll"
-```
-
-Without that DLL, the unavailable/fallback broker services are used. Passing tests in that
-configuration does not verify the real adapter. Generated copies of broker DLLs in `bin`
-are not a substitute for this prerequisite.
-
-For a repeatable local verification with the official DLL, run:
+The real adapter is always compiled and registered. Restore/build checks the pinned DLL's SHA-256:
+`IBKR001` means the required file is missing; `IBKR002` means its contents have changed. Restore
+the tracked dependency from Git, or review an intentional API upgrade with its matching source,
+license, checksum and tests. There is no broker-unavailable build mode. Test doubles remain available
+for isolated tests and do not replace the default production adapter.
 
 ```powershell
-./scripts/verify-ibkr-adapter.ps1 -IbkrApiDll 'C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll'
+dotnet build TradingBot.sln -c Release
+dotnet test TradingBot.sln -c Release
+dotnet publish TradingBot.Web -c Release -o ./dist/tradingbot
+# Complete dependency and publish verification without starting the bot:
+./scripts/verify-ibkr-adapter.ps1
 ```
 
-The script restores, builds Release, checks that the output DLL matches the selected DLL by SHA-256, and runs all solution tests. It does not start the web app or connect to TWS. The compile and fake-broker tests do not establish a real paper connection; use the diagnostics endpoint during a supervised TWS/Gateway paper session to verify the broker handshake, account, contracts and market data.
+The publish folder includes `CSharpAPI.dll`, `Google.Protobuf.dll` and the accompanying
+`third_party/ibkr` files. Deploy the entire publish folder. The verification script checks these
+files, the runtime dependency manifest, all solution tests and the missing/changed-DLL guards.
+It does not start the web app or connect to TWS. TWS/IB Gateway, API access and the appropriate
+market-data permissions are still needed for a real broker connection; compilation is not a paper E2E test.
 
 ### Repository hygiene
 

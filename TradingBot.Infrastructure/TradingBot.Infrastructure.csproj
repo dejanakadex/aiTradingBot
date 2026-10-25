@@ -6,17 +6,12 @@
     <ProjectReference Include="..\TradingBot.Persistence\TradingBot.Persistence.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <IbkrApiDll Condition="'$(IbkrApiDll)' == ''">C:\TWS API\source\CSharpClient\client\bin\Release\net8.0\CSharpAPI.dll</IbkrApiDll>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="Microsoft.ML.LightGbm" Version="5.0.0" />
     <PackageReference Include="Parquet.Net" Version="6.1.0" />
     <PackageReference Include="FacioQuo.Stock.Indicators" Version="3.0.1" />
-    <PackageReference Include="Google.Protobuf" Version="3.29.5" Condition="Exists('$(IbkrApiDll)')" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -25,15 +20,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <PropertyGroup Condition="Exists('$(IbkrApiDll)')">
-    <DefineConstants>$(DefineConstants);IBKR_API_AVAILABLE</DefineConstants>
-  </PropertyGroup>
-
-  <ItemGroup Condition="Exists('$(IbkrApiDll)')">
-    <Reference Include="CSharpAPI">
-      <HintPath>$(IbkrApiDll)</HintPath>
-      <Private>true</Private>
-    </Reference>
-  </ItemGroup>
+  <Import Project="../third_party/ibkr/IBKR.Api.targets" />
 
 </Project>

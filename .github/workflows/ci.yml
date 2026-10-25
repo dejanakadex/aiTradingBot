@@ -57,11 +57,17 @@ jobs:
           --collect "XPlat Code Coverage"
           --results-directory TestResults
 
+      - name: Verify required IBKR dependency and publish package
+        shell: pwsh
+        run: ./scripts/verify-ibkr-adapter.ps1 -SkipBuildAndTests
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: test-results
-          path: TestResults/**/*
+          path: |
+            TestResults/**/*
+            !TestResults/ibkr-publish/**
           if-no-files-found: ignore
           retention-days: 14

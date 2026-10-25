@@ -4,6 +4,8 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 
 ## Trenutno stanje
 
+**Build politika od 25.10.2026.:** službeni IBKR API `10.49.02.0` pohranjen je u repozitoriju kao obvezna ovisnost. Stvarni adapter uvijek se kompilira i registrira; fallback build bez DLL-a više nije podržan. Raniji rezultati u dva build načina niže ostaju povijesni dokaz. Aktualne upute su u [README-u](../README.md#required-ibkr-dependency).
+
 | Točka | Status | Sažetak |
 | --- | --- | --- |
 | 0 — Razvojni baseline | Završeno | .NET 10 LTS, clean repository, GitHub Actions, Dependabot i početnih 195/195 testova. Realni IBKR adapter još treba zaseban build sa službenim DLL-om. |
@@ -37,6 +39,15 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 28 — Onboarding novog instrumenta | Implementirano i lokalno provjereno | Registry, neovisna collection i backfill nastavljaju se nakon restarta; rollout vodi `Collecting` → `WarmingUp` → `ResearchReady` na temelju trajnih barova, gapova i labela. Shadow traži završenu kompatibilnu evaluaciju, paper još odobren model i shadow uzorak nakon ulaska u status. Lokalno 383/383 testova u službenom DLL i fallback buildu; stvarni IBKR paper test nije proveden. |
 | 29 — Automatizirani end-to-end test | Implementirano i lokalno provjereno | Ponovljiv SQLite/fake-broker tok obuhvaća onboarding, backfill, feature/pattern, lokalni LightGBM model, strategiju, risk, arbitražu, BUY/fill, zaštitu i izlaz. Stop, target, timer, djelomični fill, odbijanje, prekid, restart i dva istodobna instrumentna signala imaju provjere naloga, pozicije i rezervacija. Lokalno 391/391 testova; stvarni IBKR paper test ostaje točka 31. |
 | 30 — Shadow provjera i performanse | U tijeku | Read-only IBKR probe, pragovi, SQLite procjena odluka i lokalni multi-instrument load test implementirani. TWS API veza je potvrđena, ali SPY/QQQ tickovi nisu dostupni (10089/10189). Stvarni AnalysisOnly uzorak i usporedba po strategiji čekaju zdrav feed i spreman instrument/model. [Mjerenje i preostali koraci](SHADOW_READINESS.md). |
+
+## Obvezni IBKR DLL u repozitoriju — 25.10.2026.
+
+- Prema zahtjevu korisnika, službeni `CSharpAPI.dll` verzije `10.49.02.0` dodan je u `third_party/ibkr/10.49.02`, uz SHA-256 identitet, licencu i arhivu pripadajućeg C# izvora. Ovisnost se povlači običnim Git cloneom; ne ovisi o lokalnoj `C:\TWS API` instalaciji.
+- `Infrastructure` i `ShadowProbe` uvoze zajednički `IBKR.Api.targets`. Stvarni adapter, njegova registracija i dijagnostika više nisu uvjetno kompilirani. `Google.Protobuf` 3.29.5 je obvezna NuGet ovisnost. Nedostajući DLL prekida restore/build s `IBKR001`, a izmijenjeni s `IBKR002`. Testni unavailable/fake servisi ostaju za izolirane testove, ali nisu automatski produkcijski fallback.
+- Postojeći DI test više ne preskače provjeru ako stvarni adapter nedostaje: zahtijeva zajedničku realnu instancu za order/account/position/bar/tick servise i `Real` dijagnostiku s verzijom API-ja, bez otvaranja broker veze.
+- Lokalna završna provjera: restore, Release build **0 upozorenja / 0 grešaka**, solution testovi **419/419**. Publish web aplikacije potvrđuje identičan DLL, `Google.Protobuf.dll`, runtime dependency manifest te kopiju licence, izvora i provenance dokumenta. Provjere nedostajuće i izmijenjene datoteke moraju pasti čak i uz postojeći build output; stvarni DLL tijekom provjere ostaje netaknut.
+- CI sada koristi isti uključeni DLL, cijeli testni skup i provjeru publish paketa/negativnih build slučajeva. GitHub rezultat prati se nakon pusha; lokalna provjera nije tvrdnja da je CI već završen.
+- Bot, ShadowProbe i TWS veza nisu pokretani. Ova promjena rješava trajnu build/runtime ovisnost, ne potvrđuje market-data prava ili paper naloge. FX-2 i daljnje FX točke još nisu započete.
 
 ## FX nadogradnja — trenutni status
 

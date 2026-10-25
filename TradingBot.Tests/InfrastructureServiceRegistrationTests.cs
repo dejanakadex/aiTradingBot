@@ -76,14 +76,8 @@ namespace TradingBot.Tests
         }
 
         [Fact]
-        public void AddInfrastructure_WhenIbkrApiIsAvailable_RegistersSharedRealBrokerService()
+        public async Task AddInfrastructure_AlwaysRegistersSharedRealBrokerService()
         {
-            var realBrokerType = Type.GetType("TradingBot.Infrastructure.Services.IbkrBrokerService, TradingBot.Infrastructure");
-            if (realBrokerType == null)
-            {
-                return;
-            }
-
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddOptions();
@@ -107,12 +101,18 @@ namespace TradingBot.Tests
             var positions = provider.GetRequiredService<IPositionService>();
             var marketData = provider.GetRequiredService<IMarketDataService>();
 
-            Assert.Equal(realBrokerType, adapter.GetType());
+            Assert.IsType<IbkrBrokerService>(adapter);
             Assert.Same(adapter, execution);
             Assert.Same(adapter, account);
             Assert.Same(adapter, positions);
             Assert.Same(adapter, marketData);
+            Assert.Same(adapter, provider.GetRequiredService<ITickMarketDataService>());
+            Assert.Same(adapter, provider.GetRequiredService<IOrderModificationService>());
             Assert.IsType<IbkrConnectionService>(provider.GetRequiredService<IIbkrConnectionService>());
+            var diagnostics = await provider.GetRequiredService<IbkrDiagnosticsService>().GetAsync();
+            Assert.Equal("Real", diagnostics.AdapterStatus);
+            Assert.Equal("10.49.2.0", diagnostics.ApiVersion);
+            Assert.False(diagnostics.BrokerConnected);
         }
 
         [Fact]

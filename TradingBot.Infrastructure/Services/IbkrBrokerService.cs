@@ -1,4 +1,3 @@
-#if IBKR_API_AVAILABLE
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Threading.Channels;
@@ -1454,4 +1453,3 @@ namespace TradingBot.Infrastructure.Services
         }
     }
 }
-#endif
