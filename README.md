@@ -15,6 +15,8 @@ Ongoing work uses one branch: `trading-bot-v2`.
 
 - [Detailed project review](docs/PROJECT_REVIEW.md) — code findings, evidence, test gaps and verification limits (Croatian).
 - [Proposed v2 plan](docs/V2_PLAN.md) — implementation phases and acceptance criteria, pending confirmation (Croatian).
+- [Additive EUR/USD plan](docs/EURUSD_READINESS.md) — FX-1 through FX-12, preserving stock support (Croatian).
+- [Stock compatibility baseline](docs/STOCK_COMPATIBILITY_BASELINE.md) — existing features, FX gaps and fixed regression expectations (Croatian).
 
 The review tracks both original findings and their implementation status. Daily-risk inputs,
 signal arbitration, the durable broker/exit lifecycle, the final execution-grade scalping gate

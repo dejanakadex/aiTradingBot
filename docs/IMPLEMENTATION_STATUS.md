@@ -38,6 +38,23 @@ Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka 
 | 29 — Automatizirani end-to-end test | Implementirano i lokalno provjereno | Ponovljiv SQLite/fake-broker tok obuhvaća onboarding, backfill, feature/pattern, lokalni LightGBM model, strategiju, risk, arbitražu, BUY/fill, zaštitu i izlaz. Stop, target, timer, djelomični fill, odbijanje, prekid, restart i dva istodobna instrumentna signala imaju provjere naloga, pozicije i rezervacija. Lokalno 391/391 testova; stvarni IBKR paper test ostaje točka 31. |
 | 30 — Shadow provjera i performanse | U tijeku | Read-only IBKR probe, pragovi, SQLite procjena odluka i lokalni multi-instrument load test implementirani. TWS API veza je potvrđena, ali SPY/QQQ tickovi nisu dostupni (10089/10189). Stvarni AnalysisOnly uzorak i usporedba po strategiji čekaju zdrav feed i spreman instrument/model. [Mjerenje i preostali koraci](SHADOW_READINESS.md). |
 
+## FX nadogradnja — trenutni status
+
+| Točka | Status | Dokaz i granica |
+| --- | --- | --- |
+| FX-1 — Inventar i regresijska zaštita | Implementirano i lokalno provjereno | Matrica postojećih funkcionalnosti i FX gapova; 13 novih fiksnih stock baseline slučajeva, ukupno 419/419 testova u službenom DLL i fallback buildu. Produkcijsko ponašanje nije promijenjeno. |
+| FX-2 do FX-12 | Planirano | [Dogovoreni redoslijed i kriteriji](EURUSD_READINESS.md); FX-2 konfiguracija je sljedeća zasebna točka. |
+
+### FX-1 — Popis funkcionalnosti i zaštita dioničkog ponašanja
+
+Provjera 23.–25.10.2026., polazni shared commit `d4bf83c` (radni `75fe6e0`, identično stablo). [Stock compatibility baseline](STOCK_COMPATIBILITY_BASELINE.md) dokumentira postojeće komponente, testove, načine izlaza i ograničenja potrebna za aditivnu FX implementaciju.
+
+- Dodan `StockCompatibilityBaselineTests`: fiksni rezultati 10 aktivnih long/short patterna i njihovih score komponenti, default canonical featurei na 40-bar SPY uzorku te dva odbijanja VWAP patterna bez volumena. Sintetički fixturei nisu povijesni podaci ni dokaz profitabilnosti. Short patterni ostaju research-only; `HeadAndShoulders` i `Triangle` postoje samo u enumu, bez detektora.
+- Početni Release baseline: **406/406**. Novi izdvojeni razred: **13/13**. Konačni solution: **419/419**, bez preskočenih testova, u Release buildu sa službenim DLL-om i Debug fallback buildu bez njega. Oba puna builda imaju **0 upozorenja i 0 grešaka**. Potvrđen je `IBKR_API_AVAILABLE` u službenom buildu i identičan SHA-256 kopiranog DLL-a; fallback nema taj kompilacijski simbol.
+- Lokalni TRX dokazi su u ignoriranom `TestResults/fx1-before`, `TestResults/fx1-official` i `TestResults/fx1-fallback`. GitHub CI za ovaj commit nije pokrenut niti se lokalni rezultat predstavlja kao CI potvrda.
+- U ograničenom izvršnom okruženju pomoćna IBKR skripta/višestruki MSBuild procesi vraćali su failure bez compiler greške, a fallback testni proces zastao je bez završnog rezultata. NuGet je prijavio `NU1900` zbog nedostupnog mrežnog izvora. Izravni jednoprocesni buildovi prošli su; ponovljeni restore, fallback testovi i cijela `scripts/verify-ibkr-adapter.ps1` skripta izvan ograničenja prošli su bez promjene koda ili isključivanja NuGet audita. Točan uzrok zastoja nije izoliran; nije zabilježen pad pojedinog testa. Za fallback je eksplicitno korištena nepostojeća putanja `C:\__fx1_no_ibkr__\CSharpAPI.dll`. Završni restore vraćen je na zadani službeni DLL.
+- Nema izmjene produkcijskog koda, konfiguracije, paketa ili migracija. Oba izlazna profila i svi postojeći testovi ostaju. Nije pokrenut bot niti slan nalog. FX order tok i stvarni paper E2E ostaju neimplementirani/nepotvrđeni; točke 25, 30 i 31 nisu ovime zatvorene.
+
 ## Točka 1 — izvedeno
 
 Verifikacija: [GitHub Actions run 35847439813](https://github.com/dejanakadex/aiTradingBot/actions/runs/35847439813) — .NET 10 Release build, 200/200 testova, bez warninga i grešaka.
