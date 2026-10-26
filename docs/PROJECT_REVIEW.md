@@ -5,6 +5,8 @@ Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_
 
 ## Sažetak
 
+Dopuna 26.10.2026.: stvarni FX kolektor ima valjan spremljeni quote uzorak, ali nije radio cijelu noć: TWS socket zatvoren je u 22:45 UTC, a kasniji reconnect odbijen. Nedovoljan 26-bar warmup pretežno dolazi iz praznih 5s intervala, dodatno iz stroge vremenske provjere. Windows Time servis je zaustavljen; uzrok negativne receive/event razlike treba potvrditi nakon sinkronizacije. Novi offline audit reproducira samo tri zagrijana 5s framea; dva bara razlike prema live auditu ostaju navedena u [operativnom izvještaju](FOREX_COLLECTION.md#provjera-26-listopada-2026). FX-12 nije zatvoren.
+
 Operativna dopuna 25.10.2026.: EUR/USD kolektor sada ima aktivan zaseban profil, trajnu bazu i Parquet. Stvarno pokretanje otkrilo je nedostatak rollout i post-trade tablica koji ranije testiranje djelomične sheme nije uhvatilo; forward migracija i provjera svih mapiranih stupaca to popravljaju uz očuvanje podataka. TWS veza i 1.425 spremljenih barova potvrđeni su, s jednom povijesnom prazninom. [Dokaz i granice kolektora](FOREX_COLLECTION.md). Prikupljanje čeka sesiju, a nalozi su blokirani u adapteru; nema potvrde model shadowa ili stvarnog izvršenja.
 
 Naknadna dopuna 25.10.2026., FX-12 priprema: read-only inventar postojeće konfiguracije/SQLite dokaza i protokol stvarnog paper testa otkrivaju nedostajuće FX profile, bazu na zadanoj lokaciji i zatvorenu sesiju. Offline provjera ne daje dopuštenje naloga; stvarni model shadow, brokerova pravila i entry/fill/zaštita/exit još moraju biti potvrđeni. Ispravljen je UTC binding datuma pregledanih izvršnih pravila. [FX-12 opseg i blokade](FX12_PAPER_PROTOCOL.md). Nema stvarnog naloga ni promjene live enablementa.

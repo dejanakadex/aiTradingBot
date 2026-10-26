@@ -12,7 +12,7 @@ FX nastavak 25.10.2026.: programski FX-1–FX-11 i lokalna regresija završeni s
 
 ## Cilj i granice
 
-Operativni nastavak FX-12: [EUR/USD kolektor](FOREX_COLLECTION.md) pripremljen je i pokrenut s trajnom bazom, Parquetom i read-only adapterom. Nakon otvaranja sesije slijedi provjera stvarnih tickova, kvalitete i pokrivenosti; zatim model/shadow workflow. Povijesna praznina ostaje označena. Forward migracija popravlja nedostajuće rollout/post-trade tablice u novim bazama bez gubitka starih dokaza.
+Operativni nastavak FX-12: [EUR/USD kolektor](FOREX_COLLECTION.md) pripremljen je i pokrenut s trajnom bazom, Parquetom i read-only adapterom. Provjera 26.10. potvrđuje 10.596 stvarnih quote parova, ali prekid TWS veze u 23:45 Zagreb i nedovoljan 5s kontinuitet. Dodan je `fx-collection-audit`. Slijede ponovno povezivanje/sat, dnevni uzorak i provjera live/replay razlike, zatim model/shadow workflow. Povijesna praznina ostaje označena. Forward migracija popravlja nedostajuće rollout/post-trade tablice u novim bazama bez gubitka starih dokaza.
 
 FX-12 priprema 25.10.2026.: dodan je ponovljiv read-only preflight i [protokol ograničenog paper testa](FX12_PAPER_PROTOCOL.md). Stvarni E2E ostaje otvoren zbog nedovršenih model/shadow i operativnih preduvjeta; offline prolaz ne zamjenjuje FX-9 runtime zaštite. Sljedeći operativni korak je stvarni quote dataset tijekom otvorene sesije, zatim FX-10 model workflow i FX-11 model shadow prije naloga.
 

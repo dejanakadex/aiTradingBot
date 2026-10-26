@@ -198,10 +198,13 @@ namespace TradingBot.Tests
 
         private static IDbContextFactory<TradingBot.Persistence.TradingBotDbContext> CreateInMemoryFactory(out SqliteConnection connection)
         {
-            connection = new SqliteConnection("Data Source=:memory:");
+            // The worker and polling assertion run concurrently: each context needs its own
+            // connection, with one keeper preserving the shared in-memory database lifetime.
+            var connectionString = $"Data Source=pipeline-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False";
+            connection = new SqliteConnection(connectionString);
             connection.Open();
             var options = new DbContextOptionsBuilder<TradingBot.Persistence.TradingBotDbContext>()
-                .UseSqlite(connection)
+                .UseSqlite(connectionString)
                 .Options;
 
             var factory = new SimpleDbContextFactory(options);

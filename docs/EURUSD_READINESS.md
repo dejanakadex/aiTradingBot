@@ -4,6 +4,8 @@ Status 25.10.2026.: **FX-1 do FX-11 programski su provedeni uz granice opisane n
 
 ## Što je već provjereno
 
+- Dopuna 26.10.2026.: bot je spremio 10.596 stvarnih EUR/USD bid/ask parova, ali noćna veza prestala je u 23:45 Zagreb. Samo 3 live 5s prozora imaju 26 uzastopnih barova. Dodana je ponovljiva offline dijagnostika kontinuiteta; ne radi se još o odobrenom model shadowu ili paper izvršavanju. Ponovno povezivanje, provjera sinkronizacije sata, dnevni uzorak i preostala live/replay razlika prethode sljedećem research koraku. [Dokaz i postupak](FOREX_COLLECTION.md#provjera-26-listopada-2026).
+
 - Neovisni read-only poziv službenim `CSharpAPI.dll` potvrdio je `EUR.USD CASH IDEALPRO` bid/ask tok u paper TWS vezi: 549 bid/ask tickova i 52 price callbacka u 30 sekundi. To potvrđuje dostupnost FX podataka na toj vezi, ne botovu FX obradu, trade tickove, povijesni backfill ni naloge. Detalji su u [shadow protokolu](SHADOW_READINESS.md).
 - Točka 25 sada može reproducirati kratke signale s research zapisima i labelama čiji horizont počinje tek kada je signal dostupan. Time je uklonjen vremenski leakage koji bi iskrivio EUR/USD istraživanje. Virtualni broker i dalje ima dionički ugovor troška i ne treba ga primijeniti na FX bez prilagodbe.
 - Trenutna konfiguracija instrumenta već ima polja `SecurityType`, `Exchange` i `Currency`, pa nije potrebna velika rekonstrukcija domenskog registra.

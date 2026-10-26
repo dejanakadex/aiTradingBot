@@ -29,6 +29,7 @@ internal static class ModelOpsProgram
             }
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
+            if (command == "fx-collection-audit") return await AuditForexCollectionAsync(options);
             var suppliedDbPath = Required(options, "db");
             if (!Path.IsPathFullyQualified(suppliedDbPath)) throw new ArgumentException("--db must be an absolute path.");
             var dbPath = Path.GetFullPath(suppliedDbPath);
@@ -206,6 +207,57 @@ internal static class ModelOpsProgram
         return result;
     }
 
+    private static async Task<int> AuditForexCollectionAsync(IReadOnlyDictionary<string, string> options)
+    {
+        var dataset = Required(options, "dataset");
+        var file = Required(options, "config");
+        var output = Optional(options, "output");
+        if (!Path.IsPathFullyQualified(dataset) || !Directory.Exists(dataset)
+            || !Path.IsPathFullyQualified(file) || !File.Exists(file))
+            throw new ArgumentException("--dataset and --config must be existing absolute paths.");
+        if (output != null && (!Path.IsPathFullyQualified(output) || File.Exists(output) || !Directory.Exists(Path.GetDirectoryName(output))))
+            throw new ArgumentException("--output must be a new absolute report path in an existing directory.");
+        var from = ParseUtc(Required(options, "from")); var to = ParseUtc(Required(options, "to"));
+        if (from >= to || to - from > TimeSpan.FromDays(7)) throw new ArgumentException("Audit range must be positive and at most seven days.");
+        var instrument = Required(options, "instrument-id");
+        // This branch deliberately has no database connection or application DI container.
+        var config = new ConfigurationBuilder().AddJsonFile(file).Build();
+        var aggregates = config.GetSection("ShortAggregates").Get<ShortAggregateSettings>() ?? new();
+        aggregates.IntervalsSeconds = config.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>() ?? aggregates.IntervalsSeconds;
+        var store = new ParquetMarketDatasetStore(Options.Create(new DatasetStorageSettings { RootPath = dataset }),
+            new SystemClock(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ParquetMarketDatasetStore>.Instance);
+        var verified = await store.VerifyAsync();
+        if (!verified.IsValid) throw new InvalidDataException("Dataset integrity verification failed.");
+        var manifest = await store.GetManifestAsync();
+        var selectedRows = manifest.Files.Where(x => x.InstrumentId == instrument && x.DataType is "bid" or "ask"
+            && x.MaximumEventTimeUtc >= from && x.MinimumEventTimeUtc < to).Sum(x => (long)x.RowCount);
+        if (selectedRows > 200_000) throw new ArgumentException("Selected files exceed 200,000 events; select a smaller audit range.");
+        var rows = await store.ReadAsync(new DatasetQuery(instrument, from, to, ["bid", "ask"]));
+        var after = await store.VerifyAsync();
+        if (!after.IsValid || verified.ManifestSha256 != after.ManifestSha256)
+            throw new InvalidDataException("Dataset changed during audit; use a stable snapshot and retry.");
+        var audit = ForexCollectionAudit.Analyze(rows, config.GetSection("TradingSettings").Get<TradingSettings>() ?? new(),
+            aggregates, config.GetSection("CanonicalFeatures").Get<CanonicalFeatureSettings>() ?? new(), instrument, from, to);
+        var report = new
+        {
+            canSendOrders = false, verification = verified, audit,
+            limitations = new[] {
+                "Offline receive-clock reconstruction, not a live worker scheduling or persisted signal audit.",
+                "Only complete session-open windows available by ToUtc are counted; no empty bars are filled.",
+                "Missing-window reason counts may overlap. A window without quotes does not prove broker data loss.",
+                "Callback session changes reset features. Explicit live resets without new callbacks are not present in the quote dataset.",
+                "26 bars and price feature readiness are separate measurements, not strategy/model approval or evidence of trading readiness."
+            }
+        };
+        if (output != null)
+        {
+            await using var stream = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await JsonSerializer.SerializeAsync(stream, report, JsonOptions);
+        }
+        Print(report);
+        return 0;
+    }
+
     private static string Required(IReadOnlyDictionary<string, string> options, string name) =>
         options.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value : throw new ArgumentException($"Required option --{name} is missing.");
@@ -224,12 +276,13 @@ internal static class ModelOpsProgram
 
     private static void PrintUsage() => Console.WriteLine("""
         Local model operations. Run from the repository root; no Web host, broker or trading worker is started.
-        Every command requires --db ABSOLUTE_SQLITE_PATH; optional --config APPSETTINGS_JSON overrides TradingBot.Web/appsettings.json.
+        Commands require --db ABSOLUTE_SQLITE_PATH except fx-collection-audit; optional --config APPSETTINGS_JSON overrides TradingBot.Web/appsettings.json.
 
         migrate
         fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC
         fx-contract --instrument-id ID --strategy-id ID
         fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
+        fx-collection-audit --config ABSOLUTE_JSON_PATH --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --from UTC --to UTC [--output NEW_ABSOLUTE_REPORT_PATH]
         evaluate --instrument-id ID --strategy-id ID --horizon-seconds N --from UTC --to UTC [--replay-run-id GUID]
         train --evaluation-id GUID
         list [--count N]
