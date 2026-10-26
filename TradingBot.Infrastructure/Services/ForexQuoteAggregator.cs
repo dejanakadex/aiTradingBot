@@ -22,10 +22,16 @@ internal sealed class ForexQuoteAggregator
     private DateTime _now;
     private string? _session;
     private long _rejected, _late, _incomplete;
+    private long _future, _stale, _resets;
+    private readonly Dictionary<int, ForexWindowDiagnostics> _windowStats = new();
 
     public ForexQuoteAggregator(ShortAggregateSettings settings) { _settings = settings; Version = VersionFor(settings); }
     public string Version { get; }
-    public ForexAggregateDiagnostics Diagnostics => new(_rejected, _late, _incomplete);
+    public ForexAggregateDiagnostics Diagnostics => new(_rejected, _late, _incomplete)
+    {
+        FutureQuoteEvents = _future, StaleQuoteEvents = _stale, ResetCount = _resets,
+        Windows = new Dictionary<int, ForexWindowDiagnostics>(_windowStats)
+    };
     public static string VersionFor(ShortAggregateSettings settings)
     {
         var contract = FormattableString.Invariant($"{string.Join(',', settings.IntervalsSeconds.Order())}|{settings.AllowedLatenessSeconds}|{settings.ForexMaximumQuoteAgeSeconds}|{settings.MaxCompletedPerInterval}");
@@ -43,7 +49,11 @@ internal sealed class ForexQuoteAggregator
             || item.EventTimeUtc > item.ReceivedTimeUtc
             || item.ReceivedTimeUtc - item.EventTimeUtc > TimeSpan.FromSeconds(_settings.ForexMaximumQuoteAgeSeconds)
             || !MarketDataSession.IsForexOpen(item.EventTimeUtc))
-        { Reject(item.EventTimeUtc); return; }
+        {
+            if (item.EventTimeUtc > item.ReceivedTimeUtc) _future++;
+            else if (item.ReceivedTimeUtc - item.EventTimeUtc > TimeSpan.FromSeconds(_settings.ForexMaximumQuoteAgeSeconds)) _stale++;
+            Reject(item.EventTimeUtc); return;
+        }
         var key = item.EventId[..^suffix.Length];
         if (_seen.Contains(key)) return;
         if (!_pending.Remove(key, out var other))
@@ -95,8 +105,14 @@ internal sealed class ForexQuoteAggregator
             {
                 var w = windows[start]; windows.Remove(start);
                 var end = start.AddSeconds(interval);
+                var stats = _windowStats.GetValueOrDefault(interval) ?? new(0, 0);
                 if (_invalidTimes.Any(x => x >= start && x < end)
-                    || _pending.Values.Any(x => x.EventTimeUtc >= start && x.EventTimeUtc < end)) continue;
+                    || _pending.Values.Any(x => x.EventTimeUtc >= start && x.EventTimeUtc < end))
+                {
+                    _windowStats[interval] = stats with { Suppressed = stats.Suppressed + 1 };
+                    continue;
+                }
+                _windowStats[interval] = stats with { Completed = stats.Completed + 1 };
                 if (!_completed.TryGetValue(interval, out var completed)) _completed[interval] = completed = new();
                 var previousEnd = completed.Count == 0 ? start : completed.Last().WindowEndUtc;
                 completed.Enqueue(new ForexQuoteBar
@@ -118,6 +134,7 @@ internal sealed class ForexQuoteAggregator
 
     public void Reset()
     {
+        _resets++;
         _incomplete += _pending.Count;
         _pending.Clear(); _open.Clear(); _completed.Clear(); _invalidTimes.Clear();
     }

@@ -14,6 +14,24 @@
 
 ## Pokretanje i provjera
 
+### Lokalni logovi i pristup bazi
+
+NLog zapisuje u `data/eurusd-collection/logs/trading-YYYY-MM-DD.log` sve botove INFO/WARN/ERROR/FATAL poruke, a u `error-YYYY-MM-DD.log` izdvojene ERROR/FATAL poruke i iznimke. Vrijeme na početku retka lokalno je vrijeme računala; novi FX sažetak dodatno ima eksplicitan `AsOfUtc`. Datoteke se razdvajaju po danu; automatsko brisanje/ograničenje veličine nije uvedeno i stari logovi ostaju sačuvani. `nlog.config` u objavljenoj `app` mapi podržava automatsko ponovno učitavanje.
+
+Dopuna 26.10.2026. filtrira samo `Microsoft.EntityFrameworkCore.Database.Command` na razinama Info i nižima. SQL WARN/ERROR ostaju u postojećim targetima, kao i sve botove INFO poruke. Prije promjene SQL je činio više od 99% poruka; glavni dnevni log narastao je do približno 1,49 GB. Smanjenje logiranja ne mijenja izvršavanje SQL-a, zapis podataka ni poslovne provjere.
+
+Novi `ForexDiagnosticsHostedService` jednom u minuti zapisuje jedan `FX collection summary` po uključenom FX instrumentu, neovisno o trading/signal odobrenju. Čita postojeće stanje bez pokretanja/finalizacije barova, dodatnih SQL upita ili broker zahtjeva. Sažetak sadrži vezu/sesiju, promjene broja budućih, prestarih i ostalih odbačenih događaja, zakašnjele/nepotpune parove, broj resetiranja te za svaki interval:
+
+- `CompletedDelta` i `SuppressedDelta`: novodovršeni i potisnuti otvoreni prozori od prethodnog sažetka. Potpuno prazni intervali ili intervali sa samo odbačenim quoteovima nisu otvoreni prozori i ne ulaze u `SuppressedDelta`; puni coverage audit ostaje `fx-collection-audit`.
+- `ConsecutiveBars`: trenutačni neprekinuti niz sačuvanih finalnih barova, ograničen `RetentionLimit`; to nije odobrenje signala/modela. `LastBarEndUtc`, `LastBarAgeSeconds` i `NoRecentBar` otkrivaju zastoj čak i kada povijest ima dug niz.
+- `EmptyIntervalsBeforeLastBar`: praznina neposredno prije posljednjeg bara, a ne ukupan broj praznina u minuti. Odbijanja se broje kao pojedinačni bid/ask događaji, pa isti nevaljani callback tipično doprinosi dva događaja.
+
+Sažetak je WARN ako su nastala odbijanja, zakašnjenja, nepotpuni parovi ili potisnuti prozori. Tijekom otvorene FX sesije WARN vrijedi i za prekinutu vezu ili nedostajući/bar stariji od 60 sekundi; inače je INFO. Prag 60 sekundi služi samo log dijagnostici i ne mijenja strategijske/risk pragove. Brojači traju do restarta procesa i preživljavaju reset agregata; prvi sažetak obuhvaća stanje od pokretanja. Sažetak ne zapisuje cijene, account ID, ključeve ili cijele tickove. Greška dijagnostike ne zaustavlja kolektor.
+
+Lokalnu SQLite bazu moguće je čitati u `ReadOnly` načinu dok kolektor radi. Za analizu koristiti transakcijski konzistentne upite; za zaseban istraživački rad SQLite backup API umjesto kopiranja samo `.db` uz aktivan WAL. Ne mijenjati operativne naloge, odobrenja, modele ili registry radi prolaska testa. Logovi, baza i raw tickovi ostaju lokalni i gitignored.
+
+Provjera: četiri nova testa stvarnim NLog file targetima potvrđuju uklanjanje SQL INFO uz očuvanje bot INFO/SQL WARN/ERROR, a stvarnim agregatorom provjeravaju razloge odbijanja, snapshot/delta brojače preko reseta, kontinuitet i starenje bez mutacije barova. Puna regresija ima 707 prolaznih testova. Time se ne zatvara FX-12 niti problem trajne sinkronizacije Windows sata.
+
 Na Windowsu s PowerShellom 7, .NET SDK-om i prijavljenim paper TWS-om na 7497:
 
 ```powershell

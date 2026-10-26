@@ -109,6 +109,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService<MarketDataSubscriptionHostedService>();
             services.AddHostedService<TickMarketDataHostedService>();
             services.AddHostedService<ForexSignalHostedService>();
+            services.AddHostedService<ForexDiagnosticsHostedService>();
             services.AddHostedService<CandlePatternDetectionBackgroundService>();
             services.AddHostedService<PatternDecisionBackgroundService>();
             services.AddHostedService<ApprovedOrderExecutionBackgroundService>();

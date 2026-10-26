@@ -24,7 +24,16 @@ public sealed record ForexQuoteBar
     public int EmptyIntervalsBefore { get; init; }
 }
 
-public sealed record ForexAggregateDiagnostics(long RejectedQuoteEvents, long LateQuotes, long IncompleteQuotes);
+public sealed record ForexAggregateDiagnostics(long RejectedQuoteEvents, long LateQuotes, long IncompleteQuotes)
+{
+    public long FutureQuoteEvents { get; init; }
+    public long StaleQuoteEvents { get; init; }
+    public long ResetCount { get; init; }
+    // Process-lifetime counters, retained across collection resets. Windows are counted per interval.
+    public IReadOnlyDictionary<int, ForexWindowDiagnostics> Windows { get; init; } = new Dictionary<int, ForexWindowDiagnostics>();
+}
+
+public sealed record ForexWindowDiagnostics(long Completed, long Suppressed);
 
 public sealed record ForexFeatureReplayResult(string InputSha256, string AggregateVersion,
     IReadOnlyList<MarketFeatures> Frames, ForexAggregateDiagnostics Diagnostics);
