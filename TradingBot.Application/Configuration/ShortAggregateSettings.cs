@@ -6,6 +6,8 @@ public sealed class ShortAggregateSettings
     public int AllowedLatenessSeconds { get; set; } = 2;
     public int MaxCompletedPerInterval { get; set; } = 512;
     public int ForexMaximumQuoteAgeSeconds { get; set; } = 2;
+    // Opt-in bounded clock skew; never changes either source timestamp.
+    public int ForexFutureToleranceMilliseconds { get; set; } = 0;
 
     public IReadOnlyList<string> GetValidationErrors()
     {
@@ -20,6 +22,8 @@ public sealed class ShortAggregateSettings
             errors.Add("ShortAggregates:MaxCompletedPerInterval must be at least 2.");
         if (ForexMaximumQuoteAgeSeconds < 0 || ForexMaximumQuoteAgeSeconds > 30)
             errors.Add("ShortAggregates:ForexMaximumQuoteAgeSeconds must be between 0 and 30.");
+        if (ForexFutureToleranceMilliseconds is < 0 or > 500)
+            errors.Add("ShortAggregates:ForexFutureToleranceMilliseconds must be between 0 and 500.");
         return errors;
     }
 }

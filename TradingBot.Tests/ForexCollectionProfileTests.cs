@@ -45,6 +45,7 @@ public sealed class ForexCollectionProfileTests
         aggregates.IntervalsSeconds = config.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>()!;
         var signals = config.GetSection("ForexSignals").Get<ForexSignalSettings>()!;
         Assert.Empty(patterns.Validate()); Assert.Empty(aggregates.GetValidationErrors());
+        Assert.Equal(250, aggregates.ForexFutureToleranceMilliseconds);
         Assert.Empty(signals.Validate(trading, aggregates, patterns));
         Assert.All(signals.Profiles, x => { Assert.Null(x.ApprovedFeatureVersion); Assert.Null(x.ApprovedPatternVersion); Assert.Null(x.ApprovedSignalVersion); });
         var research = config.GetSection("ForexResearch").Get<ForexResearchSettings>()!;

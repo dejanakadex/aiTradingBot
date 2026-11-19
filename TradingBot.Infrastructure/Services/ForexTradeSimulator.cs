@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Domain.Enums;
 using TradingBot.Infrastructure.Options;
@@ -14,14 +15,16 @@ public sealed record ForexSimulationResult(ReplayTradeResult Trade, DateTime Lab
 /// <summary>Quote-driven historical scenario, never a claim of executable liquidity or an IBKR fill.</summary>
 public sealed class ForexTradeSimulator(ForexRiskService risk)
 {
-    public static ForexReplayQuote[] ReadQuotes(IReadOnlyList<MarketDatasetRecord> records, string instrumentId, string symbol)
+    public static ForexReplayQuote[] ReadQuotes(IReadOnlyList<MarketDatasetRecord> records, string instrumentId, string symbol,
+        ShortAggregateSettings? aggregates = null)
     {
+        aggregates ??= new ShortAggregateSettings();
         if (records.Count == 0) throw new InvalidDataException("No FX paired quote data.");
         if (records.Any(x => x.InstrumentId != instrumentId || x.Symbol != symbol || !x.IsFinal || !x.CanPersist
             || x.QualityStatus != "Healthy" || x.Source != ForexQuoteAggregator.QuoteSource || x.Price is not > 0m
             || x.DataType is not ("bid" or "ask") || !x.EventId.StartsWith("IBKR:FXQ:", StringComparison.Ordinal)
             || !x.EventId.EndsWith(":" + x.DataType, StringComparison.Ordinal) || x.EventTimeUtc.Kind != DateTimeKind.Utc
-            || x.ReceivedTimeUtc.Kind != DateTimeKind.Utc || x.EventTimeUtc > x.ReceivedTimeUtc))
+            || x.ReceivedTimeUtc.Kind != DateTimeKind.Utc || ForexQuoteTimePolicy.IsTooFarAhead(x.EventTimeUtc, x.ReceivedTimeUtc, aggregates)))
             throw new InvalidDataException("FX replay requires healthy, canonical paired quotes with UTC availability.");
         var unique = records.GroupBy(x => x.EventId, StringComparer.Ordinal).Select(g =>
         {
@@ -34,8 +37,10 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
             if (g.Count() != 2 || bid == null || ask == null || bid.EventTimeUtc != ask.EventTimeUtc
                 || bid.ReceivedTimeUtc != ask.ReceivedTimeUtc || ask.Price < bid.Price)
                 throw new InvalidDataException("Incomplete, mismatched or crossed FX quote pair.");
-            return new ForexReplayQuote(g.Key, bid.EventTimeUtc, bid.ReceivedTimeUtc, bid.Price!.Value, ask.Price!.Value);
-        }).OrderBy(x => x.AvailableUtc).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
+            return (Quote: new ForexReplayQuote(g.Key, bid.EventTimeUtc,
+                ForexQuoteTimePolicy.AvailableAt(bid.EventTimeUtc, bid.ReceivedTimeUtc), bid.Price!.Value, ask.Price!.Value),
+                ReceivedUtc: bid.ReceivedTimeUtc);
+        }).OrderBy(x => x.ReceivedUtc).ThenBy(x => x.Quote.Id, StringComparer.Ordinal).Select(x => x.Quote).ToArray();
         if (result.Zip(result.Skip(1)).Any(x => x.Second.EventUtc < x.First.EventUtc))
             throw new InvalidDataException("Out-of-order FX event times require a separate coverage range.");
         return result;

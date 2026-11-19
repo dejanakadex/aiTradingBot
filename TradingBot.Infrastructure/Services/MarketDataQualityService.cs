@@ -17,18 +17,21 @@ namespace TradingBot.Infrastructure.Services
         private readonly TradingSettings _settings;
         private readonly IClock _clock;
         private readonly ILogger<MarketDataQualityService> _logger;
+        private readonly ShortAggregateSettings _aggregates;
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _streamLocks = new(StringComparer.OrdinalIgnoreCase);
 
         public MarketDataQualityService(
             IDbContextFactory<TradingBotDbContext> dbFactory,
             IOptions<TradingSettings> settings,
             IClock clock,
-            ILogger<MarketDataQualityService> logger)
+            ILogger<MarketDataQualityService> logger,
+            IOptions<ShortAggregateSettings>? aggregates = null)
         {
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _aggregates = aggregates?.Value ?? new ShortAggregateSettings();
         }
 
         public async Task<MarketDataQualityAssessment> EvaluateAsync(
@@ -180,7 +183,10 @@ namespace TradingBot.Infrastructure.Services
 
             var eventTime = ToUtc(marketEvent.EventTimeUtc);
             var receivedTime = ToUtc(marketEvent.ReceivedTimeUtc);
-            if (eventTime > receivedTime.Add(FutureTolerance))
+            var fxQuote = configured.InstrumentType == InstrumentType.Forex
+                && marketEvent.Kind is MarketDataEventKind.Bid or MarketDataEventKind.Ask;
+            if (fxQuote ? ForexQuoteTimePolicy.IsTooFarAhead(eventTime, receivedTime, _aggregates)
+                : eventTime > receivedTime.Add(FutureTolerance))
             {
                 return Reject(MarketDataQualityStatus.Future, "Event time is later than receive time tolerance.");
             }

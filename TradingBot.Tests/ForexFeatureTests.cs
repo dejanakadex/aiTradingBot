@@ -215,15 +215,18 @@ public sealed class ForexFeatureTests
             right.GetCompletedForexAggregates("FX-EURUSD", 5, Start.AddSeconds(7)));
     }
 
-    [Fact]
-    public async Task PersistedQuotesReplaySameFeatureFramesAsLiveWithoutPatternOrDatabaseCalls()
+    [Theory]
+    [InlineData(0)] [InlineData(200)]
+    public async Task PersistedQuotesReplaySameFeatureFramesAsLiveWithoutPatternOrDatabaseCalls(int receiptShiftMilliseconds)
     {
         var root = Path.Combine(Path.GetTempPath(), "fx5-" + Guid.NewGuid().ToString("N"));
         try
         {
             var store = new ParquetMarketDatasetStore(Options.Create(new DatasetStorageSettings { RootPath = root }), new Clock(), NullLogger<ParquetMarketDatasetStore>.Instance);
-            var ticks = Series(40).ToArray();
-            var live = Latest(); var service = Features(live); var frames = new List<MarketFeatures>();
+            var settings = Settings();
+            settings.ForexFutureToleranceMilliseconds = receiptShiftMilliseconds == 0 ? 0 : 250;
+            var ticks = Series(40).Select(x => x with { ReceivedTimeUtc = x.ReceivedTimeUtc.AddMilliseconds(-receiptShiftMilliseconds) }).ToArray();
+            var live = Latest(settings); var service = Features(live, settings); var frames = new List<MarketFeatures>();
             for (var i = 0; i < 40; i++)
             {
                 live.Apply(ticks[i * 2]); live.Apply(ticks[i * 2 + 1]);
@@ -236,7 +239,7 @@ public sealed class ForexFeatureTests
             Assert.True((await store.VerifyAsync()).IsValid);
             var replay = new DeterministicReplayService(store, new NoDatabase(), new FeatureEngine(), new NoPatterns(), new Clock(),
                 Options.Create(new ReplaySettings()), NullLogger<DeterministicReplayService>.Instance,
-                tradingSettings: Options.Create(Trading), shortAggregateSettings: Options.Create(Settings()));
+                tradingSettings: Options.Create(Trading), shortAggregateSettings: Options.Create(settings));
             var first = await replay.ReplayForexFeaturesAsync("FX-EURUSD", Start, Start.AddSeconds(202), 5);
             var second = await replay.ReplayForexFeaturesAsync("FX-EURUSD", Start, Start.AddSeconds(202), 5);
             Assert.Equal(40, first.Frames.Count); Assert.Equal(first.InputSha256, second.InputSha256);

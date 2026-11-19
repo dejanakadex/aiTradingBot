@@ -46,15 +46,17 @@ public sealed class ForexDiagnosticsHostedService(ILatestMarketDataService lates
             var rejected = current.RejectedQuoteEvents - previous.RejectedQuoteEvents;
             var late = current.LateQuotes - previous.LateQuotes;
             var incomplete = current.IncompleteQuotes - previous.IncompleteQuotes;
+            var tolerated = current.ToleratedFutureQuoteEvents - previous.ToleratedFutureQuoteEvents;
             var open = MarketDataSession.IsForexOpen(nowUtc);
-            var level = rejected > 0 || late > 0 || incomplete > 0 || intervals.Any(x => x.SuppressedDelta > 0)
+            var level = rejected > 0 || tolerated > 0 || late > 0 || incomplete > 0 || intervals.Any(x => x.SuppressedDelta > 0)
                 || open && (connection.Status != ConnectionStatus.Connected || intervals.Any(x => x.NoRecentBar)) ? LogLevel.Warning : LogLevel.Information;
             logger.Log(level,
-                "FX collection summary Instrument={Instrument} AsOfUtc={AsOfUtc:O} ElapsedSeconds={ElapsedSeconds} Connection={Connection} SessionOpen={SessionOpen} RejectedEventsDelta={Rejected} FutureEventsDelta={Future} StaleEventsDelta={Stale} OtherRejectedEventsDelta={Other} LatePairsDelta={Late} IncompletePairsDelta={Incomplete} ResetsDelta={Resets} Intervals={Intervals}",
+                "FX collection summary Instrument={Instrument} AsOfUtc={AsOfUtc:O} ElapsedSeconds={ElapsedSeconds} Connection={Connection} SessionOpen={SessionOpen} RejectedEventsDelta={Rejected} FutureEventsDelta={Future} StaleEventsDelta={Stale} OtherRejectedEventsDelta={Other} LatePairsDelta={Late} IncompletePairsDelta={Incomplete} ResetsDelta={Resets} Intervals={Intervals} ToleratedFutureEventsDelta={ToleratedFuture} FutureToleranceMilliseconds={FutureTolerance} MaximumFutureLeadMilliseconds={MaximumFutureLead}",
                 instrument.InstrumentId, nowUtc, elapsed, connection.Status, open, rejected,
                 current.FutureQuoteEvents - previous.FutureQuoteEvents, current.StaleQuoteEvents - previous.StaleQuoteEvents,
                 rejected - (current.FutureQuoteEvents - previous.FutureQuoteEvents) - (current.StaleQuoteEvents - previous.StaleQuoteEvents),
-                late, incomplete, current.ResetCount - previous.ResetCount, JsonSerializer.Serialize(intervals));
+                late, incomplete, current.ResetCount - previous.ResetCount, JsonSerializer.Serialize(intervals),
+                tolerated, settings.Value.ForexFutureToleranceMilliseconds, current.MaximumFutureLeadMilliseconds);
             _previous[instrument.InstrumentId] = current;
         }
         _lastReport = nowUtc;

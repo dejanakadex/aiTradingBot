@@ -2,6 +2,10 @@
 
 Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka točka mora završiti testovima, zelenim CI-jem i jasnim izvještajem prije prelaska na sljedeću.
 
+**19.11.2026. — FX-12, ograničena tolerancija sata.** Zajednička FX bid/ask vremenska provjera povezuje canonical quality, agregaciju i izvršni replay. `ForexFutureToleranceMilliseconds` je opt-in (zadano 0, najviše 500 ms); read-only kolektor koristi 250 ms. Izvorna vremena, stale/risk zaštite i stock pravila ostaju očuvani; novi fingerprint blokira stara model odobrenja. Dodani su minutni brojači toleriranih odstupanja i audit razlika između sirovog i prekomjernog skewa. Stvarni stari Parquet uzorak daje 33 umjesto 3 zagrijana 5s framea, ali novi uzorak pokazuje i zaseban problem zastarjelih kotacija. [Mjerenja i granice dokaza](FOREX_COLLECTION.md#vremenska-tolerancija--19112026). FX-12 nije dovršen; naloga nema.
+
+Lokalna provjera: **721/721 testova**, Release solution sa službenim IBKR DLL-om; publish i negativne provjere nedostajućeg/promijenjenog DLL-a prolaze. Novi slučajevi pokrivaju uključivu granicu 250 ms i jedan tick iznad nje, 0–500 ms konfiguraciju, kvalitetu/agregaciju/replay, očuvanje vremena, konzervativnu dostupnost, zabranu prikrivanja out-of-order ulaza, stale/crossed parove, version invalidation i stvarni Parquet live/replay feature paritet. CI se provjerava nakon pusha.
+
 ## Trenutno stanje
 
 **FX-12 dijagnostika 26.10.2026.: smanjeni SQL logovi i dodani minutni FX sažeci.** NLog filtrira rutinske EF Command INFO poruke uz očuvanje SQL WARN/ERROR i bot INFO. Neovisni read-only worker po FX instrumentu bilježi razloge odbijanja, delta brojače, resetiranja, finalne/potisnute otvorene prozore te kontinuitet i starost barova. Ne mijenja signal, kalendar, vremenske tolerancije, model/risk odobrenja ili naloge. Stari logovi i SQLite/Parquet ostaju sačuvani. Četiri nova testa; **707/707** lokalnih testova prolazi. [Upute i granice metrika](FOREX_COLLECTION.md#lokalni-logovi-i-pristup-bazi). FX-12 i trajna sinkronizacija sata ostaju otvoreni.

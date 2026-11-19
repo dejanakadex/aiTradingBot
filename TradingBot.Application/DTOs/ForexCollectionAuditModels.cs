@@ -6,7 +6,11 @@ public sealed record ForexCollectionAuditReport(
     DateTime? FirstEventUtc, DateTime? LastEventUtc, double? MinimumReceiveMinusEventMilliseconds,
     double? MedianReceiveMinusEventMilliseconds, double? P95ReceiveMinusEventMilliseconds,
     int FutureQuoteEvents, int StaleQuoteEvents, ForexAggregateDiagnostics Diagnostics,
-    IReadOnlyList<ForexIntervalAudit> Intervals);
+    IReadOnlyList<ForexIntervalAudit> Intervals)
+{
+    public int FutureToleranceMilliseconds { get; init; }
+    public int BeyondFutureToleranceQuoteEvents { get; init; }
+}
 
 public sealed record ForexIntervalAudit(
     int IntervalSeconds, int ExpectedFinalWindows, int WindowsWithoutQuotes,

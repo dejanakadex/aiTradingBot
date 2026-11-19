@@ -1,5 +1,23 @@
 # Operativno EUR/USD prikupljanje
 
+## Vremenska tolerancija — 19.11.2026.
+
+Windows Time je nakon korisnikove promjene aktivan, s `time.windows.com,0x8`; zadnja potvrđena sinkronizacija u početnoj provjeri je 22:24:32 Zagreb. Mjerenja u 22:29 pokazuju zaostajanje 29,8–35,3 ms, a u 22:37 jedan uspješan uzorak 38,4 ms uz dva timeouta. To nije dokaz dugoročno stabilnog sata. W32Time treba ostati uključen; tolerancija u botu nije zamjena za sinkronizaciju.
+
+`ShortAggregates:ForexFutureToleranceMilliseconds` ima zadanu vrijednost **0**, dopušten raspon **0–500 ms**, a samo profil `ForexCollection` eksplicitno uključuje **250 ms**. Početni prag pokriva izmjerenih približno 35 ms i ranije spremljenih 135 ms, uz ograničenu rezervu; nije statistički dokaz točnosti brokerskog sata. Jednaka granica vrijedi za FX bid/ask canonical quality, midpoint agregator i čitač izvršnog replaya. Stock i MIDPOINT bar quality zadržavaju postojeća pravila. Prekoračenje granice u živom quality gateu ostavlja incident i postojeći reconnect/coverage-gap postupak; ne mora stići do brojača agregatora.
+
+Izvorni `EventTimeUtc` i `ReceivedTimeUtc` u Parquetu se ne mijenjaju. Agregati zadržavaju event-time prozore i receive-time finalizaciju; tolerancija ne finalizira budući prozor ranije. Izvršni simulator koristi konzervativnu dostupnost `max(EventTimeUtc, ReceivedTimeUtc)`, uz provjeru izvornog receive redoslijeda, bez djelovanja prije oba vremena. Granica starosti od dvije sekunde, zaštite izvršavanja, nepotpuni/crossed parovi i zabrana izmišljanja praznih barova ostaju. Nema automatskog pomicanja sata niti njegovih timestampova u botu.
+
+Tolerancija ulazi u aggregate/feature/label fingerprint. Nulta vrijednost čuva stari aggregate fingerprint; nenulta vrijednost traži novu evaluaciju i odgovarajuća odobrenja modela. NLog minutni sažetak dodaje `ToleratedFutureEventsDelta`, konfiguriranu granicu i `MaximumFutureLeadMilliseconds` (maksimum od pokretanja procesa). Tolerirani događaji također daju WARN kako drift ne bi postao nevidljiv. U offline auditu `FutureQuoteEvents` i dalje broji sve sirove negativne razlike, `BeyondFutureToleranceQuoteEvents` broji prekoračenja, a `MissingBarsWithFutureQuotes` odnosi se na prekoračenja primijenjene granice.
+
+Ponovna obrada **istih 21.192 događaja od 25.10. 21:15–22:45:02 UTC**, bez izmjene ulaza: svih 154 događaja s negativnom razlikom stane u 250 ms. Broj 5s barova raste **780 → 796**, a frameova s najmanje 26 barova **3 → 33**. Za 15s vrijednosti su **316 → 331** i **27 → 155**. Dva zastarjela događaja i prazni intervali ostaju problem. Ovo je offline usporedba politike, ne dokaz jednakosti rasporeda živih radnika i replaya.
+
+Stvarni novi uzorak **19.11. 21:32:48–21:37:30 UTC** prije deploya ima 4.178 događaja, nula budućih i **96 starijih od dvije sekunde**. Obje politike zato daju istih 50 finalnih 5s barova i nula zagrijanih frameova u tom kratkom rasponu. Razlika event/receipt uključuje brokerovu sekundnu rezoluciju i kašnjenje do callbacka; nije čista mrežna latencija. Nije utvrđeno nastaje li dodatno kašnjenje u brokeru, mreži ili lokalnoj obradi. Ne povećavati stale prag samo radi prolaska warmupa.
+
+FX-12 ostaje otvoren: potreban je dulji dnevni uzorak, analiza zastarjelih kotacija i live/replay pariteta, zatim model/evaluacija/shadow i odvojeno odobreni paper test. Nalozi ostaju blokirani.
+
+Deploy je potvrđen stvarnim TWS feedom: novi proces pokrenut je u 21:41:29 UTC, a prvi minutni sažetak u 21:42:47 UTC prikazuje `Connected`, granicu 250 ms, nula future događaja i dva stale događaja. SQLite backup napravljen je prije zamjene procesa; restart ima eksplicitnu coverage prazninu. Nema naloga, izvršenja, tradeova, rezervacija ni modela. [Strukturirani dokaz i oba offline izvještaja](fx-clock-check-2026-11-19.json). Lokalno prolazi **721/721 testova** i obvezni IBKR publish/guard.
+
 25.10.2026.: pripremljen je i pokrenut zaseban **ForexCollection** profil postojećeg web hosta. Prikupljanje ne zahtijeva model, izvršne limite ni dopuštenje trgovanja. To nije završen FX-11 model shadow ili FX-12 paper trade test.
 
 ## Konfiguracija i lokacije

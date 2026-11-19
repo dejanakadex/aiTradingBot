@@ -23,6 +23,8 @@ internal sealed class ForexQuoteAggregator
     private string? _session;
     private long _rejected, _late, _incomplete;
     private long _future, _stale, _resets;
+    private long _toleratedFuture;
+    private double _maximumFutureLeadMilliseconds;
     private readonly Dictionary<int, ForexWindowDiagnostics> _windowStats = new();
 
     public ForexQuoteAggregator(ShortAggregateSettings settings) { _settings = settings; Version = VersionFor(settings); }
@@ -30,32 +32,39 @@ internal sealed class ForexQuoteAggregator
     public ForexAggregateDiagnostics Diagnostics => new(_rejected, _late, _incomplete)
     {
         FutureQuoteEvents = _future, StaleQuoteEvents = _stale, ResetCount = _resets,
+        ToleratedFutureQuoteEvents = _toleratedFuture, MaximumFutureLeadMilliseconds = _maximumFutureLeadMilliseconds,
         Windows = new Dictionary<int, ForexWindowDiagnostics>(_windowStats)
     };
     public static string VersionFor(ShortAggregateSettings settings)
     {
         var contract = FormattableString.Invariant($"{string.Join(',', settings.IntervalsSeconds.Order())}|{settings.AllowedLatenessSeconds}|{settings.ForexMaximumQuoteAgeSeconds}|{settings.MaxCompletedPerInterval}");
+        // Preserve the exact legacy contract at zero; a nonzero policy invalidates prior feature/model approvals.
+        if (settings.ForexFutureToleranceMilliseconds != 0)
+            contract += FormattableString.Invariant($"|future-ms-v1:{settings.ForexFutureToleranceMilliseconds}");
         return "fx-midpoint-bars-v1+" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(contract))).ToLowerInvariant();
     }
 
     public void Apply(CanonicalMarketDataEvent item)
     {
         Advance(item.ReceivedTimeUtc);
+        var tooFarAhead = ForexQuoteTimePolicy.IsTooFarAhead(item.EventTimeUtc, item.ReceivedTimeUtc, _settings);
+        _maximumFutureLeadMilliseconds = Math.Max(_maximumFutureLeadMilliseconds, (item.EventTimeUtc - item.ReceivedTimeUtc).TotalMilliseconds);
         // v2 IDs identify the two halves of ONE broker callback. Legacy unpaired ticks are never guessed into a pair.
         var suffix = item.Kind == MarketDataEventKind.Bid ? ":bid" : ":ask";
         if (item.Kind is not (MarketDataEventKind.Bid or MarketDataEventKind.Ask)
             || item.Source != QuoteSource || !item.IsFinal || item.Price is not > 0m
             || !item.EventId.StartsWith("IBKR:FXQ:", StringComparison.Ordinal) || !item.EventId.EndsWith(suffix, StringComparison.Ordinal)
-            || item.EventTimeUtc > item.ReceivedTimeUtc
+            || tooFarAhead
             || item.ReceivedTimeUtc - item.EventTimeUtc > TimeSpan.FromSeconds(_settings.ForexMaximumQuoteAgeSeconds)
             || !MarketDataSession.IsForexOpen(item.EventTimeUtc))
         {
-            if (item.EventTimeUtc > item.ReceivedTimeUtc) _future++;
+            if (tooFarAhead) _future++;
             else if (item.ReceivedTimeUtc - item.EventTimeUtc > TimeSpan.FromSeconds(_settings.ForexMaximumQuoteAgeSeconds)) _stale++;
             Reject(item.EventTimeUtc); return;
         }
         var key = item.EventId[..^suffix.Length];
         if (_seen.Contains(key)) return;
+        if (item.EventTimeUtc > item.ReceivedTimeUtc) _toleratedFuture++;
         if (!_pending.Remove(key, out var other))
         {
             if (_pending.Count >= 128)

@@ -82,7 +82,7 @@ public static class ForexCollectionAudit
                 longestEmpty = Math.Max(longestEmpty, emptyRun); previous = at;
             }
             intervals.Add(new(interval, expected.Count, expected.Count(x => !observed.ContainsKey(x)), missing.Length,
-                missing.Count(x => observed[x].Any(r => r.EventTimeUtc > r.ReceivedTimeUtc)),
+                missing.Count(x => observed[x].Any(r => ForexQuoteTimePolicy.IsTooFarAhead(r.EventTimeUtc, r.ReceivedTimeUtc, aggregates))),
                 missing.Count(x => observed[x].Any(r => r.ReceivedTimeUtc - r.EventTimeUtc > TimeSpan.FromSeconds(aggregates.ForexMaximumQuoteAgeSeconds))),
                 final.Count, final.Values.Select(x => x.Count).DefaultIfEmpty().Max(), final.Values.Count(x => x.Count >= 26),
                 final.Values.Count(x => x.Ready), longestEmpty,
@@ -95,6 +95,10 @@ public static class ForexCollectionAudit
             records.Length == 0 ? null : records.Min(x => x.EventTimeUtc), records.Length == 0 ? null : records.Max(x => x.EventTimeUtc),
             Percentile(0), Percentile(.5), Percentile(.95), records.Count(x => x.EventTimeUtc > x.ReceivedTimeUtc),
             records.Count(x => x.ReceivedTimeUtc - x.EventTimeUtc > TimeSpan.FromSeconds(aggregates.ForexMaximumQuoteAgeSeconds)),
-            latest.GetForexDiagnostics(instrumentId), intervals);
+            latest.GetForexDiagnostics(instrumentId), intervals)
+        {
+            FutureToleranceMilliseconds = aggregates.ForexFutureToleranceMilliseconds,
+            BeyondFutureToleranceQuoteEvents = records.Count(x => ForexQuoteTimePolicy.IsTooFarAhead(x.EventTimeUtc, x.ReceivedTimeUtc, aggregates))
+        };
     }
 }

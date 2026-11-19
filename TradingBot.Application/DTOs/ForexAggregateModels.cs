@@ -27,6 +27,8 @@ public sealed record ForexQuoteBar
 public sealed record ForexAggregateDiagnostics(long RejectedQuoteEvents, long LateQuotes, long IncompleteQuotes)
 {
     public long FutureQuoteEvents { get; init; }
+    public long ToleratedFutureQuoteEvents { get; init; }
+    public double MaximumFutureLeadMilliseconds { get; init; }
     public long StaleQuoteEvents { get; init; }
     public long ResetCount { get; init; }
     // Process-lifetime counters, retained across collection resets. Windows are counted per interval.

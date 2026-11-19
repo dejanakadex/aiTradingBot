@@ -30,7 +30,7 @@ public sealed partial class DeterministicReplayService
         var records = (await _datasetStore.ReadAsync(new(request.InstrumentId, from, to, ["bid", "ask"]), cancellationToken))
             .Where(x => x.ReceivedTimeUtc <= to).OrderBy(x => x.ReceivedTimeUtc).ThenBy(x => x.EventId, StringComparer.Ordinal).ToArray();
         if (records.Length > 200000) throw new InvalidDataException("FX research input exceeds 200,000 events; select a smaller range.");
-        var quotes = ForexTradeSimulator.ReadQuotes(records, instrument.InstrumentId, instrument.Symbol);
+        var quotes = ForexTradeSimulator.ReadQuotes(records, instrument.InstrumentId, instrument.Symbol, _shortAggregateSettings);
         var inputHash = ComputeInputHash(records);
         var configHash = ForexResearchContract.Hash(contract.Label + contract.Feature + contract.Pattern);
         var latest = new LatestMarketDataService(Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings), Microsoft.Extensions.Options.Options.Create(_tradingSettings));
