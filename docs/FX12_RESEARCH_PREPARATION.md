@@ -69,3 +69,20 @@ Prvo provesti `fx-collection-audit` nad tom snimkom. Ako prelazi 200.000 događa
 Zatim `fx-replay` s eksplicitnim apsolutnim `--db`, `--config`, `--dataset`, instrumentom/strategijom i istim `--from/--to`. Koristiti isključivo zasebnu istraživačku bazu. Za novu bazu: napraviti novu praznu datoteku bez prepisivanja, `ModelOps migrate`, pa `fx-contract` prije replaya. CLI ne pokreće host/brokera i ne kreira stvarne naloge.
 
 Pregledati signal count, odbijene/blocked kandidate, potpune/nepotpune labele, razloge no-fill/gap/reconnect/risk odbijanja, zatvorene tradeove, troškove i output hash. `Completed` bez tradeova potvrđuje samo da je obrada završila. Tek višednevni odgovarajući uzorak vodi na evaluate/train/review, zatim stvarni model shadow i odvojeni FX12 paper protokol.
+
+## Dogovoreni prijedlozi nakon FX-12 — 20.11.2026.
+
+Korisnik je zatražio da se prijedlozi iz pregleda DaviddTech / AI Trading Arena sačuvaju za povratak **nakon završetka FX-12**. Ovo je odgođeni istraživački backlog, nije implementacija, dokaz profitabilnosti niti odobrenje trgovanja. FX-12 i reprezentativni podaci ostaju prioritet; prije izvedbe dogovoriti sljedeću pojedinačnu točku.
+
+Predloženi redoslijed nadogradnje postojeće infrastrukture:
+
+1. **Preglednik istraživačkih eksperimenata:** objediniti uspješne i neuspješne pokušaje, verzije strategije/parametara, hashove podataka, troškove, rezultate i razloge prihvaćanja/odbijanja. Ponovno koristiti postojeći research/model registar; brojati sve pokušaje i uklanjati duplikate.
+2. **Jednostavna trend/breakout strategija kao usporedni kandidat:** smjer trenda, proboj kanala i ATR zaštita, s malo parametara. U istim uvjetima usporediti s postojećim patternima. To je inspiracija, ne tvrdnja o točnoj reprodukciji autorove strategije.
+3. **Provjera pojedinačnih filtara:** zasebno mjeriti donosi li npr. ADX ili dodatna potvrda poboljšanje izvan razdoblja optimizacije, umjesto samo manjeg broja tradeova ili ljepše povijesne krivulje.
+4. **Testovi otpornosti i kontrole odabira:** susjedni parametri, različita tržišna razdoblja, veći troškovi/slippage i kašnjenja kroz odgovarajuće replay scenarije. Evidentirati višestruko testiranje; ne podešavati strategiju prema završnom holdoutu. Odvojiti backtest, naknadnu simulaciju na novim podacima, stvarni shadow i brokerski paper rezultat.
+5. **Praćenje slabljenja strategije:** unaprijed definirani kriteriji upozorenja, pauziranja i ponovnog odobravanja. Pauza novih ulaza mora očuvati zaštitu i lifecycle otvorenih pozicija; AI može pomagati analizom, a odluke i risk ograničenja moraju biti provjerljivi.
+6. **Usporedba i povezanost strategija:** provjeriti donose li kandidati različite informacije i gube li istodobno; veći broj strategija nije dokaz diversifikacije. Ne pretpostavljati da postojeći pojedinačni replay već simulira zajednički portfelj.
+
+Ograničenja: zadržati .NET/Blazor, postojeći replay, ML.NET, risk/arbitration i order lifecycle; SPY i ostali instrumenti ostaju podržani. Ne prenositi kripto strategije sa satnih svijeća na sekundni EUR/USD bez nove provjere. FX quote count/size nisu stvarni trade volumen. Ne preuzimati autorovu polugu, sizing ni tvrdnje o prinosu. Ne kupovati članstvo niti uvoditi crypto u okviru ovog dogovora. Prvi eksperiment može se temeljiti na javno opisanoj ideji; konačna neto prednost mora se dokazati našim podacima i troškovima.
+
+Izvori pregleda: [poslani video](https://www.youtube.com/watch?v=-bGy0X4uVww&t=365s), [dodatni vodič](https://www.youtube.com/watch?v=KCvSmtKngyQ), [AI Trading Arena](https://aitradingarena.com/). Pregledani su transkripti i javni prikazi; zatvoreni izvorni kod i neovisno verificirani cjeloviti brokerski rezultati nisu provjereni. Prikazani prinosi nisu potvrđena očekivanja našeg bota.
