@@ -1,0 +1,627 @@
+{
+  "CheckedAtUtc": "2026-11-19T22:22:16.579007+00:00",
+  "RuntimeCommit": "2a73e9aafe2cb409e544c999ffee5ec6d69f83ee",
+  "Scope": "Post-break FX12 read-only collection and latency check. No runtime code/configuration changes, restart, approvals or orders.",
+  "Snapshot": {
+    "Kind": "Derived read-only quote subset; original entry hashes unchanged, copied files verified. Range edges are filtered by audit. Original manifest preserved separately.",
+    "FromUtc": "2026-11-19T22:15:00Z",
+    "ToUtc": "2026-11-19T22:20:00Z",
+    "SourceManifestSha256": "7DEC3CB77955F4049D62533E1510C34C6A86C3FB3CD9544D99255284B6307CD0",
+    "SnapshotManifestSha256": "B55670602F65C95D1F148CE2D6619A8C1CE7B52EF89ED2D8B9F3FB0E6756F7E9",
+    "Files": 28,
+    "ManifestRows": 238,
+    "Bytes": 161882
+  },
+  "CollectionAudit": {
+    "canSendOrders": false,
+    "verification": {
+      "isValid": true,
+      "fileCount": 28,
+      "rowCount": 238,
+      "manifestSha256": "B55670602F65C95D1F148CE2D6619A8C1CE7B52EF89ED2D8B9F3FB0E6756F7E9",
+      "errors": []
+    },
+    "audit": {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "fromUtc": "2026-11-19T22:15:00Z",
+      "toUtc": "2026-11-19T22:20:00Z",
+      "aggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+      "quoteEvents": 238,
+      "completeCallbackPairs": 119,
+      "incompleteCallbackPairs": 0,
+      "callbackSessions": 2,
+      "firstEventUtc": "2026-11-19T22:15:00Z",
+      "lastEventUtc": "2026-11-19T22:19:56Z",
+      "minimumReceiveMinusEventMilliseconds": 449.6443,
+      "medianReceiveMinusEventMilliseconds": 973.7052,
+      "p95ReceiveMinusEventMilliseconds": 1471.7253,
+      "futureQuoteEvents": 0,
+      "staleQuoteEvents": 0,
+      "diagnostics": {
+        "rejectedQuoteEvents": 0,
+        "lateQuotes": 0,
+        "incompleteQuotes": 0,
+        "futureQuoteEvents": 0,
+        "toleratedFutureQuoteEvents": 0,
+        "maximumFutureLeadMilliseconds": 0,
+        "staleQuoteEvents": 0,
+        "resetCount": 1,
+        "windows": {
+          "5": {
+            "completed": 32,
+            "suppressed": 0
+          },
+          "15": {
+            "completed": 14,
+            "suppressed": 0
+          }
+        }
+      },
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 59,
+          "windowsWithoutQuotes": 27,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 32,
+          "maximumConsecutiveFeatureBars": 7,
+          "framesWithAtLeast26Bars": 0,
+          "priceFeatureReadyFrames": 0,
+          "longestEmptyRun": 14,
+          "consecutiveBarHistogram": {
+            "1": 11,
+            "2": 8,
+            "3": 5,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1
+          }
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 19,
+          "windowsWithoutQuotes": 5,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 14,
+          "maximumConsecutiveFeatureBars": 8,
+          "framesWithAtLeast26Bars": 0,
+          "priceFeatureReadyFrames": 0,
+          "longestEmptyRun": 4,
+          "consecutiveBarHistogram": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 2,
+            "6": 2,
+            "7": 1,
+            "8": 1
+          }
+        }
+      ],
+      "futureToleranceMilliseconds": 250,
+      "beyondFutureToleranceQuoteEvents": 0
+    },
+    "limitations": [
+      "Offline receive-clock reconstruction, not a live worker scheduling or persisted signal audit.",
+      "Only complete session-open windows available by ToUtc are counted; no empty bars are filled.",
+      "Missing-window reason counts may overlap. A window without quotes does not prove broker data loss.",
+      "Callback session changes reset features. Explicit live resets without new callbacks are not present in the quote dataset.",
+      "26 bars and price feature readiness are separate measurements, not strategy/model approval or evidence of trading readiness."
+    ]
+  },
+  "Latency": {
+    "Scope": "Completed minute windows selected by log UTC end, including the partial pre-open minute and excluding any unreported tail. Means are event-weighted; events include both bid and ask. These windows differ from Parquet audit cutoffs. SDK dispatch is connection-wide batch-drain time, not wire latency.",
+    "FromUtc": "2026-11-19T22:15:00Z",
+    "ToUtc": "2026-11-19T22:20:00Z",
+    "ActiveWindows": 5,
+    "Totals": {
+      "Events": 218,
+      "FailedProcessing": 0,
+      "ReceiveAgeOverTwoSeconds": 0,
+      "NegativeQueueClockDeltas": 0,
+      "MeanReceiveMinusEventMs": 989.3816293577984,
+      "MeanDequeueMinusReceiptMs": 12.813781651376146,
+      "MeanPipelineMs": 4.490479357798165,
+      "MaxReceiveMinusEventMs": 1716.5723,
+      "MaxDequeueMinusReceiptMs": 130.9365,
+      "MaxPipelineMs": 106.2991
+    },
+    "TickWindows": [
+      {
+        "AsOfUtc": "2026-11-19T22:15:36.5323690Z",
+        "ElapsedSeconds": 62.6547722,
+        "Events": 75,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 819.9767386666667,
+        "MaxReceiveMinusEventMs": 1716.5723,
+        "MeanDequeueMinusReceiptMs": 19.85743333333333,
+        "MaxDequeueMinusReceiptMs": 130.9365,
+        "MeanPipelineMs": 5.083795999999999,
+        "MaxPipelineMs": 106.2991,
+        "OldestQuoteEventUtc": "2026-11-19T22:15:26Z",
+        "OldestQuoteReceivedUtc": "2026-11-19T22:15:27.7165723Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.0423,
+        "OldestQuotePipelineMs": 2.0961
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:16:37.1221058Z",
+        "ElapsedSeconds": 60.5889654,
+        "Events": 47,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 1012.9837319148938,
+        "MaxReceiveMinusEventMs": 1646.6701,
+        "MeanDequeueMinusReceiptMs": 9.879408510638298,
+        "MaxDequeueMinusReceiptMs": 23.2225,
+        "MeanPipelineMs": 4.151955319148936,
+        "MaxPipelineMs": 12.6007,
+        "OldestQuoteEventUtc": "2026-11-19T22:15:57Z",
+        "OldestQuoteReceivedUtc": "2026-11-19T22:15:58.6466701Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.1127,
+        "OldestQuotePipelineMs": 11.781
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:17:37.1818316Z",
+        "ElapsedSeconds": 60.0590557,
+        "Events": 3,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 1155.1011333333333,
+        "MaxReceiveMinusEventMs": 1177.7736,
+        "MeanDequeueMinusReceiptMs": 3.8692666666666664,
+        "MaxDequeueMinusReceiptMs": 11.4668,
+        "MeanPipelineMs": 6.014933333333333,
+        "MaxPipelineMs": 11.4066,
+        "OldestQuoteEventUtc": "2026-11-19T22:17:36Z",
+        "OldestQuoteReceivedUtc": "2026-11-19T22:17:37.1777736Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.0893,
+        "OldestQuotePipelineMs": 3.9627
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:18:38.2173410Z",
+        "ElapsedSeconds": 61.034828,
+        "Events": 36,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 1203.7874083333331,
+        "MaxReceiveMinusEventMs": 1508.6568,
+        "MeanDequeueMinusReceiptMs": 8.131619444444446,
+        "MaxDequeueMinusReceiptMs": 19.0728,
+        "MeanPipelineMs": 4.777430555555556,
+        "MaxPipelineMs": 13.0499,
+        "OldestQuoteEventUtc": "2026-11-19T22:18:25Z",
+        "OldestQuoteReceivedUtc": "2026-11-19T22:18:26.5086568Z",
+        "OldestQuoteDequeueMinusReceiptMs": 13.7277,
+        "OldestQuotePipelineMs": 2.0588
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:19:38.9005600Z",
+        "ElapsedSeconds": 60.6824326,
+        "Events": 57,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 1048.6851631578952,
+        "MaxReceiveMinusEventMs": 1410.3597,
+        "MeanDequeueMinusReceiptMs": 9.393308771929824,
+        "MaxDequeueMinusReceiptMs": 25.0878,
+        "MeanPipelineMs": 3.7274666666666674,
+        "MaxPipelineMs": 12.2746,
+        "OldestQuoteEventUtc": "2026-11-19T22:18:53Z",
+        "OldestQuoteReceivedUtc": "2026-11-19T22:18:54.4103597Z",
+        "OldestQuoteDequeueMinusReceiptMs": 4.6962,
+        "OldestQuotePipelineMs": 2.2081
+      }
+    ],
+    "DispatchWindows": [
+      {
+        "AsOfUtc": "2026-11-19T22:15:35.9846851Z",
+        "ElapsedSeconds": 63.2530881,
+        "Batches": 33.0,
+        "BatchesOver250Ms": 0.0,
+        "MeanBatchMs": 0.5664818181818184,
+        "MaxBatchMs": 10.3433
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:16:40.9936872Z",
+        "ElapsedSeconds": 65.0075718,
+        "Batches": 35.0,
+        "BatchesOver250Ms": 0.0,
+        "MeanBatchMs": 0.08611428571428571,
+        "MaxBatchMs": 0.8413
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:17:45.9794983Z",
+        "ElapsedSeconds": 64.9843093,
+        "Batches": 20.0,
+        "BatchesOver250Ms": 0.0,
+        "MeanBatchMs": 0.102065,
+        "MaxBatchMs": 0.3164
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:18:45.9826904Z",
+        "ElapsedSeconds": 60.0018019,
+        "Batches": 30.0,
+        "BatchesOver250Ms": 0.0,
+        "MeanBatchMs": 0.04115333333333333,
+        "MaxBatchMs": 0.0868
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:19:47.7269982Z",
+        "ElapsedSeconds": 61.7425385,
+        "Batches": 33.0,
+        "BatchesOver250Ms": 0.0,
+        "MeanBatchMs": 0.04597575757575757,
+        "MaxBatchMs": 0.1395
+      }
+    ],
+    "CollectionWindows": [
+      {
+        "AsOfUtc": "2026-11-19T22:15:32.7874486Z",
+        "RejectedEventsDelta": 0,
+        "FutureEventsDelta": 0,
+        "StaleEventsDelta": 0,
+        "OtherRejectedEventsDelta": 0,
+        "LatePairsDelta": 0,
+        "IncompletePairsDelta": 0,
+        "ResetsDelta": 0,
+        "ToleratedFutureEventsDelta": 0,
+        "Intervals": [
+          {
+            "IntervalSeconds": 5,
+            "CompletedDelta": 5,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 3,
+            "LastBarEndUtc": "2026-11-19T22:15:30Z",
+            "LastBarAgeSeconds": 2.7874486,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          },
+          {
+            "IntervalSeconds": 15,
+            "CompletedDelta": 2,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 2,
+            "LastBarEndUtc": "2026-11-19T22:15:30Z",
+            "LastBarAgeSeconds": 2.7874486,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          }
+        ]
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:16:32.7740749Z",
+        "RejectedEventsDelta": 0,
+        "FutureEventsDelta": 0,
+        "StaleEventsDelta": 0,
+        "OtherRejectedEventsDelta": 0,
+        "LatePairsDelta": 0,
+        "IncompletePairsDelta": 0,
+        "ResetsDelta": 0,
+        "ToleratedFutureEventsDelta": 0,
+        "Intervals": [
+          {
+            "IntervalSeconds": 5,
+            "CompletedDelta": 7,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 1,
+            "LastBarEndUtc": "2026-11-19T22:16:20Z",
+            "LastBarAgeSeconds": 12.7740749,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 1,
+            "RetentionLimit": 512
+          },
+          {
+            "IntervalSeconds": 15,
+            "CompletedDelta": 4,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 6,
+            "LastBarEndUtc": "2026-11-19T22:16:30Z",
+            "LastBarAgeSeconds": 2.7740749,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          }
+        ]
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:17:32.7809131Z",
+        "RejectedEventsDelta": 0,
+        "FutureEventsDelta": 0,
+        "StaleEventsDelta": 0,
+        "OtherRejectedEventsDelta": 0,
+        "LatePairsDelta": 0,
+        "IncompletePairsDelta": 0,
+        "ResetsDelta": 1,
+        "ToleratedFutureEventsDelta": 0,
+        "Intervals": [
+          {
+            "IntervalSeconds": 5,
+            "CompletedDelta": 0,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 0,
+            "LastBarEndUtc": null,
+            "LastBarAgeSeconds": null,
+            "NoRecentBar": true,
+            "EmptyIntervalsBeforeLastBar": null,
+            "RetentionLimit": 512
+          },
+          {
+            "IntervalSeconds": 15,
+            "CompletedDelta": 0,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 0,
+            "LastBarEndUtc": null,
+            "LastBarAgeSeconds": null,
+            "NoRecentBar": true,
+            "EmptyIntervalsBeforeLastBar": null,
+            "RetentionLimit": 512
+          }
+        ]
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:18:32.7774645Z",
+        "RejectedEventsDelta": 0,
+        "FutureEventsDelta": 0,
+        "StaleEventsDelta": 0,
+        "OtherRejectedEventsDelta": 0,
+        "LatePairsDelta": 0,
+        "IncompletePairsDelta": 0,
+        "ResetsDelta": 1,
+        "ToleratedFutureEventsDelta": 0,
+        "Intervals": [
+          {
+            "IntervalSeconds": 5,
+            "CompletedDelta": 8,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 2,
+            "LastBarEndUtc": "2026-11-19T22:18:30Z",
+            "LastBarAgeSeconds": 2.7774645,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          },
+          {
+            "IntervalSeconds": 15,
+            "CompletedDelta": 4,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 4,
+            "LastBarEndUtc": "2026-11-19T22:18:30Z",
+            "LastBarAgeSeconds": 2.7774645,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          }
+        ]
+      },
+      {
+        "AsOfUtc": "2026-11-19T22:19:32.7810320Z",
+        "RejectedEventsDelta": 0,
+        "FutureEventsDelta": 0,
+        "StaleEventsDelta": 0,
+        "OtherRejectedEventsDelta": 0,
+        "LatePairsDelta": 0,
+        "IncompletePairsDelta": 0,
+        "ResetsDelta": 0,
+        "ToleratedFutureEventsDelta": 0,
+        "Intervals": [
+          {
+            "IntervalSeconds": 5,
+            "CompletedDelta": 10,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 7,
+            "LastBarEndUtc": "2026-11-19T22:19:25Z",
+            "LastBarAgeSeconds": 7.781032,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          },
+          {
+            "IntervalSeconds": 15,
+            "CompletedDelta": 4,
+            "SuppressedDelta": 0,
+            "ConsecutiveBars": 8,
+            "LastBarEndUtc": "2026-11-19T22:19:30Z",
+            "LastBarAgeSeconds": 2.781032,
+            "NoRecentBar": false,
+            "EmptyIntervalsBeforeLastBar": 0,
+            "RetentionLimit": 512
+          }
+        ]
+      }
+    ]
+  },
+  "CpuActiveSample": {
+    "FromUtc": "2026-11-19T22:16:34.5559744Z",
+    "ToUtc": "2026-11-19T22:17:04.5956008Z",
+    "CpuSeconds": 0.375,
+    "WallSeconds": 30.0460127,
+    "WorkingSetBytes": 237891584
+  },
+  "ClockProbe": {
+    "AtUtc": "2026-11-19T22:19:24Z",
+    "Source": "time.windows.com",
+    "OffsetMilliseconds": [
+      47.8059,
+      44.6086,
+      45.796
+    ],
+    "Meaning": "Local clock behind reference; not a continuous accuracy proof."
+  },
+  "CoverageGaps": [
+    {
+      "StartUtc": "2026-11-19 22:16:17.0810935",
+      "EndUtc": "2026-11-19 22:17:17.1929005",
+      "Reason": "Tick heartbeat timeout.",
+      "DroppedEvents": 0
+    },
+    {
+      "StartUtc": "2026-11-19 22:17:17.1929005",
+      "EndUtc": "2026-11-19 22:17:32.2499575",
+      "Reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+      "DroppedEvents": 0
+    }
+  ],
+  "PatternParityBeforeOptimization": {
+    "Scope": "Bounded receive-time reconstruction versus saved live pattern evidence. Compares the listed persisted values, not all feature fields, scheduling gates, execution labels, model decisions or fills.",
+    "FirstBarEndUtc": "2026-11-19T21:42:05Z",
+    "LastBarEndUtc": "2026-11-19T21:51:55Z",
+    "OfflinePatternRows": 1120,
+    "LiveComparedRows": 1120,
+    "OfflineBars": 112,
+    "ComparedBars": 112,
+    "MissingLiveRows": 0,
+    "MismatchCounts": {},
+    "Examples": [],
+    "ComparedFields": [
+      "referencePrice",
+      "confidence",
+      "featureVersion",
+      "regime",
+      "atrToPriceRatio",
+      "hardConditions",
+      "scoreComponents",
+      "pairedSpreadBps",
+      "pairedQuoteTimeUtc",
+      "hasCandidate"
+    ]
+  },
+  "PatternParityAfterOptimization": {
+    "Scope": "Bounded receive-time reconstruction versus saved live pattern evidence. Compares the listed persisted values, not all feature fields, scheduling gates, execution labels, model decisions or fills.",
+    "FirstBarEndUtc": "2026-11-19T22:15:05Z",
+    "LastBarEndUtc": "2026-11-19T22:19:55Z",
+    "OfflinePatternRows": 320,
+    "LiveComparedRows": 320,
+    "OfflineBars": 32,
+    "ComparedBars": 32,
+    "MissingLiveRows": 0,
+    "MismatchCounts": {},
+    "Examples": [],
+    "ComparedFields": [
+      "referencePrice",
+      "confidence",
+      "featureVersion",
+      "regime",
+      "atrToPriceRatio",
+      "hardConditions",
+      "scoreComponents",
+      "pairedSpreadBps",
+      "pairedQuoteTimeUtc",
+      "hasCandidate"
+    ]
+  },
+  "Preflight": {
+    "checkedAtUtc": "2026-11-19T22:21:27.1687806Z",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "strategyId": "eurusd-patterns",
+    "sessionOpen": true,
+    "nextScheduledSessionUtc": null,
+    "checks": [
+      {
+        "code": "session",
+        "passed": true,
+        "detail": "Configured FX session is open; broker availability still needs verification."
+      },
+      {
+        "code": "no-live",
+        "passed": true,
+        "detail": "Live mode and live explicit enablement must remain off."
+      },
+      {
+        "code": "instrument",
+        "passed": true,
+        "detail": "An enabled USD-quoted CASH instrument with the selected long strategy is required; collection does not require trading enablement."
+      },
+      {
+        "code": "isolated-execution",
+        "passed": true,
+        "detail": "Other instruments must not be enabled for execution during the bounded pilot; collection may remain enabled."
+      },
+      {
+        "code": "research-contract",
+        "passed": false,
+        "detail": "FX research contract is missing, incomplete or inconsistent. No defaults were approved."
+      },
+      {
+        "code": "reviewed-size-limits",
+        "passed": false,
+        "detail": "Reviewed venue base-unit minimum/maximum and evidence must be present and no older than 24 hours; broker rules still need a live refresh."
+      },
+      {
+        "code": "database",
+        "passed": true,
+        "detail": "An existing operational database is required; this command never creates or migrates one."
+      },
+      {
+        "code": "paper-ready",
+        "passed": false,
+        "detail": "Registry must already be PaperReady from FX-11 evidence; this command never changes it."
+      },
+      {
+        "code": "current-rollout",
+        "passed": false,
+        "detail": "An unexpired FX-11 rollout assessment must retain PaperReady; its freshness limit is 60 seconds."
+      },
+      {
+        "code": "approved-model",
+        "passed": false,
+        "detail": "Exactly one approved FX model must match the current research contract and artifact hash."
+      },
+      {
+        "code": "research-integrity",
+        "passed": false,
+        "detail": "Approved model must reference an intact completed FX evaluation and replay."
+      },
+      {
+        "code": "local-capacity-clear",
+        "passed": true,
+        "detail": "The isolated pilot requires no existing active local reservations; actual broker positions/orders require separate reconciliation."
+      }
+    ],
+    "scope": "Offline file/database preflight only; no broker connection, migration, approval or order submission.",
+    "offlinePrerequisitesPassed": false,
+    "canSendOrders": false,
+    "runtimeChecksStillRequired": [
+      "Verified paper account and USD summary",
+      "Fresh live paired quotes and healthy current rollout",
+      "Broker size/price rules, margin and partial-size protective exits",
+      "Existing positions/orders reconciled",
+      "Bounded test limits and stop procedure",
+      "Fresh approved signal, FX-9 sizing, costs, reservation and execution guard"
+    ]
+  },
+  "LocalOrderCounts": {
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "Trades": 0,
+    "PortfolioRiskReservationRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "Limitations": [
+    "Five-minute post-break sample has much lower quote rate than pre-break samples; CPU improvement is observed, but this is not a controlled equal-load latency benchmark.",
+    "Prior burst sample: 48/3085 pairs over 2 seconds, maximum 6366.409 ms. Prior later 1899-pair sample already had zero stale quotes before the SQL optimization. Absence of stale quotes now does not prove the SQL query caused the historical burst.",
+    "Unix-second broker timestamps contribute quantization; receive minus event time is not pure network latency.",
+    "No queue overflow was recorded. A no-callback interval does not distinguish unchanged market quotes from an upstream outage; reconnect restores subscription and records uncertain coverage.",
+    "Pattern parity compares ten saved fields listed in each report. It does not prove all live/replay features, wall-clock gates, ML decisions or order execution parity.",
+    "FX12 remains open: research contract, reviewed execution limits, evaluated model and real model shadow/PaperReady are missing."
+  ],
+  "DiagnosticHelperSha256": {
+    "FxInspect/Program.cs": "66EF04072E7A337AA2F3A306B60AE8AEBF47CD952C644EA24BB97C56E1910623",
+    "compare_fx_patterns.py": "BC6DBDF5A639187358A7662DC15DFC7C014CF159529E20735726FA36DD40C086",
+    "fx_latency_report.py": "9EF5D3BAD0B4F9B1914F2B628BADDC32A66B9663011E554D21987611F9F1E5B6",
+    "snapshot_fx.py": "CC7AAE8D7734DB15C3714A1840DAA3C93B2C7B0BEFEDA2157582166B97587E84"
+  }
+}

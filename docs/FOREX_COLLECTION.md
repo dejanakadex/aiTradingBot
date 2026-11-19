@@ -1,5 +1,39 @@
 # Operativno EUR/USD prikupljanje
 
+## Provjera nakon pauze — 19.11.2026.
+
+Runtime `2a73e9a` nastavio je prikupljanje nakon 22:15 UTC / 23:15 Zagreb, bez restarta ili promjene postavki. TWS je Connected, host AnalysisOnly, adapter read-only. Nema lokalnih naloga, izvršenja, tradeova, rezervacija ni modela. [Strukturirani dokaz](evidence/fx12-postpause-2026-11-19.json) čuva odvojene granice svakog mjerenja.
+
+### Učinak optimizacije i preostala kašnjenja
+
+Stabilna kopija uzorka **22:15–22:20 UTC** sadrži 28 provjerenih Parquet datoteka, 238 događaja i **119 potpunih bid/ask parova**. Svi su Healthy, bez nepotpunih parova, budućih vremena ili starosti >2 s. Medijan receive–event je **973,7 ms**, p95 **1.471,7 ms**, maksimum **1.716,6 ms**. Brokerova vremena imaju rezoluciju sekunde; to nije čista mrežna latencija.
+
+Pet dovršenih minutnih logova do 22:20 UTC pokriva 218 događaja: srednja obrada **4,49 ms**, čekanje u internom redu **12,81 ms**, maksimumi **106,30 / 130,94 ms**. Sredine su ponderirane brojem događaja. Nema processing iznimke, negativne queue razlike ni SDK dispatch batcha >250 ms. Log se ispisuje tijekom obrade, može razdvojiti dvije strane para i ne uključuje još neispisan kraj minute; zato njegov broj nije jednak Parquet uzorku. SDK dispatch mjeri cijelo pražnjenje reda poruka, ne pojedini mrežni paket.
+
+Aktivni proces potrošio je **0,375 CPU sekundi u 30,05 s**, oko 1,25% jedne jezgre. Ranije je potrošio 2,125 CPU sekundi u 2,14 s uz potvrđeni skupi SQL cooldown upit. To je jasan napredak lokalnog opterećenja, ali nije kontrolirani benchmark jednakog quote prometa. Novi uzorak ima oko 24 para/min, znatno manje nego prije pauze. Raniji desetominutni uzorak već je imao nula stale događaja prije SQL popravka; ne tvrdimo da je popravak uklonio uzrok povremenog starog 6,37s bursta. Za to treba ponovna pojava uz istodobne queue/pipeline/dispatch metrike ili dulji reprezentativni uzorak. Windows stripchart u 22:19 UTC izmjerio je zaostatak od 44,6–47,8 ms.
+
+### Kontinuitet i usporedba patterna
+
+Od 59 mogućih finalnih 5s prozora nastala su **32 bara**, a **27 prozora nema kotacije**. Najdulji niz ima sedam barova, bez framea s 26. Za 15s nastalo je 14 od 19 prozora, najdulji niz osam; profil nije prebačen na 15s. Nijedan opaženi prozor nije izgubljen zbog odbijanja vremena. Pet minuta ionako nije dovoljno za 26 × 15s barova.
+
+Od 22:16:17 do 22:17:17 UTC nije bilo novih callbackova. Postojeći 60s heartbeat timeout obnovio je pretplatu nakon 15s odmaka, uz reset agregata i trajni zapis nepoznate pokrivenosti do 22:17:32. Nema prijavljenog queue overflowa/dropped događaja. Bez dodatnog brokerskog dokaza ne možemo razlikovati odsutnost promjene kotacije od upstream prekida. Taj prekid je odvojen od starosti primljene kotacije. Praznine se ne popunjavaju fiktivnim barovima, a heartbeat i 2s freshness pravila nisu ublaženi.
+
+Read-only rekonstrukcija proširena je na deset spremljenih polja: reference price, confidence, feature verziju, režim, ATR/price, hard conditions, score components, spread, vrijeme uparene kotacije i prisutnost pattern kandidata. **1.120/1.120 ranijih zapisa (112 barova, 21:41:48–21:52 UTC)** i **320/320 novih zapisa (32 bara)** podudara se bez nedostajućih live redaka. To potvrđuje navedene vrijednosti i pattern izračune u ovim uzorcima, ne sve featuree, vremenske gateove, izvršne labele, model ili order lifecycle.
+
+### Ponovljivost i daljnji FX-12 rad
+
+Lokalna stabilna kopija je u `TestResults/fx12-postpause-snapshot-20261119` radnog worktreea. Izvorni manifest sačuvan je kao `_source-manifest.json`; izdvojene su samo EUR/USD bid/ask datoteke koje preklapaju raspon, uz nepromijenjene file hashove. Izvedeni manifest ima zaseban SHA-256 i `snapshot-provenance.json`. To je provjeren podskup, ne nova provjera cijelog aktivnog dataseta. Raw podaci i dijagnostički pomoćni alati ostaju lokalni, izvan Gita; dokaz sadrži njihove SHA-256 otiske.
+
+Ponoviti službeni audit iz korijena istog checkouta, s novim izlaznim imenom:
+
+```powershell
+dotnet TradingBot.ModelOps/bin/Release/net10.0/TradingBot.ModelOps.dll fx-collection-audit --config "$PWD/TradingBot.Web/appsettings.ForexCollection.json" --dataset "$PWD/TestResults/fx12-postpause-snapshot-20261119" --instrument-id FX-CASH-EUR-USD-IDEALPRO --from 2026-11-19T22:15:00Z --to 2026-11-19T22:20:00Z --output "$PWD/TestResults/fx12-postpause-audit-repeat.json"
+```
+
+Službeni audit stabilne kopije prolazi. Preflight u **22:21 UTC** prolazi sesiju, izolaciju/no-live, instrument, bazu i lokalni kapacitet; i dalje nedostaju research ugovor, pregledana izvršna pravila, evaluirani/odobreni model i model shadow/PaperReady. Ne stvarati odobrenje samo da bi test poslao nalog. Slijedi **60–120 minuta aktivnije dnevne sesije**, zatim provjera kontinuiteta i reprezentativnosti prije FX-10 replaya/evaluacije. Taj vremenski uzorak nije jamstvo dovoljnog trening skupa. Stari 92-minutni historical gap ostaje otvoren i minute ne popravljaju tick praznine.
+
+Ova dopuna mijenja samo dokumentaciju i dokaze. Runtime ima prethodnih **726/726 testova** i [uspješan CI](https://github.com/dejanakadex/aiTradingBot/actions/runs/44625350139). Nije bilo potrebe ponovno pokretati kolektor ili mijenjati strategiju. FX-12 ostaje otvoren.
+
 ## Istraga kašnjenja i nastavak FX-12 — 19.11.2026.
 
 Provjera aktivnog Parquet manifesta završila je bez grešaka: **4.481 datoteka / 1.052.479 redaka**, hash je u [dokazu](evidence/fx12-latency-2026-11-19.json). To je provjera integriteta snimke, ne tvrdnja da su svi redci pogodni za trgovanje ili da postoji neprekidna tick pokrivenost.
