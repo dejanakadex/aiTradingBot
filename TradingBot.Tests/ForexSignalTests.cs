@@ -20,6 +20,24 @@ public sealed class ForexSignalTests
     private static readonly DateTime Start = new(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public async Task IdleCyclesSkipDatabaseButNewBarsAndRestartsKeepDurableCooldown()
+    {
+        using var fixture = new Fixture(); fixture.Feed(); fixture.Approve();
+        var trigger = fixture.Trigger();
+        Assert.Single(await trigger.ProcessAsync("FX-EURUSD", fixture.Now));
+        var contexts = fixture.DbCreations;
+        for (var i = 0; i < 5; i++) Assert.Empty(await trigger.ProcessAsync("FX-EURUSD", fixture.Now.AddSeconds(i)));
+        Assert.Equal(contexts, fixture.DbCreations);
+        Assert.Empty(await fixture.Trigger().ProcessAsync("FX-EURUSD", fixture.Now));
+        Assert.True(fixture.DbCreations > contexts); // New process must read the durable watermark.
+        fixture.Feed(28, 1); fixture.Now = Start.AddSeconds(147);
+        Assert.Empty(await trigger.ProcessAsync("FX-EURUSD", fixture.Now)); // Existing cooldown still applies.
+        await using var db = fixture.CreateDbContext();
+        Assert.Equal(290, await db.ResearchCandidateRecords.CountAsync());
+        Assert.Contains(await db.ResearchCandidateRecords.ToArrayAsync(), x => x.ReasonsJson.Contains("cooldown"));
+    }
+
+    [Fact]
     public async Task ApprovedProfileEmitsOnlyShadowAndPersistsCompleteAudit()
     {
         using var fixture = new Fixture(); fixture.Feed(); fixture.Approve();

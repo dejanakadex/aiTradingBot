@@ -76,6 +76,10 @@ public sealed class ForexSignalTriggerService
         var bars = _latest.GetCompletedForexAggregates(instrument.InstrumentId, selection.IntervalSeconds, now, _aggregates.MaxCompletedPerInterval);
         var output = new List<PatternCandidate>();
         if (bars.Count == 0) return output;
+        // The timer may run several times per bar. Never scan durable cooldown state when no work is due.
+        // A new service has no watermark and must still restore the exact contract from SQLite.
+        lock (_processed)
+            if (_processed.TryGetValue(key, out var completed) && bars[^1].WindowEndUtc <= completed) return output;
         await using var db = await _db.CreateDbContextAsync(token).ConfigureAwait(false);
         bool hasWatermark;
         lock (_processed) hasWatermark = _processed.ContainsKey(key);

@@ -314,6 +314,8 @@ namespace TradingBot.Persistence
                 b.HasIndex(x => x.InstrumentId);
                 b.HasIndex(x => x.Outcome);
                 b.HasIndex(x => new { x.InstrumentId, x.StrategyId, x.Timeframe, x.Direction, x.EvaluatedAtUtc });
+                b.HasIndex(x => new { x.ReplayRunId, x.InstrumentId, x.StrategyId, x.Timeframe, x.DecisionStage, x.Outcome, x.EvaluatedAtUtc })
+                    .HasDatabaseName("IX_ResearchCandidate_FxCooldown");
                 b.Property(x => x.InstrumentId).UseCollation("NOCASE");
                 b.HasMany(x => x.Labels)
                     .WithOne(x => x.ResearchCandidate)

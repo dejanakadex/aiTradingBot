@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading.Channels;
 using IBApi;
@@ -935,12 +936,30 @@ namespace TradingBot.Infrastructure.Services
 
         private async Task ProcessMessagesAsync(EReader reader, EReaderSignal signal, CancellationToken cancellationToken)
         {
+            var report = Stopwatch.StartNew();
+            long batches = 0, slowBatches = 0;
+            double maximumMs = 0, totalMs = 0;
             while (!cancellationToken.IsCancellationRequested && IsConnected)
             {
                 try
                 {
                     signal.waitForSignal();
-                    ProcessProtocolMessages(reader.processMsgs);
+                    var started = Stopwatch.GetTimestamp();
+                    try { ProcessProtocolMessages(reader.processMsgs); }
+                    finally
+                    {
+                        var ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                        batches++; totalMs += ms; maximumMs = Math.Max(maximumMs, ms);
+                        if (ms > 250) slowBatches++;
+                        if (report.Elapsed >= TimeSpan.FromMinutes(1))
+                        {
+                            // Whole SDK queue drain, excluding signal wait; not per-message or wire latency.
+                            _logger.Log(slowBatches > 0 ? LogLevel.Warning : LogLevel.Information,
+                                "IBKR dispatch AsOfUtc={AsOfUtc:O} ElapsedSeconds={ElapsedSeconds} Batches={Batches} BatchesOver250Ms={SlowBatches} MeanBatchMs={MeanBatchMs} MaxBatchMs={MaxBatchMs}",
+                                DateTime.UtcNow, report.Elapsed.TotalSeconds, batches, slowBatches, totalMs / batches, maximumMs);
+                            report.Restart(); batches = slowBatches = 0; maximumMs = totalMs = 0;
+                        }
+                    }
                 }
                 catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                 {

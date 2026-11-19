@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -92,6 +94,19 @@ public sealed class TickMarketDataHostedService : BackgroundService
         var delay = _settings.ReconnectInitialDelaySeconds;
         var gapStart = checkpointUtc == default ? (DateTime?)null : checkpointUtc;
         var dropped = 0L;
+        var latency = new TickLatencyWindow();
+        var latencyReport = Stopwatch.StartNew();
+        void ReportLatency()
+        {
+            if (latencyReport.Elapsed < TimeSpan.FromMinutes(1)) return;
+            var elapsed = latencyReport.Elapsed.TotalSeconds;
+            var summary = latency.Take(); latencyReport.Restart();
+            var level = summary.ReceiveAgeOverTwoSeconds > 0 || summary.FailedProcessing > 0
+                || summary.NegativeQueueClockDeltas > 0 || summary.MaxDequeueMinusReceiptMs > 1000
+                || summary.MaxPipelineMs > 1000 ? LogLevel.Warning : LogLevel.Information;
+            _logger.Log(level, "Tick latency Instrument={Instrument} AsOfUtc={AsOfUtc:O} ElapsedSeconds={ElapsedSeconds} Metrics={Metrics}",
+                instrument.InstrumentId, _clock.UtcNow, elapsed, JsonSerializer.Serialize(summary));
+        }
         while (!token.IsCancellationRequested)
         {
             try
@@ -138,6 +153,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
                             throw new IOException($"Tick queue overflow: {subscription.DroppedEvents - lastDropped} events dropped.");
                         }
                         var now = _clock.UtcNow;
+                        ReportLatency();
                         _latest.AdvanceTo(now);
                         if (_shortSignals != null && instrument.InstrumentType != InstrumentType.Forex)
                             await _shortSignals.ProcessAsync(instrument, now, token).ConfigureAwait(false);
@@ -154,7 +170,20 @@ public sealed class TickMarketDataHostedService : BackgroundService
                     if (!available) throw new IOException("Tick channel completed.");
                     while (subscription.Reader.TryRead(out var marketEvent))
                     {
-                        var assessment = await _pipeline.ProcessCanonicalEventAsync(marketEvent, token).ConfigureAwait(false);
+                        var dequeued = _clock.UtcNow;
+                        var processingStarted = Stopwatch.GetTimestamp();
+                        var failed = true;
+                        MarketDataQualityAssessment assessment;
+                        try
+                        {
+                            assessment = await _pipeline.ProcessCanonicalEventAsync(marketEvent, token).ConfigureAwait(false);
+                            failed = false;
+                        }
+                        finally
+                        {
+                            latency.Record(marketEvent, dequeued, Stopwatch.GetElapsedTime(processingStarted), failed);
+                            ReportLatency();
+                        }
                         if (!assessment.CanPersist)
                             throw new IOException($"Tick quality rejected: {assessment.Status} {assessment.Reason}");
                         if (assessment.IsHealthy && _shortSignals != null && instrument.InstrumentType != InstrumentType.Forex)

@@ -4,6 +4,8 @@
 
 ## Utvrđeni preduvjeti
 
+**Dopuna 19.11.2026.:** instrument, baza i prikupljanje su operativni. Provjeren je integritet 1.052.479 spremljenih redaka i podudaranje 112 finalnih 5s prozora u desetominutnom uzorku, uz 22 zagrijana framea. Otklonjeno je potvrđeno SQL opterećenje, a dodatna mjerenja trebaju razdvojiti povremene pre-callback zastoje. Svježi preflight još nema research ugovor, pregledana izvršna pravila, odobren model ni aktualni model shadow/PaperReady. [Aktualni izvještaj](FOREX_COLLECTION.md#istraga-kašnjenja-i-nastavak-fx-12--19112026); to ne daje dopuštenje za nalog.
+
 **Dopuna 26.10.2026.:** stvarni quoteovi su prikupljeni, ali samo 25.10. 21:15–22:45 UTC; zatim je TWS veza nestala. Offline i live audit potvrđuju samo tri zagrijana 5s framea. Provedena je [analiza praznih intervala, vremenskih odbijanja i live/replay razlike](FOREX_COLLECTION.md#provjera-26-listopada-2026). Nije odobren model ni poslan nalog. Prvi korak protokola ostaje otvoren dok ne dobijemo stabilan i dovoljno kvalitetan uzorak.
 
 **Kasnija operativna dopuna istog dana:** nedostatak konfiguracije instrumenta i baze riješen je zasebnim [ForexCollection profilom](FOREX_COLLECTION.md). Kolektor je pokrenut na paper TWS-u i spremio je 1.425 povijesnih barova; postoji jedna označena praznina od 92 minute. Naknadni preflight čita cijelu popravljenu operativnu shemu i potvrđuje instrument/bazu, ali model, research, PaperReady i izvršni uvjeti ostaju neispunjeni. Naloga nije bilo. Sljedeći odlomak i raniji JSON ostaju vremenski označen dokaz prije te pripreme.

@@ -1468,6 +1468,8 @@ namespace TradingBot.Persistence.Migrations
                     b.HasIndex("RecordKey").IsUnique();
                     b.HasIndex("ReplayRunId");
                     b.HasIndex("InstrumentId", "StrategyId", "Timeframe", "Direction", "EvaluatedAtUtc");
+                    b.HasIndex("ReplayRunId", "InstrumentId", "StrategyId", "Timeframe", "DecisionStage", "Outcome", "EvaluatedAtUtc")
+                        .HasDatabaseName("IX_ResearchCandidate_FxCooldown");
                     b.ToTable("ResearchCandidateRecords");
                 });
 

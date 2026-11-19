@@ -1,0 +1,525 @@
+{
+  "Date": "2026-11-19",
+  "Scope": "FX12 collection diagnostics and local latency investigation; no order authorization",
+  "DatasetIntegritySnapshot": {
+    "isValid": true,
+    "fileCount": 4481,
+    "rowCount": 1052479,
+    "manifestSha256": "60B28C21576963BDC56B59FAD53D1338CF0014E7E1C93E2F16598EB2479E8EAB",
+    "errors": []
+  },
+  "CollectedSample": {
+    "Scope": "Read-only selected Parquet files; file hashes verified on read. Not a whole-dataset audit or live/replay scheduler parity proof.",
+    "FromUtc": "2026-11-19T21:41:48Z",
+    "ToUtc": "2026-11-19T21:52:00Z",
+    "TotalRecords": 3798,
+    "NonHealthyRecords": 0,
+    "Strict": {
+      "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "FromUtc": "2026-11-19T21:41:48Z",
+      "ToUtc": "2026-11-19T21:52:00Z",
+      "AggregateVersion": "fx-midpoint-bars-v1+580cc308c56477241c1518ff35b2eb56f00caa74d65bd4158ea952c24e15d5d0",
+      "QuoteEvents": 3798,
+      "CompleteCallbackPairs": 1899,
+      "IncompleteCallbackPairs": 0,
+      "CallbackSessions": 1,
+      "FirstEventUtc": "2026-11-19T21:41:48Z",
+      "LastEventUtc": "2026-11-19T21:51:59Z",
+      "MinimumReceiveMinusEventMilliseconds": 57.7759,
+      "MedianReceiveMinusEventMilliseconds": 959.5235,
+      "P95ReceiveMinusEventMilliseconds": 1487.7795,
+      "FutureQuoteEvents": 0,
+      "StaleQuoteEvents": 0,
+      "Diagnostics": {
+        "RejectedQuoteEvents": 0,
+        "LateQuotes": 0,
+        "IncompleteQuotes": 0,
+        "FutureQuoteEvents": 0,
+        "ToleratedFutureQuoteEvents": 0,
+        "MaximumFutureLeadMilliseconds": 0,
+        "StaleQuoteEvents": 0,
+        "ResetCount": 0,
+        "Windows": {
+          "5": {
+            "Completed": 113,
+            "Suppressed": 0
+          },
+          "15": {
+            "Completed": 40,
+            "Suppressed": 0
+          }
+        }
+      },
+      "Intervals": [
+        {
+          "IntervalSeconds": 5,
+          "ExpectedFinalWindows": 121,
+          "WindowsWithoutQuotes": 9,
+          "ObservedWindowsWithoutFinalBar": 0,
+          "MissingBarsWithFutureQuotes": 0,
+          "MissingBarsWithStaleQuotes": 0,
+          "FinalBars": 112,
+          "MaximumConsecutiveFeatureBars": 41,
+          "FramesWithAtLeast26Bars": 22,
+          "PriceFeatureReadyFrames": 22,
+          "LongestEmptyRun": 2,
+          "ConsecutiveBarHistogram": {
+            "1": 8,
+            "2": 7,
+            "3": 7,
+            "4": 7,
+            "5": 6,
+            "6": 4,
+            "7": 4,
+            "8": 4,
+            "9": 4,
+            "10": 4,
+            "11": 4,
+            "12": 4,
+            "13": 3,
+            "14": 2,
+            "15": 2,
+            "16": 2,
+            "17": 2,
+            "18": 2,
+            "19": 2,
+            "20": 2,
+            "21": 2,
+            "22": 2,
+            "23": 2,
+            "24": 2,
+            "25": 2,
+            "26": 2,
+            "27": 2,
+            "28": 2,
+            "29": 2,
+            "30": 2,
+            "31": 2,
+            "32": 1,
+            "33": 1,
+            "34": 1,
+            "35": 1,
+            "36": 1,
+            "37": 1,
+            "38": 1,
+            "39": 1,
+            "40": 1,
+            "41": 1
+          }
+        },
+        {
+          "IntervalSeconds": 15,
+          "ExpectedFinalWindows": 39,
+          "WindowsWithoutQuotes": 0,
+          "ObservedWindowsWithoutFinalBar": 0,
+          "MissingBarsWithFutureQuotes": 0,
+          "MissingBarsWithStaleQuotes": 0,
+          "FinalBars": 39,
+          "MaximumConsecutiveFeatureBars": 40,
+          "FramesWithAtLeast26Bars": 15,
+          "PriceFeatureReadyFrames": 15,
+          "LongestEmptyRun": 0,
+          "ConsecutiveBarHistogram": {
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1,
+            "10": 1,
+            "11": 1,
+            "12": 1,
+            "13": 1,
+            "14": 1,
+            "15": 1,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "19": 1,
+            "20": 1,
+            "21": 1,
+            "22": 1,
+            "23": 1,
+            "24": 1,
+            "25": 1,
+            "26": 1,
+            "27": 1,
+            "28": 1,
+            "29": 1,
+            "30": 1,
+            "31": 1,
+            "32": 1,
+            "33": 1,
+            "34": 1,
+            "35": 1,
+            "36": 1,
+            "37": 1,
+            "38": 1,
+            "39": 1,
+            "40": 1
+          }
+        }
+      ],
+      "FutureToleranceMilliseconds": 0,
+      "BeyondFutureToleranceQuoteEvents": 0
+    },
+    "Bounded": {
+      "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "FromUtc": "2026-11-19T21:41:48Z",
+      "ToUtc": "2026-11-19T21:52:00Z",
+      "AggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+      "QuoteEvents": 3798,
+      "CompleteCallbackPairs": 1899,
+      "IncompleteCallbackPairs": 0,
+      "CallbackSessions": 1,
+      "FirstEventUtc": "2026-11-19T21:41:48Z",
+      "LastEventUtc": "2026-11-19T21:51:59Z",
+      "MinimumReceiveMinusEventMilliseconds": 57.7759,
+      "MedianReceiveMinusEventMilliseconds": 959.5235,
+      "P95ReceiveMinusEventMilliseconds": 1487.7795,
+      "FutureQuoteEvents": 0,
+      "StaleQuoteEvents": 0,
+      "Diagnostics": {
+        "RejectedQuoteEvents": 0,
+        "LateQuotes": 0,
+        "IncompleteQuotes": 0,
+        "FutureQuoteEvents": 0,
+        "ToleratedFutureQuoteEvents": 0,
+        "MaximumFutureLeadMilliseconds": 0,
+        "StaleQuoteEvents": 0,
+        "ResetCount": 0,
+        "Windows": {
+          "5": {
+            "Completed": 113,
+            "Suppressed": 0
+          },
+          "15": {
+            "Completed": 40,
+            "Suppressed": 0
+          }
+        }
+      },
+      "Intervals": [
+        {
+          "IntervalSeconds": 5,
+          "ExpectedFinalWindows": 121,
+          "WindowsWithoutQuotes": 9,
+          "ObservedWindowsWithoutFinalBar": 0,
+          "MissingBarsWithFutureQuotes": 0,
+          "MissingBarsWithStaleQuotes": 0,
+          "FinalBars": 112,
+          "MaximumConsecutiveFeatureBars": 41,
+          "FramesWithAtLeast26Bars": 22,
+          "PriceFeatureReadyFrames": 22,
+          "LongestEmptyRun": 2,
+          "ConsecutiveBarHistogram": {
+            "1": 8,
+            "2": 7,
+            "3": 7,
+            "4": 7,
+            "5": 6,
+            "6": 4,
+            "7": 4,
+            "8": 4,
+            "9": 4,
+            "10": 4,
+            "11": 4,
+            "12": 4,
+            "13": 3,
+            "14": 2,
+            "15": 2,
+            "16": 2,
+            "17": 2,
+            "18": 2,
+            "19": 2,
+            "20": 2,
+            "21": 2,
+            "22": 2,
+            "23": 2,
+            "24": 2,
+            "25": 2,
+            "26": 2,
+            "27": 2,
+            "28": 2,
+            "29": 2,
+            "30": 2,
+            "31": 2,
+            "32": 1,
+            "33": 1,
+            "34": 1,
+            "35": 1,
+            "36": 1,
+            "37": 1,
+            "38": 1,
+            "39": 1,
+            "40": 1,
+            "41": 1
+          }
+        },
+        {
+          "IntervalSeconds": 15,
+          "ExpectedFinalWindows": 39,
+          "WindowsWithoutQuotes": 0,
+          "ObservedWindowsWithoutFinalBar": 0,
+          "MissingBarsWithFutureQuotes": 0,
+          "MissingBarsWithStaleQuotes": 0,
+          "FinalBars": 39,
+          "MaximumConsecutiveFeatureBars": 40,
+          "FramesWithAtLeast26Bars": 15,
+          "PriceFeatureReadyFrames": 15,
+          "LongestEmptyRun": 0,
+          "ConsecutiveBarHistogram": {
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1,
+            "10": 1,
+            "11": 1,
+            "12": 1,
+            "13": 1,
+            "14": 1,
+            "15": 1,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "19": 1,
+            "20": 1,
+            "21": 1,
+            "22": 1,
+            "23": 1,
+            "24": 1,
+            "25": 1,
+            "26": 1,
+            "27": 1,
+            "28": 1,
+            "29": 1,
+            "30": 1,
+            "31": 1,
+            "32": 1,
+            "33": 1,
+            "34": 1,
+            "35": 1,
+            "36": 1,
+            "37": 1,
+            "38": 1,
+            "39": 1,
+            "40": 1
+          }
+        }
+      ],
+      "FutureToleranceMilliseconds": 250,
+      "BeyondFutureToleranceQuoteEvents": 0
+    }
+  },
+  "BarWindowComparison": {
+    "rawEvents": 3798,
+    "completePairs": 1899,
+    "liveFrames": 112,
+    "offlineBars": 113,
+    "onlyOffline": [
+      "2026-11-19T21:41:50+00:00"
+    ],
+    "onlyLive": [],
+    "ExcludedPartialStartingWindow": "2026-11-19T21:41:45Z/2026-11-19T21:41:50Z",
+    "offlineFullWindows": 112,
+    "onlyOfflineFullWindows": [],
+    "Scope": "Matching final 5s window ends in the bounded sample, not full feature/model/order parity."
+  },
+  "OldSampleLag": {
+    "completePairs": 3085,
+    "stalePairs": 48,
+    "maxReceiveMinusEventMs": 6366.409,
+    "worstNeighborhood": [
+      {
+        "eventUtc": "2026-11-19T21:36:37Z",
+        "receivedUtc": "2026-11-19T21:36:43.3619644Z",
+        "ageMs": 6361.964
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:37Z",
+        "receivedUtc": "2026-11-19T21:36:43.364666Z",
+        "ageMs": 6364.665999999999
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:37Z",
+        "receivedUtc": "2026-11-19T21:36:43.3664093Z",
+        "ageMs": 6366.409
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:38Z",
+        "receivedUtc": "2026-11-19T21:36:43.3669692Z",
+        "ageMs": 5366.969
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:38Z",
+        "receivedUtc": "2026-11-19T21:36:43.3672794Z",
+        "ageMs": 5367.2789999999995
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:38Z",
+        "receivedUtc": "2026-11-19T21:36:43.3687011Z",
+        "ageMs": 5368.701
+      },
+      {
+        "eventUtc": "2026-11-19T21:36:38Z",
+        "receivedUtc": "2026-11-19T21:36:43.36944Z",
+        "ageMs": 5369.44
+      }
+    ],
+    "stalePairsByReceiptMinute": {
+      "2026-11-19T21:33": 4,
+      "2026-11-19T21:34": 17,
+      "2026-11-19T21:35": 10,
+      "2026-11-19T21:36": 17
+    }
+  },
+  "Preflight": {
+    "checkedAtUtc": "2026-11-19T21:50:50.9143056Z",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "strategyId": "eurusd-patterns",
+    "sessionOpen": true,
+    "nextScheduledSessionUtc": null,
+    "checks": [
+      {
+        "code": "session",
+        "passed": true,
+        "detail": "Configured FX session is open; broker availability still needs verification."
+      },
+      {
+        "code": "no-live",
+        "passed": true,
+        "detail": "Live mode and live explicit enablement must remain off."
+      },
+      {
+        "code": "instrument",
+        "passed": true,
+        "detail": "An enabled USD-quoted CASH instrument with the selected long strategy is required; collection does not require trading enablement."
+      },
+      {
+        "code": "isolated-execution",
+        "passed": true,
+        "detail": "Other instruments must not be enabled for execution during the bounded pilot; collection may remain enabled."
+      },
+      {
+        "code": "research-contract",
+        "passed": false,
+        "detail": "FX research contract is missing, incomplete or inconsistent. No defaults were approved."
+      },
+      {
+        "code": "reviewed-size-limits",
+        "passed": false,
+        "detail": "Reviewed venue base-unit minimum/maximum and evidence must be present and no older than 24 hours; broker rules still need a live refresh."
+      },
+      {
+        "code": "database",
+        "passed": true,
+        "detail": "An existing operational database is required; this command never creates or migrates one."
+      },
+      {
+        "code": "paper-ready",
+        "passed": false,
+        "detail": "Registry must already be PaperReady from FX-11 evidence; this command never changes it."
+      },
+      {
+        "code": "current-rollout",
+        "passed": false,
+        "detail": "An unexpired FX-11 rollout assessment must retain PaperReady; its freshness limit is 60 seconds."
+      },
+      {
+        "code": "approved-model",
+        "passed": false,
+        "detail": "Exactly one approved FX model must match the current research contract and artifact hash."
+      },
+      {
+        "code": "research-integrity",
+        "passed": false,
+        "detail": "Approved model must reference an intact completed FX evaluation and replay."
+      },
+      {
+        "code": "local-capacity-clear",
+        "passed": true,
+        "detail": "The isolated pilot requires no existing active local reservations; actual broker positions/orders require separate reconciliation."
+      }
+    ],
+    "scope": "Offline file/database preflight only; no broker connection, migration, approval or order submission.",
+    "offlinePrerequisitesPassed": false,
+    "canSendOrders": false,
+    "runtimeChecksStillRequired": [
+      "Verified paper account and USD summary",
+      "Fresh live paired quotes and healthy current rollout",
+      "Broker size/price rules, margin and partial-size protective exits",
+      "Existing positions/orders reconciled",
+      "Bounded test limits and stop procedure",
+      "Fresh approved signal, FX-9 sizing, costs, reservation and execution guard"
+    ]
+  },
+  "CpuInvestigation": {
+    "ObservedCpuSeconds": 2.125,
+    "SampleWallSeconds": 2.1435986,
+    "LogicalProcessors": 12,
+    "HotThreadSamples": 3,
+    "AllHotSamplesInSqliteCooldownQuery": true,
+    "OriginalCooldownQueryMs": 503.8743,
+    "ExistingOutcomeIndexDiagnosticMs": 0.4184,
+    "OriginalQueryPlan": [
+      "SEARCH ResearchCandidateRecords USING INDEX IX_ResearchCandidateRecords_InstrumentId_StrategyId_Timeframe_Direction_EvaluatedAtUtc",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "Implemented": [
+    "Minute tick latency summaries split callback timestamp age, queue wait and pipeline processing.",
+    "Minute SDK queue-drain duration summaries exclude signal wait.",
+    "No database cooldown query when the same service has no new completed bar.",
+    "Additive covering index migration for durable cooldown lookup; no evidence removed."
+  ],
+  "Limitations": [
+    "Broker seconds resolution contributes to receive-minus-event values; not pure network latency.",
+    "Late quote burst is confirmed before callback; TWS/network/SDK queue/OS scheduling attribution remains unproven.",
+    "SQL load is confirmed, but causality for upstream late quotes is not established.",
+    "Window ends match for this bounded sample; not full feature/model/order parity.",
+    "Historical 92-minute MIDPOINT gap remains; minute bars cannot repair missing ticks."
+  ],
+  "LocalTestsPassed": 726,
+  "Fx12Complete": false,
+  "AfterDeployment": {
+    "CooldownQueryMilliseconds": 0.03600004129111767,
+    "QueryPlan": [
+      [
+        4,
+        0,
+        54,
+        "SEARCH ResearchCandidateRecords USING COVERING INDEX IX_ResearchCandidate_FxCooldown (ReplayRunId=? AND InstrumentId=? AND StrategyId=? AND Timeframe=? AND DecisionStage=? AND Outcome=?)"
+      ]
+    ],
+    "MigrationApplied": "20261119220000_AddForexCooldownIndex",
+    "StartedAtUtc": "2026-11-19T22:03:26.0567517Z",
+    "AnalysisOnly": true,
+    "ReadOnlyApi": true,
+    "SessionPaused": true,
+    "FirstLatencySummaryEvents": 0,
+    "FirstDispatchSummary": {
+      "Batches": 13,
+      "BatchesOver250Ms": 0,
+      "MeanBatchMs": 4.53646923076923,
+      "MaxBatchMs": 24.7979
+    },
+    "CpuSample": {
+      "CpuSeconds": 0.03125,
+      "WallSeconds": 2.0381561,
+      "Limit": "Configured session pause and restart; not a comparable active workload benchmark."
+    },
+    "OperationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    }
+  }
+}
