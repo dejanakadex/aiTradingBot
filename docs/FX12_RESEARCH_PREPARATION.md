@@ -86,3 +86,9 @@ Predloženi redoslijed nadogradnje postojeće infrastrukture:
 Ograničenja: zadržati .NET/Blazor, postojeći replay, ML.NET, risk/arbitration i order lifecycle; SPY i ostali instrumenti ostaju podržani. Ne prenositi kripto strategije sa satnih svijeća na sekundni EUR/USD bez nove provjere. FX quote count/size nisu stvarni trade volumen. Ne preuzimati autorovu polugu, sizing ni tvrdnje o prinosu. Ne kupovati članstvo niti uvoditi crypto u okviru ovog dogovora. Prvi eksperiment može se temeljiti na javno opisanoj ideji; konačna neto prednost mora se dokazati našim podacima i troškovima.
 
 Izvori pregleda: [poslani video](https://www.youtube.com/watch?v=-bGy0X4uVww&t=365s), [dodatni vodič](https://www.youtube.com/watch?v=KCvSmtKngyQ), [AI Trading Arena](https://aitradingarena.com/). Pregledani su transkripti i javni prikazi; zatvoreni izvorni kod i neovisno verificirani cjeloviti brokerski rezultati nisu provjereni. Prikazani prinosi nisu potvrđena očekivanja našeg bota.
+
+## Dorada korisničkog sučelja nakon trenutačnog plana
+
+**Dogovor 20.11.2026.:** nakon završetka trenutačnog plana detaljnije razraditi doradu postojećeg Blazor sučelja kako bi bilo jasno, pregledno i razumljivo korisniku. Ovo je zasebna odgođena stavka, bez početka implementacije ili promjene redoslijeda aktualnog rada.
+
+Tada zajedno pregledati postojeće ekrane i korisničke zadatke te dogovoriti navigaciju, prioritete prikaza, razumljive nazive i objašnjenja statusa. Posebno razmotriti jasnoću prikaza prikupljanja podataka, strategija, istraživačkih rezultata i stanja trgovanja, uz vidljive razloge blokada i potrebne sljedeće korake. Konkretan opseg, izgled i redoslijed zahvata dogovoriti u toj fazi; postojeće funkcionalnosti ostaju sačuvane.
