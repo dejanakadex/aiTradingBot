@@ -30,6 +30,26 @@ internal static class ModelOpsProgram
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
             if (command == "fx-collection-audit") return await AuditForexCollectionAsync(options);
+            if (command == "fx-snapshot")
+            {
+                Print(await ForexDatasetSnapshot.ExportAsync(Required(options, "dataset"), Required(options, "output-dir"),
+                    Required(options, "instrument-id"), ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to"))));
+                return 0;
+            }
+            if (command == "fx-prepare")
+            {
+                var output = Required(options, "output");
+                if (!Path.IsPathFullyQualified(output) || File.Exists(output) || Directory.Exists(output))
+                    throw new ArgumentException("--output must be a new absolute configuration path.");
+                var prepared = ForexResearchPreparation.Prepare(await File.ReadAllTextAsync(Required(options, "config")),
+                    options.TryGetValue("rules", out var rulesPath) ? await File.ReadAllTextAsync(rulesPath) : null,
+                    decimal.Parse(Required(options, "equity-usd"), CultureInfo.InvariantCulture));
+                await using var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
+                await using var writer = new StreamWriter(file);
+                await writer.WriteAsync(prepared.Config);
+                Print(prepared.Report);
+                return 0;
+            }
             var suppliedDbPath = Required(options, "db");
             if (!Path.IsPathFullyQualified(suppliedDbPath)) throw new ArgumentException("--db must be an absolute path.");
             var dbPath = Path.GetFullPath(suppliedDbPath);
@@ -188,7 +208,7 @@ internal static class ModelOpsProgram
             return 0;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or InvalidDataException
-            or KeyNotFoundException or SqliteException)
+            or KeyNotFoundException or SqliteException or JsonException or IOException or UnauthorizedAccessException or FormatException)
         {
             Console.Error.WriteLine($"ModelOps: {error.Message}");
             return 1;
@@ -280,6 +300,8 @@ internal static class ModelOpsProgram
 
         migrate
         fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC
+        fx-prepare --config COLLECTION_JSON [--rules RULES_REPORT] --equity-usd DECIMAL --output NEW_ABSOLUTE_CONFIG
+        fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
         fx-contract --instrument-id ID --strategy-id ID
         fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
         fx-collection-audit --config ABSOLUTE_JSON_PATH --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --from UTC --to UTC [--output NEW_ABSOLUTE_REPORT_PATH]

@@ -11,6 +11,8 @@ using TradingBot.Infrastructure.Services;
 
 var settings = ParseArguments(args);
 if (settings is null) return 2;
+if (settings.ForexRulesConfigPath is not null)
+    return await ForexRulesProbeRunner.RunAsync(settings.ForexRulesConfigPath, settings.OutputPath, settings.Port, settings.ClientId);
 if (settings.ForexDataConfigPath is not null)
     return await ForexDataProbeRunner.RunAsync(settings.ForexDataConfigPath, settings.OutputPath, settings.Port, settings.ClientId, settings.Seconds, settings.ForexShadow);
 if (settings.ContractsConfigPath is not null)
@@ -118,6 +120,7 @@ static ProbeSettings? ParseArguments(string[] arguments)
     string? output = null;
     string? database = null;
     string? contractsConfig = null;
+    string? forexRulesConfig = null;
     string? forexDataConfig = null;
     var forexShadow = false;
     for (var i = 0; i < arguments.Length; i++)
@@ -138,6 +141,7 @@ static ProbeSettings? ParseArguments(string[] arguments)
             case "--output": output = value; break;
             case "--database": database = value; break;
             case "--contracts-config": contractsConfig = value; break;
+            case "--forex-rules-config": forexRulesConfig = value; break;
             case "--forex-data-config": forexDataConfig = value; break;
             case "--forex-shadow-config": forexDataConfig = value; forexShadow = true; break;
             default: Console.Error.WriteLine("Unknown or invalid option."); return null;
@@ -146,13 +150,13 @@ static ProbeSettings? ParseArguments(string[] arguments)
     if (port is < 1 or > 65535 || clientId < 0 || seconds is < 5 or > 3600
         || symbols.Length == 0 || symbols.Any(x => x.Length is < 1 or > 8 || x.Any(c => !char.IsAsciiLetterOrDigit(c)))
         || string.IsNullOrWhiteSpace(output)
-        || ((contractsConfig is not null || forexDataConfig is not null) && (port is not (7497 or 4002) || database is not null))
-        || (contractsConfig is not null && forexDataConfig is not null))
+        || ((contractsConfig is not null || forexDataConfig is not null || forexRulesConfig is not null) && (port is not (7497 or 4002) || database is not null))
+        || new[] { contractsConfig, forexDataConfig, forexRulesConfig }.Count(x => x is not null) > 1)
     {
-        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]. Read-only modes: --contracts-config JSON_PATH or --forex-data-config JSON_PATH, with --output ABSOLUTE_PATH [--port 7497|4002] [--client-id 87] [--seconds 1800].");
+        Console.Error.WriteLine("Usage: --output ABSOLUTE_PATH [--database SQLITE_PATH] [--port 7497] [--client-id 87] [--seconds 1800] [--symbols SPY,QQQ]. Read-only modes: --contracts-config, --forex-rules-config, --forex-data-config or --forex-shadow-config JSON_PATH, with --output ABSOLUTE_PATH [--port 7497|4002] [--client-id 87] [--seconds 1800].");
         return null;
     }
-    return new ProbeSettings(port, clientId, seconds, symbols, output, database, contractsConfig, forexDataConfig, forexShadow);
+    return new ProbeSettings(port, clientId, seconds, symbols, output, database, contractsConfig, forexDataConfig, forexShadow, forexRulesConfig);
 }
 
 static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subscription,
@@ -170,4 +174,4 @@ static async Task ReadTicksAsync(string symbol, ITickMarketDataSubscription subs
     }
 }
 
-internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath, string? ContractsConfigPath, string? ForexDataConfigPath, bool ForexShadow);
+internal sealed record ProbeSettings(int Port, int ClientId, int Seconds, string[] Symbols, string OutputPath, string? DatabasePath, string? ContractsConfigPath, string? ForexDataConfigPath, bool ForexShadow, string? ForexRulesConfigPath);

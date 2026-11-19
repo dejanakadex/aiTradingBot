@@ -1,0 +1,288 @@
+{
+  "PreparedAtUtc": "2026-11-19T23:05:48.985325+00:00",
+  "Scope": "Isolated offline EUR/USD backtest preparation. No collector restart, operational configuration changes, model approval or orders.",
+  "RulesEvidenceFile": "fx12-research-rules-2026-11-19.json",
+  "Scenarios": {
+    "100": {
+      "Preparation": {
+        "scope": "Offline research only. Fictional portfolio, explicit fill assumptions, no model approval or order permission.",
+        "canSendOrders": false,
+        "rulesCaptured": true,
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "strategyId": "eurusd-patterns",
+        "simulatedEquityUsd": 100,
+        "notionalCapUsd": 100,
+        "maximumRiskPerTrade": 1.0,
+        "maximumBaseUnits": 20000,
+        "earliestRulesAvailableUtc": "2026-11-19T22:58:08.4676935Z",
+        "rulesValidThroughUtc": "2026-11-20T22:55:17.8679025Z",
+        "rulesEvidenceSha256": "fada0aef16e31873637186678d52422483bceef3ef8d915b18b687853a24faa2",
+        "sourceConfigSha256": "c3a5679e20fd0995bc5e2c2f3e134c1bb779e21d03c7822e959faac5ed0c902b",
+        "feature": "features-fx-midpoint-v1+config-6ab44bd7bc2ea22b73279a015eb6e7300698c3a7264931614de6733bf50f0420+basis-FX.QuoteMidpoint.fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76.5s",
+        "pattern": "patterns-fx-midpoint-v1+config-2a47b0f4df62b97a546e50aeb4301f41dc22d5722de00350bdc984ca74f0dbed+signals-fx-shadow-v1+config-37c77330b3004b7fda2d38afdef80b06456ad68e66f52f0fdb0bf98977e69635",
+        "label": "labels-fx-execution-v1+config-9d1e8ccf3689a41d5e06a768dcd3986868d1b56b003649d144a8319cd5eb6908",
+        "minimumRoundTripCommissionUsd": 4,
+        "limitations": [
+          "Without --rules this is an incomplete draft: no historical rules, signal approvals or executable replay contract.",
+          "No retroactive rule timestamps. Older signals have no usable rules; future samples require refreshed evidence after expiry.",
+          "100 USD standard-lot scenario is expected to reject sizes/costs; no invented odd-lot fill model.",
+          "The optional larger simulated portfolio is a technical scenario, not a funding recommendation or proof of viability with 100 USD.",
+          "Evaluation uses 2 training days, 1 validation day and 1 untouched holdout day; original minimum sample counts remain unchanged.",
+          "Minute history does not provide bid/ask execution coverage. Replay remains bounded to 7 days / 200,000 events."
+        ]
+      },
+      "ConfigurationSha256": "37811AC1CD38A822840879A5FA1CA2D5692076DC4C2813B9F4DD7B29E02C1748",
+      "Contract": {
+        "feature": "features-fx-midpoint-v1+config-6ab44bd7bc2ea22b73279a015eb6e7300698c3a7264931614de6733bf50f0420+basis-FX.QuoteMidpoint.fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76.5s",
+        "pattern": "patterns-fx-midpoint-v1+config-2a47b0f4df62b97a546e50aeb4301f41dc22d5722de00350bdc984ca74f0dbed+signals-fx-shadow-v1+config-37c77330b3004b7fda2d38afdef80b06456ad68e66f52f0fdb0bf98977e69635",
+        "label": "labels-fx-execution-v1+config-9d1e8ccf3689a41d5e06a768dcd3986868d1b56b003649d144a8319cd5eb6908",
+        "holdingSeconds": 60
+      },
+      "Replay": {
+        "id": "0cd0a6c6-2bb8-41aa-ade7-e4846a027115",
+        "replayRunId": "14b14f83-ce17-4098-b3dc-1e624eeb5d94",
+        "inputSha256": "a1a513f93f9acb23c46c5bb10360c48eccaad63537f20ff8ce8c8eaa68c294d4",
+        "requestSha256": "e376c8f1a00be01c1cbdf1551891d1a581b81378281d03424825b429d869e22e",
+        "outputSha256": "95e502b2c955683d83d36968e60100b06238190f3b2a3c9df615db3ecab49376",
+        "signalCount": 0,
+        "filledTradeCount": 0,
+        "closedTradeCount": 0,
+        "realizedNetPnl": 0,
+        "createdAtUtc": "2026-11-19T23:02:54.2609503Z",
+        "trades": []
+      }
+    },
+    "50000": {
+      "Preparation": {
+        "scope": "Offline research only. Fictional portfolio, explicit fill assumptions, no model approval or order permission.",
+        "canSendOrders": false,
+        "rulesCaptured": true,
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "strategyId": "eurusd-patterns",
+        "simulatedEquityUsd": 50000,
+        "notionalCapUsd": 25000,
+        "maximumRiskPerTrade": 100,
+        "maximumBaseUnits": 20000,
+        "earliestRulesAvailableUtc": "2026-11-19T22:58:08.4676935Z",
+        "rulesValidThroughUtc": "2026-11-20T22:55:17.8679025Z",
+        "rulesEvidenceSha256": "fada0aef16e31873637186678d52422483bceef3ef8d915b18b687853a24faa2",
+        "sourceConfigSha256": "c3a5679e20fd0995bc5e2c2f3e134c1bb779e21d03c7822e959faac5ed0c902b",
+        "feature": "features-fx-midpoint-v1+config-6ab44bd7bc2ea22b73279a015eb6e7300698c3a7264931614de6733bf50f0420+basis-FX.QuoteMidpoint.fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76.5s",
+        "pattern": "patterns-fx-midpoint-v1+config-2a47b0f4df62b97a546e50aeb4301f41dc22d5722de00350bdc984ca74f0dbed+signals-fx-shadow-v1+config-37c77330b3004b7fda2d38afdef80b06456ad68e66f52f0fdb0bf98977e69635",
+        "label": "labels-fx-execution-v1+config-10b62b5372f3216f47590f52a27fab160e12837856cc804cdd66fcd4d20a14c3",
+        "minimumRoundTripCommissionUsd": 4,
+        "limitations": [
+          "Without --rules this is an incomplete draft: no historical rules, signal approvals or executable replay contract.",
+          "No retroactive rule timestamps. Older signals have no usable rules; future samples require refreshed evidence after expiry.",
+          "100 USD standard-lot scenario is expected to reject sizes/costs; no invented odd-lot fill model.",
+          "The optional larger simulated portfolio is a technical scenario, not a funding recommendation or proof of viability with 100 USD.",
+          "Evaluation uses 2 training days, 1 validation day and 1 untouched holdout day; original minimum sample counts remain unchanged.",
+          "Minute history does not provide bid/ask execution coverage. Replay remains bounded to 7 days / 200,000 events."
+        ]
+      },
+      "ConfigurationSha256": "4565BBD28A02780362A3E261111CFDA0344B7D2F0E9C5391FD17483802497F49",
+      "Contract": {
+        "feature": "features-fx-midpoint-v1+config-6ab44bd7bc2ea22b73279a015eb6e7300698c3a7264931614de6733bf50f0420+basis-FX.QuoteMidpoint.fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76.5s",
+        "pattern": "patterns-fx-midpoint-v1+config-2a47b0f4df62b97a546e50aeb4301f41dc22d5722de00350bdc984ca74f0dbed+signals-fx-shadow-v1+config-37c77330b3004b7fda2d38afdef80b06456ad68e66f52f0fdb0bf98977e69635",
+        "label": "labels-fx-execution-v1+config-10b62b5372f3216f47590f52a27fab160e12837856cc804cdd66fcd4d20a14c3",
+        "holdingSeconds": 60
+      },
+      "Replay": {
+        "id": "7b87f772-c863-494b-a447-96ca47fdbbc1",
+        "replayRunId": "1aaef6e4-ccb3-4ca6-b8a0-41327977d677",
+        "inputSha256": "a1a513f93f9acb23c46c5bb10360c48eccaad63537f20ff8ce8c8eaa68c294d4",
+        "requestSha256": "7d97f8fcf101265ec54ac13acb777ccd7910ec47620195fd351bd515bf702106",
+        "outputSha256": "09d19b024b2a48d52b3dfc7863a1f712456a15ad631e9dbcd6b373c83dd6cf7c",
+        "signalCount": 0,
+        "filledTradeCount": 0,
+        "closedTradeCount": 0,
+        "realizedNetPnl": 0,
+        "createdAtUtc": "2026-11-19T23:03:12.1841317Z",
+        "trades": []
+      }
+    }
+  },
+  "Snapshot": {
+    "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-19T22:58:10Z",
+    "toUtc": "2026-11-19T23:02:00Z",
+    "files": 18,
+    "manifestRows": 1188,
+    "sourceManifestSha256": "76EB3DF2BBAB02AF199F20F2FBFFA8F50AA6F8C1771FA4A98AA7394FDC0F6ED1",
+    "snapshotManifestSha256": "768E15BD55194F2D8011E779A811B3D7B834E38887C6F58B54E8294F00E7E006",
+    "canSendOrders": false
+  },
+  "Audit": {
+    "canSendOrders": false,
+    "verification": {
+      "isValid": true,
+      "fileCount": 18,
+      "rowCount": 1188,
+      "manifestSha256": "768E15BD55194F2D8011E779A811B3D7B834E38887C6F58B54E8294F00E7E006",
+      "errors": []
+    },
+    "audit": {
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "fromUtc": "2026-11-19T22:58:10Z",
+      "toUtc": "2026-11-19T23:02:00Z",
+      "aggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+      "quoteEvents": 1172,
+      "completeCallbackPairs": 586,
+      "incompleteCallbackPairs": 0,
+      "callbackSessions": 1,
+      "firstEventUtc": "2026-11-19T22:58:10Z",
+      "lastEventUtc": "2026-11-19T23:01:36Z",
+      "minimumReceiveMinusEventMilliseconds": -6.8216,
+      "medianReceiveMinusEventMilliseconds": 893.1472,
+      "p95ReceiveMinusEventMilliseconds": 1473.4818,
+      "futureQuoteEvents": 2,
+      "staleQuoteEvents": 2,
+      "diagnostics": {
+        "rejectedQuoteEvents": 2,
+        "lateQuotes": 0,
+        "incompleteQuotes": 0,
+        "futureQuoteEvents": 0,
+        "toleratedFutureQuoteEvents": 2,
+        "maximumFutureLeadMilliseconds": 6.8216,
+        "staleQuoteEvents": 2,
+        "resetCount": 0,
+        "windows": {
+          "5": {
+            "completed": 37,
+            "suppressed": 1
+          },
+          "15": {
+            "completed": 14,
+            "suppressed": 1
+          }
+        }
+      },
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 45,
+          "windowsWithoutQuotes": 7,
+          "observedWindowsWithoutFinalBar": 1,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 1,
+          "finalBars": 37,
+          "maximumConsecutiveFeatureBars": 13,
+          "framesWithAtLeast26Bars": 0,
+          "priceFeatureReadyFrames": 0,
+          "longestEmptyRun": 3,
+          "consecutiveBarHistogram": {
+            "1": 6,
+            "2": 4,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 3,
+            "7": 3,
+            "8": 3,
+            "9": 3,
+            "10": 2,
+            "11": 2,
+            "12": 1,
+            "13": 1
+          }
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 14,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 1,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 1,
+          "finalBars": 13,
+          "maximumConsecutiveFeatureBars": 10,
+          "framesWithAtLeast26Bars": 0,
+          "priceFeatureReadyFrames": 0,
+          "longestEmptyRun": 0,
+          "consecutiveBarHistogram": {
+            "1": 1,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+            "5": 1,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1,
+            "10": 1
+          }
+        }
+      ],
+      "futureToleranceMilliseconds": 250,
+      "beyondFutureToleranceQuoteEvents": 0
+    },
+    "limitations": [
+      "Offline receive-clock reconstruction, not a live worker scheduling or persisted signal audit.",
+      "Only complete session-open windows available by ToUtc are counted; no empty bars are filled.",
+      "Missing-window reason counts may overlap. A window without quotes does not prove broker data loss.",
+      "Callback session changes reset features. Explicit live resets without new callbacks are not present in the quote dataset.",
+      "26 bars and price feature readiness are separate measurements, not strategy/model approval or evidence of trading readiness."
+    ]
+  },
+  "Databases": {
+    "100": {
+      "Candidates": [
+        {
+          "DecisionStage": "PatternHardConditions",
+          "Outcome": 0,
+          "Count": 370
+        }
+      ],
+      "LabelCount": 0,
+      "Orders": 0,
+      "Models": 0
+    },
+    "50000": {
+      "Candidates": [
+        {
+          "DecisionStage": "PatternHardConditions",
+          "Outcome": 0,
+          "Count": 370
+        }
+      ],
+      "LabelCount": 0,
+      "Orders": 0,
+      "Models": 0
+    }
+  },
+  "ObservedDelayedPair": {
+    "EventUtc": "2026-11-19T23:00:31Z",
+    "ReceivedUtc": "2026-11-19T23:00:34.1753915Z",
+    "ReceiveMinusEventMs": 3175.3915,
+    "SameEventDequeueMinusReceiptMs": 0.1779,
+    "SameEventPipelineMs": 34.6128,
+    "SdkWindowMaxBatchMs": 0.2455,
+    "Conclusion": "This delay preceded callback receipt. It is not explained by this event waiting in the collector queue. TWS/feed/network/SDK-reader scheduling remain unresolved; workload was not controlled."
+  },
+  "Validation": {
+    "TestsPassed": 741,
+    "TestsFailed": 0,
+    "RequiredIbkrPublishAndNegativeGuardsPassed": true
+  },
+  "Limitations": [
+    "No 26-bar warm frame in the first saved sample: zero candidates, labels, fills and trades is a successful processing smoke test, not a strategy performance result.",
+    "The two scenarios have identical input hashes; their costs/capital contracts differ. No actual account capital is represented.",
+    "Initial rule capture failed while TWS was not listening. User restarted TWS; subsequent read-only capture succeeded.",
+    "Rules timestamps were not moved backward to cover earlier samples. No odd-lot execution or profitable strategy claim."
+  ],
+  "RepeatedTechnicalReplay": {
+    "id": "0d6c65ff-85ea-4a79-bdb9-62c9543b7bb5",
+    "replayRunId": "ce0111e0-097b-4a9f-9fc8-2ba518dbdc53",
+    "inputSha256": "a1a513f93f9acb23c46c5bb10360c48eccaad63537f20ff8ce8c8eaa68c294d4",
+    "requestSha256": "7d97f8fcf101265ec54ac13acb777ccd7910ec47620195fd351bd515bf702106",
+    "outputSha256": "09d19b024b2a48d52b3dfc7863a1f712456a15ad631e9dbcd6b373c83dd6cf7c",
+    "signalCount": 0,
+    "filledTradeCount": 0,
+    "closedTradeCount": 0,
+    "realizedNetPnl": 0,
+    "createdAtUtc": "2026-11-19T23:06:24.3458017Z",
+    "trades": []
+  },
+  "RepeatedTechnicalReplayMatches": true,
+  "DatabaseCountsScope": "After initial run in each database, before the second technical replay; repeat has a separate ReplayRunId and is not additional unique training evidence."
+}

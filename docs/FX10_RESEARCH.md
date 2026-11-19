@@ -2,6 +2,8 @@
 
 Implementacija nadograđuje postojeći replay, SQLite research/evaluation/model registar i ML.NET workflow. Ne pokreće TWS niti šalje naloge tijekom offline obrade. SPY ostaje na postojećim stock ugovorima. Automatski FX paper put postoji iza dodatnog opt-ina; nije aktiviran u zajedničkoj konfiguraciji.
 
+Operativna priprema 19./20.11.2026.: dodani su read-only rules capture, `fx-prepare` i `fx-snapshot`, odvojeni scenariji kapitala 100 / virtualnih 50.000 USD te izolirane istraživačke baze. [Konfiguracija, izvori, naredbe i ograničenja](FX12_RESEARCH_PREPARATION.md). Nema model approvala niti dopuštenja naloga.
+
 ## Ulazi i granice dokaza
 
 - Potreban je provjeren Parquet s kanonskim parovima `IBKR.TickByTick.Forex.BidAsk.v2`. MIDPOINT minutne svijeće, stock trade tickovi i legacy nevezani bid/ask nisu zamjena. Dvije strane imaju isti callback ID, event i receive vrijeme. Konfliktni duplikati, nedostajuća strana, crossed quote ili regresija event vremena prekidaju obradu.

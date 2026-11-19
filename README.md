@@ -18,6 +18,7 @@ Ongoing work uses one branch: `trading-bot-v2`.
 - [Additive EUR/USD plan](docs/EURUSD_READINESS.md) — FX-1 through FX-12, preserving stock support (Croatian).
 - [FX onboarding and shadow runbook](docs/FX11_ONBOARDING.md) — per-strategy evidence gates, `/instruments`, currency units and isolated read-only probe. The software is locally tested; actual model shadow and paper fills remain unverified.
 - [FX paper test preparation](docs/FX12_PAPER_PROTOCOL.md) — read-only ModelOps `fx-paper-preflight`, concrete prerequisites and bounded broker test protocol. FX-12 remains open; this check cannot submit orders.
+- [EUR/USD research preparation](docs/FX12_RESEARCH_PREPARATION.md) — read-only rules capture, `fx-prepare`, immutable `fx-snapshot`, isolated capital/cost scenarios and the first real-data replay. No model approval or order permission.
 - [Operational EUR/USD collector](docs/FOREX_COLLECTION.md) — Windows launcher, persistent SQLite/Parquet paths, order blocking and offline `fx-collection-audit`. Actual paired quotes verified on 25 October; the overnight connection failed and continuity/model-shadow checks remain open.
 - [Local collection logs](docs/FOREX_COLLECTION.md#lokalni-logovi-i-pristup-bazi) — NLog SQL noise filter, per-minute FX rejection/continuity summaries and read-only SQLite diagnostics.
 - [FX clock tolerance](docs/FOREX_COLLECTION.md#vremenska-tolerancija--19112026) — bounded, versioned collection/replay policy; raw timestamps and stale/execution guards remain intact. Clock skew and delayed quotes are measured separately.

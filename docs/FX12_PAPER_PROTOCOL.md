@@ -4,6 +4,8 @@
 
 ## Utvrđeni preduvjeti
 
+**Priprema istraživanja 19./20.11.2026.:** stvarno snimljena EUR/USD contract/price pravila i pregledana standardna IDEALPRO tablica sada ulaze u zasebne offline konfiguracije i baze, uz scenarije 100 / virtualnih 50.000 USD. Prvi replay 586 parova završava bez signala ili tradeova zbog nedovoljnog warmupa; to ne potvrđuje izvršenje strategije. Model, model shadow, margina i zaštita ostaju nepotvrđeni, a operativna konfiguracija ostaje nepromijenjena. [Istraživački postupak i dokaz](FX12_RESEARCH_PREPARATION.md).
+
 **Provjera nakon pauze 19.11.2026.:** 119 novih bid/ask parova prolazi provjeru integriteta i vremena; 320/320 novih te 1.120/1.120 ranijih pattern zapisa podudaraju se u deset uspoređenih spremljenih polja. SQL optimizacija potvrđeno smanjuje CPU, ali post-pause uzorak ima praznine i obnovu pretplate nakon 60 s bez callbacka, pa nema 26-bar warmupa. Preflight u 22:21 UTC i dalje odbija research ugovor, pregledane veličine, odobren model i model shadow/PaperReady. [Dokaz i granice](FOREX_COLLECTION.md#provjera-nakon-pauze--19112026). Nema dozvole za nalog niti završetka FX-12.
 
 **Dopuna 19.11.2026.:** instrument, baza i prikupljanje su operativni. Provjeren je integritet 1.052.479 spremljenih redaka i podudaranje 112 finalnih 5s prozora u desetominutnom uzorku, uz 22 zagrijana framea. Otklonjeno je potvrđeno SQL opterećenje, a dodatna mjerenja trebaju razdvojiti povremene pre-callback zastoje. Svježi preflight još nema research ugovor, pregledana izvršna pravila, odobren model ni aktualni model shadow/PaperReady. [Aktualni izvještaj](FOREX_COLLECTION.md#istraga-kašnjenja-i-nastavak-fx-12--19112026); to ne daje dopuštenje za nalog.
