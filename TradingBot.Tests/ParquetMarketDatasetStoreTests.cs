@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
@@ -50,6 +52,62 @@ namespace TradingBot.Tests
                 Assert.Equal(64, verification.ManifestSha256.Length);
                 Assert.Equal(new[] { "trade-1", "trade-2" }, read.Select(item => item.EventId));
                 Assert.All(read, item => Assert.Equal(DateTimeKind.Utc, item.EventTimeUtc.Kind));
+            }
+            finally
+            {
+                DeleteTemporaryRoot(root);
+            }
+        }
+
+        [Fact]
+        public async Task LegacyManifestRemainsIdempotentAndAppendsCompactlyWithoutChangingExistingFiles()
+        {
+            var root = CreateTemporaryRoot();
+            try
+            {
+                var store = CreateStore(root);
+                var original = Record("legacy-trade", "US-STK-SPY-SMART", "trade", NowUtc, 100m);
+                await store.WriteBatchAsync(new[] { original });
+                var manifest = await store.GetManifestAsync();
+                var oldEntry = Assert.Single(manifest.Files);
+                var parquetPath = Path.Combine(root, oldEntry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                var parquetBefore = await File.ReadAllBytesAsync(parquetPath);
+                var manifestPath = Path.Combine(root, "_manifest.json");
+                var hashPath = Path.Combine(root, "_manifest.sha256");
+                var legacy = JsonSerializer.SerializeToUtf8Bytes(manifest, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                });
+                await File.WriteAllBytesAsync(manifestPath, legacy);
+                await File.WriteAllTextAsync(hashPath, Convert.ToHexString(SHA256.HashData(legacy)) + Environment.NewLine);
+
+                // A fresh writer must read existing metadata; an idempotent retry must not reformat it.
+                store = CreateStore(root);
+                Assert.True((await store.VerifyAsync()).IsValid);
+                var retry = await store.WriteBatchAsync(new[] { original });
+                Assert.Equal(1, retry.FilesSkipped);
+                Assert.Equal(legacy, await File.ReadAllBytesAsync(manifestPath));
+
+                await store.WriteBatchAsync(new[] { Record("new-trade", "US-STK-SPY-SMART", "trade", NowUtc.AddSeconds(1), 101m) });
+                var updated = await store.GetManifestAsync();
+                var preserved = Assert.Single(updated.Files, x => x.RelativePath == oldEntry.RelativePath);
+                Assert.Equal(JsonSerializer.Serialize(oldEntry), JsonSerializer.Serialize(preserved));
+                Assert.Equal(parquetBefore, await File.ReadAllBytesAsync(parquetPath));
+                var bytes = await File.ReadAllBytesAsync(manifestPath);
+                var indentedEquivalent = JsonSerializer.SerializeToUtf8Bytes(updated, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                });
+                Assert.True(bytes.Length < indentedEquivalent.Length);
+                using var compactDocument = JsonDocument.Parse(bytes);
+                using var indentedDocument = JsonDocument.Parse(indentedEquivalent);
+                Assert.True(JsonElement.DeepEquals(indentedDocument.RootElement, compactDocument.RootElement));
+                var verification = await store.VerifyAsync();
+                Assert.True(verification.IsValid);
+                Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), verification.ManifestSha256);
+                Assert.Equal(new[] { "legacy-trade", "new-trade" }, (await store.ReadAsync(new DatasetQuery())).Select(x => x.EventId));
             }
             finally
             {

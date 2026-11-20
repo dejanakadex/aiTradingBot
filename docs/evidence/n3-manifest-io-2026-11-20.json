@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-20",
+  "status": "Compact manifest writer implemented and offline verified; N3 remains open",
+  "nativeNvmeEvidence": {
+    "source": "n3-storage-trace-2026-11-20.json",
+    "rangeMicrosecondsFromTraceStart": [
+      50000000,
+      53000000
+    ],
+    "matchedCommands": 649,
+    "unmatchedStarts": 0,
+    "matchingKey": [
+      "IRP",
+      "SRB",
+      "CID"
+    ],
+    "walCommand": {
+      "cid": 49,
+      "opcode": 1,
+      "submitUs": 50665225,
+      "completionUs": 51979240,
+      "elapsedMs": 1314.015,
+      "statusCode": 0,
+      "statusType": 0
+    },
+    "precedingDeallocateCommands": {
+      "count": 6,
+      "minMs": 1.57,
+      "maxMs": 3.72
+    },
+    "interpretation": "Delay spans StorNVMe command submission/completion; exact firmware, hardware, power or completion-scheduling cause unproven. Nearby deallocation commands completed quickly; no reason to disable TRIM."
+  },
+  "collectorPhysicalWritesInExistingTrace": {
+    "SQLite WAL": {
+      "bytes": 45043712,
+      "count": 2040,
+      "maxMs": 1554.364
+    },
+    "Other bot file": {
+      "bytes": 11419648,
+      "count": 2769,
+      "maxMs": 19.802
+    },
+    "Manifest": {
+      "bytes": 423047168,
+      "count": 6543,
+      "maxMs": 5.244
+    },
+    "Log": {
+      "bytes": 397312,
+      "count": 97,
+      "maxMs": 1567.493
+    },
+    "SQLite DB": {
+      "bytes": 10764288,
+      "count": 1446,
+      "maxMs": 5.193
+    }
+  },
+  "manifestSizeOnUnmodifiedOperationalCopy": {
+    "beforeBytes": 7482927,
+    "compactBytes": 6269611,
+    "savedBytes": 1213316,
+    "reductionPercent": 16.21445725716688,
+    "entries": 11895,
+    "sameParsedContent": true,
+    "sourceSha256": "4A3E0C019B5C5CDB4BF42D209C814A4874F0CFCF8A325FEB7D2AEB8AB288D959"
+  },
+  "change": {
+    "writeIndented": false,
+    "schemaChanged": false,
+    "parquetChanged": false,
+    "sqliteDurabilityChanged": false,
+    "flushCadenceChanged": false,
+    "legacyJsonReadable": true,
+    "canonicalRecordHashChanged": false,
+    "manifestByteHashChangesWithFormatting": true
+  },
+  "offlineCompatibility": {
+    "verification": {
+      "isValid": true,
+      "fileCount": 2296,
+      "rowCount": 155548,
+      "manifestSha256": "B75C795C3981FC5BDD645E735191BB6FB76953974A3640635B339E20E032BC28",
+      "errors": []
+    },
+    "allAuditFieldsEqual": true,
+    "originalSnapshotManifestHashPreserved": true,
+    "quotePairs": 77772,
+    "note": "Only a separate snapshot copy was compacted; original snapshot and operational manifest were not manually rewritten. This audit is not a new full trading replay."
+  },
+  "validation": {
+    "dotnetTestsPassed": 782,
+    "failed": 0,
+    "skipped": 0,
+    "requiredIbkrPublishGuardPassed": true
+  },
+  "deployment": {
+    "Pid": 19572,
+    "Running": true,
+    "ReadOnly": true,
+    "TradingDisabled": true,
+    "ForexDisabled": true,
+    "AutomaticSignalsDisabled": true,
+    "HealthHttp": 200,
+    "InfrastructureHashMatches": true
+  },
+  "plannedRestart": {
+    "targetPid": 23344,
+    "signal": "CTRL_C",
+    "consoleProcesses": [
+      23232,
+      23344
+    ],
+    "sentUtc": "2026-11-20T22:38:23Z"
+  },
+  "limitations": [
+    "Manifest I/O pressure is measured, but causation of the long WAL stalls is not established.",
+    "Formatting reduces manifest size by 16.2% for this inventory; not a measured 16.2% reduction in total disk I/O or latency.",
+    "Existing WPR trace adds its own I/O load.",
+    "FX session closed before deployment; active-feed acceptance and lower-tail-latency comparison pending.",
+    "Balanced power plan retained; no driver, firmware, TRIM, antivirus or SQLite durability change.",
+    "Trading remains disabled; N4 not started."
+  ],
+  "operationalRecordCountsAfterRestart": {
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "Trades": 0,
+    "PortfolioRiskReservationRecords": 0,
+    "NumericalModelRecords": 0
+  }
+}

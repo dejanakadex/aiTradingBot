@@ -18,7 +18,9 @@ namespace TradingBot.Infrastructure.Services
         private static readonly JsonSerializerOptions ManifestJsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
+            // Rewritten on every durable batch; whitespace scales with the entire file inventory.
+            // Readers still accept legacy indented JSON. Canonical record hashes use separate options.
+            WriteIndented = false
         };
 
         private readonly DatasetStorageSettings _settings;
