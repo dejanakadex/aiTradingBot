@@ -1,0 +1,152 @@
+{
+  "status": "N3 in progress; stable data verified, local save tails still fail acceptance",
+  "stableLogReport": {
+    "version": "n3-report-v1",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-20T19:20:00+00:00",
+    "toUtc": "2026-11-20T21:05:00+00:00",
+    "scope": "Offline log report; window quantiles are approximate upper bounds, not global percentiles. Does not approve N3 or trading.",
+    "tickWindows": 104,
+    "events": 155604,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 0,
+    "worstWindowPipelineP99UpperMs": 11.56268519450066,
+    "maxPipelineMs": 1883.2243,
+    "worstWindowQueueP99UpperMs": 1894.4158,
+    "maxQueueMonotonicMs": 1897.1435,
+    "maxQualityReadMs": 38.4733,
+    "maxQualitySaveMs": 1882.5985,
+    "storageWindows": 101,
+    "maxFlushMs": 1263.6565,
+    "maxEnqueueToDurableMs": 6272.2713,
+    "storageFailures": 0,
+    "maxProcessCpuPercent": 0.4613039957850019,
+    "maxWorkingSetBytes": 391233536,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": false,
+    "minimum60TickWindowsPresent": true,
+    "processIds": [
+      4388
+    ],
+    "remainingChecks": [
+      "Gap/drop/reconnect evidence from collection status and SQLite",
+      "Explain outliers and compare equivalent market/load sessions",
+      "Source timestamp resolution and Windows clock synchronization",
+      "Feature/signal parity and repeat after restart"
+    ]
+  },
+  "quoteAudit": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-20T19:20:00Z",
+    "toUtc": "2026-11-20T21:05:00Z",
+    "aggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+    "quoteEvents": 155544,
+    "completeCallbackPairs": 77772,
+    "incompleteCallbackPairs": 0,
+    "callbackSessions": 1,
+    "firstEventUtc": "2026-11-20T19:20:00Z",
+    "lastEventUtc": "2026-11-20T21:04:53Z",
+    "minimumReceiveMinusEventMilliseconds": -4.1911,
+    "medianReceiveMinusEventMilliseconds": 825.7724,
+    "p95ReceiveMinusEventMilliseconds": 1395.7112,
+    "futureQuoteEvents": 2,
+    "staleQuoteEvents": 0,
+    "futureToleranceMilliseconds": 250,
+    "beyondFutureToleranceQuoteEvents": 0
+  },
+  "intervals": [
+    {
+      "intervalSeconds": 5,
+      "expectedFinalWindows": 1259,
+      "windowsWithoutQuotes": 0,
+      "observedWindowsWithoutFinalBar": 0,
+      "missingBarsWithFutureQuotes": 0,
+      "missingBarsWithStaleQuotes": 0,
+      "finalBars": 1259,
+      "maximumConsecutiveFeatureBars": 512,
+      "framesWithAtLeast26Bars": 1234,
+      "priceFeatureReadyFrames": 1234,
+      "longestEmptyRun": 0
+    },
+    {
+      "intervalSeconds": 15,
+      "expectedFinalWindows": 419,
+      "windowsWithoutQuotes": 0,
+      "observedWindowsWithoutFinalBar": 0,
+      "missingBarsWithFutureQuotes": 0,
+      "missingBarsWithStaleQuotes": 0,
+      "finalBars": 419,
+      "maximumConsecutiveFeatureBars": 419,
+      "framesWithAtLeast26Bars": 394,
+      "priceFeatureReadyFrames": 394,
+      "longestEmptyRun": 0
+    }
+  ],
+  "verification": {
+    "isValid": true,
+    "fileCount": 2296,
+    "rowCount": 155548,
+    "manifestSha256": "986B373A6E0CDE7FC228E77C897080507EDB580550E226A31ADF9D0BB927A3C0",
+    "errors": []
+  },
+  "stableGapRecords": 0,
+  "stableDroppedEvents": 0,
+  "stableQualityIncidents": 0,
+  "operationalRecordCounts": {
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "Trades": 0,
+    "PortfolioRiskReservationRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "initialWalObservation": {
+    "seconds": 420,
+    "sampleIntervalMs": 20,
+    "capturedCheckpoints": 8,
+    "longestObservedMs": 20.545,
+    "limitation": "No slow save overlapped the observation; cannot establish or exclude checkpoint causality."
+  },
+  "canSendOrders": false,
+  "newSqlReaderEvidence": {
+    "completedUtc": "2026-11-20T21:20:05.2689234Z",
+    "readerLifetimeMs": 1552.5989,
+    "pipelineMs": 1555.5303,
+    "qualitySaveMs": 1555.0581,
+    "receivedUtc": "2026-11-20T21:20:03.7155497Z",
+    "table": "MarketDataStreamStateRecords",
+    "walFrameAfterCommit": 843,
+    "lowerLevelCauseConfirmed": false
+  },
+  "tests": {
+    "passed": 781,
+    "failed": 0,
+    "pythonTestsPassed": 2,
+    "ibkrPublishGuardsPassed": true
+  },
+  "limits": [
+    "Minute log windows and exact quote audit have different boundary semantics",
+    "Read-only external WAL sampling is not an engine or kernel trace",
+    "SQL reader lifetime includes enumeration, excludes disposal work after the interception hook",
+    "WPR DiskIO/FileIO attempt denied 0x80070005; administrative recording required",
+    "No new replay/live signal parity claim; no order authorization"
+  ],
+  "secondSqlReaderEvidence": {
+    "completedUtc": "2026-11-20T21:25:21.5536681Z",
+    "readerLifetimeMs": 758.7439,
+    "diskQueueSampleUtc": "2026-11-20T21:25:21.1700938Z",
+    "diskQueue": 6,
+    "walFramesBefore": 514,
+    "walFramesAfter": 520,
+    "nBackfill": 0,
+    "nBackfillAttempted": 0,
+    "scope": "PhysicalDisk(_Total) correlation only; no attribution to collector or storage cause"
+  }
+}

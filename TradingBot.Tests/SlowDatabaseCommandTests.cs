@@ -18,10 +18,26 @@ public sealed class SlowDatabaseCommandTests
         await using var db = new TradingBotDbContext(options);
         var result = await db.Database.SqlQueryRaw<int>("SELECT slow_for_test({0}) AS Value", "private-test-value").SingleAsync();
         Assert.Equal(42, result);
-        var message = Assert.Single(log.Messages);
-        Assert.Contains("Operation=SELECT", message);
-        Assert.DoesNotContain("private-test-value", message);
-        Assert.DoesNotContain("slow_for_test", message);
+        Assert.NotEmpty(log.Messages);
+        Assert.All(log.Messages, message =>
+        {
+            Assert.Contains("Operation=SELECT", message);
+            Assert.DoesNotContain("private-test-value", message);
+            Assert.DoesNotContain("slow_for_test", message);
+        });
+    }
+    [Fact]
+    public async Task ReaderLifetimeFindsDelayAfterFastFirstRow()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        connection.CreateFunction("slow_next_row", (int value) => { if (value == 2) Thread.Sleep(300); return value; });
+        var log = new CapturedLog();
+        await using var db = new TradingBotDbContext(new DbContextOptionsBuilder<TradingBotDbContext>().UseSqlite(connection)
+            .AddInterceptors(new SlowDatabaseCommandInterceptor(log)).Options);
+        var rows = await db.Database.SqlQueryRaw<int>("SELECT slow_next_row(1) AS Value UNION ALL SELECT slow_next_row(2)").ToArrayAsync();
+        Assert.Equal(new[] { 1, 2 }, rows);
+        Assert.Contains(log.Messages, x => x.Contains("Phase=ReaderLifetime"));
+        Assert.DoesNotContain(log.Messages, x => x.Contains("Phase=Execute"));
     }
     private sealed class CapturedLog : ILogger<SlowDatabaseCommandInterceptor>
     {

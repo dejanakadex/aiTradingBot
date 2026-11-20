@@ -9,16 +9,26 @@ namespace TradingBot.Persistence;
 public sealed class SlowDatabaseCommandInterceptor(ILogger<SlowDatabaseCommandInterceptor> logger) : DbCommandInterceptor
 {
     private static readonly Regex Table = new("(?:UPDATE|INTO|FROM)\\s+\"([A-Za-z0-9_]+)\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(20));
-    private void Observe(DbCommand command, CommandExecutedEventData data)
+    private void Observe(DbCommand command, CommandExecutedEventData data) =>
+        Observe(command, data.Duration, data.Context?.ContextId.InstanceId, data.CommandSource.ToString(), "Execute");
+
+    private void Observe(DbCommand command, TimeSpan duration, Guid? contextId, string source, string phase)
     {
-        if (data.Duration.TotalMilliseconds < 250) return;
+        if (duration.TotalMilliseconds < 250) return;
         var sql = command.CommandText.TrimStart();
         var operation = new[] { "SELECT", "UPDATE", "INSERT", "DELETE", "PRAGMA" }.FirstOrDefault(x => sql.StartsWith(x + " ", StringComparison.OrdinalIgnoreCase)) ?? "OTHER";
         string table;
         try { var match = Table.Match(sql); table = match.Success ? match.Groups[1].Value : "unknown"; }
         catch (RegexMatchTimeoutException) { table = "unknown"; }
-        logger.LogWarning("Slow database command AsOfUtc={AsOfUtc:O} Milliseconds={Milliseconds} Operation={Operation} Table={Table} Context={Context} Source={Source}",
-            DateTime.UtcNow, data.Duration.TotalMilliseconds, operation, table, data.Context?.ContextId.InstanceId, data.CommandSource);
+        logger.LogWarning("Slow database command AsOfUtc={AsOfUtc:O} Milliseconds={Milliseconds} Operation={Operation} Table={Table} Context={Context} Source={Source} Phase={Phase}",
+            DateTime.UtcNow, duration.TotalMilliseconds, operation, table, contextId, source, phase);
+    }
+    public override InterceptionResult DataReaderDisposing(DbCommand command, DataReaderDisposingEventData eventData, InterceptionResult result)
+    {
+        // ExecuteReader may only produce the first RETURNING row. Reading/resetting the rest can commit/checkpoint.
+        // For SELECT this also includes caller enumeration time; it is not pure engine execution time.
+        Observe(command, eventData.Duration, eventData.Context?.ContextId.InstanceId, "Reader", "ReaderLifetime");
+        return result;
     }
     public override DbDataReader ReaderExecuted(DbCommand command, CommandExecutedEventData eventData, DbDataReader result)
     { Observe(command, eventData); return result; }
