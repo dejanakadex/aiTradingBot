@@ -1,0 +1,1648 @@
+{
+  "scope": "Four fixed, independent half-hour scenarios, not a continuous portfolio or actual broker execution.",
+  "audit": [
+    {
+      "window": "0900-0930",
+      "verification": {
+        "isValid": true,
+        "fileCount": 126,
+        "rowCount": 61780,
+        "manifestSha256": "058C201BA986482B662849CBA3047CFA04E1631531F1D57C7D488CC899295FA4",
+        "errors": []
+      },
+      "quoteEvents": 61050,
+      "pairs": 30525,
+      "incompletePairs": 0,
+      "sessions": 2,
+      "staleEvents": 2,
+      "futureEvents": 132,
+      "beyondFutureTolerance": 0,
+      "p95ReceiveAgeMs": 1291.2159,
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 359,
+          "windowsWithoutQuotes": 2,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 357,
+          "maximumConsecutiveFeatureBars": 196,
+          "framesWithAtLeast26Bars": 307,
+          "priceFeatureReadyFrames": 307,
+          "longestEmptyRun": 2
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 119,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 119,
+          "maximumConsecutiveFeatureBars": 65,
+          "framesWithAtLeast26Bars": 69,
+          "priceFeatureReadyFrames": 69,
+          "longestEmptyRun": 0
+        }
+      ]
+    },
+    {
+      "window": "0930-1000",
+      "verification": {
+        "isValid": true,
+        "fileCount": 116,
+        "rowCount": 57969,
+        "manifestSha256": "E9860BF1F3A8F5547AE5E09ED9CCD1FE71DBA05AC73701420E7559C5F508D0CD",
+        "errors": []
+      },
+      "quoteEvents": 56968,
+      "pairs": 28484,
+      "incompletePairs": 0,
+      "sessions": 1,
+      "staleEvents": 0,
+      "futureEvents": 80,
+      "beyondFutureTolerance": 0,
+      "p95ReceiveAgeMs": 1320.0986,
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 359,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 359,
+          "maximumConsecutiveFeatureBars": 359,
+          "framesWithAtLeast26Bars": 334,
+          "priceFeatureReadyFrames": 334,
+          "longestEmptyRun": 0
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 119,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 119,
+          "maximumConsecutiveFeatureBars": 119,
+          "framesWithAtLeast26Bars": 94,
+          "priceFeatureReadyFrames": 94,
+          "longestEmptyRun": 0
+        }
+      ]
+    },
+    {
+      "window": "1000-1030",
+      "verification": {
+        "isValid": true,
+        "fileCount": 132,
+        "rowCount": 65969,
+        "manifestSha256": "E99552C76657BD6C3116AE13014AA2935D2CE086B5F03242F1660D0ECF17DE68",
+        "errors": []
+      },
+      "quoteEvents": 64690,
+      "pairs": 32345,
+      "incompletePairs": 0,
+      "sessions": 1,
+      "staleEvents": 0,
+      "futureEvents": 42,
+      "beyondFutureTolerance": 0,
+      "p95ReceiveAgeMs": 1314.7414,
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 359,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 359,
+          "maximumConsecutiveFeatureBars": 359,
+          "framesWithAtLeast26Bars": 334,
+          "priceFeatureReadyFrames": 334,
+          "longestEmptyRun": 0
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 119,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 119,
+          "maximumConsecutiveFeatureBars": 119,
+          "framesWithAtLeast26Bars": 94,
+          "priceFeatureReadyFrames": 94,
+          "longestEmptyRun": 0
+        }
+      ]
+    },
+    {
+      "window": "1030-1100",
+      "verification": {
+        "isValid": true,
+        "fileCount": 86,
+        "rowCount": 41685,
+        "manifestSha256": "109A01DC150CE6D5E781D443629669685A5ECF542F2FD8CF14D6487960E360DB",
+        "errors": []
+      },
+      "quoteEvents": 41178,
+      "pairs": 20589,
+      "incompletePairs": 0,
+      "sessions": 1,
+      "staleEvents": 0,
+      "futureEvents": 54,
+      "beyondFutureTolerance": 0,
+      "p95ReceiveAgeMs": 1361.2858,
+      "intervals": [
+        {
+          "intervalSeconds": 5,
+          "expectedFinalWindows": 359,
+          "windowsWithoutQuotes": 1,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 358,
+          "maximumConsecutiveFeatureBars": 272,
+          "framesWithAtLeast26Bars": 308,
+          "priceFeatureReadyFrames": 308,
+          "longestEmptyRun": 1
+        },
+        {
+          "intervalSeconds": 15,
+          "expectedFinalWindows": 119,
+          "windowsWithoutQuotes": 0,
+          "observedWindowsWithoutFinalBar": 0,
+          "missingBarsWithFutureQuotes": 0,
+          "missingBarsWithStaleQuotes": 0,
+          "finalBars": 119,
+          "maximumConsecutiveFeatureBars": 119,
+          "framesWithAtLeast26Bars": 94,
+          "priceFeatureReadyFrames": 94,
+          "longestEmptyRun": 0
+        }
+      ]
+    }
+  ],
+  "scenarios": {
+    "100": {
+      "runs": [
+        {
+          "window": "0900-0930",
+          "replayRunId": "40125fa2-0907-45ee-aa89-b235f29bf66b",
+          "inputSha256": "6f3a802ed52ed886fbf5ae43d1ed39d607fc88f8a08ebdd9867b584efb56edc0",
+          "outputSha256": "3af2da767dcdc07a34fb5ac8b6cdfd70359c2b4ce9bad3b5a51c0970b04e1302",
+          "signalCount": 25,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "grossPnlClosed": 0.0,
+          "commissionClosed": 0.0,
+          "safetyBufferClosed": 0.0,
+          "tradeStatuses": {
+            "Incomplete": 25
+          },
+          "tradeReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 25
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3471
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 25
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 41
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 33
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 99
+          },
+          "labelReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 55,
+            "ShortExecutionUnsupported": 41,
+            "NoFreshDecisionQuote": 3
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T09:02:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:03:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:04:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:06:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:07:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:08:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:09:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:10:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:12:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:12:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:13:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:16:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:17:47Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:18:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:19:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:20:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:20:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:21:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:21:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:22:27Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:22:57Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:24:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:25:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:27:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:29:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            }
+          ]
+        },
+        {
+          "window": "0930-1000",
+          "replayRunId": "29825298-39e3-480a-a8bd-d399349c2245",
+          "inputSha256": "693a3ccf787c45057804abbb11bf64b86d8eb4989d996bd934c7b584bd29331e",
+          "outputSha256": "5cb5959a668339606ee0f54454f5255b43e4f130f6498d20e9565bbcb99e4590",
+          "signalCount": 20,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "grossPnlClosed": 0.0,
+          "commissionClosed": 0.0,
+          "safetyBufferClosed": 0.0,
+          "tradeStatuses": {
+            "Incomplete": 20
+          },
+          "tradeReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 20
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3538
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 20
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 25
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 7
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 52
+          },
+          "labelReasons": {
+            "ShortExecutionUnsupported": 25,
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 27
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T09:34:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:34:47Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:36:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:38:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:41:47Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:42:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:43:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:44:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:44:47Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:46:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:48:27Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:49:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:51:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:52:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:54:07Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:54:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:56:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:57:07Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:58:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:59:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            }
+          ]
+        },
+        {
+          "window": "1000-1030",
+          "replayRunId": "96cf19a8-8863-4be2-96e7-ca93cee7a4a7",
+          "inputSha256": "8cad73e51f7f69fe0bf66b3a2952c04ff53e8a6457af3e7747287eb137592387",
+          "outputSha256": "f2a8d62aeafbcc6e59cc884b5d674e849871d7108bcac47ff32b9f563b5ac86d",
+          "signalCount": 26,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "grossPnlClosed": 0.0,
+          "commissionClosed": 0.0,
+          "safetyBufferClosed": 0.0,
+          "tradeStatuses": {
+            "Incomplete": 26
+          },
+          "tradeReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 26
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3474
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 26
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 81
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 9
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 116
+          },
+          "labelReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 35,
+            "ShortExecutionUnsupported": 81
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T10:02:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:03:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:05:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:07:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:08:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:08:57Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:10:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:11:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:12:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:15:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:16:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:17:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:18:32Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:19:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:19:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:20:07Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:20:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:21:32Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:22:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:22:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:23:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:24:57Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:26:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:27:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:28:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:29:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            }
+          ]
+        },
+        {
+          "window": "1030-1100",
+          "replayRunId": "1f6fb60c-b641-4099-98ab-87579f1d2fc0",
+          "inputSha256": "cad9ce4dd21f62037e9e359713e87b0fcfd2c0d13c5082380eecd77deab719f6",
+          "outputSha256": "c56e008a0d5ab6579163ba84fc4617acc52b07dc025ed08ff3b98067eb67f74a",
+          "signalCount": 19,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "grossPnlClosed": 0.0,
+          "commissionClosed": 0.0,
+          "safetyBufferClosed": 0.0,
+          "tradeStatuses": {
+            "Incomplete": 19
+          },
+          "tradeReasons": {
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 18,
+            "NoFreshDecisionQuote": 1
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3497
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 19
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 23
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxRanking",
+              "Count": 3
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 38
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 83
+          },
+          "labelReasons": {
+            "ShortExecutionUnsupported": 23,
+            "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 57,
+            "NoFreshDecisionQuote": 3
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T10:33:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:36:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:36:52Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:37:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:38:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:38:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:40:17Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:42:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:42:32Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:43:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "NoFreshDecisionQuote"
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:44:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:45:57Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:46:32Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:47:27Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:48:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:49:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:51:27Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:56:12Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:59:02Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units."
+            }
+          ]
+        }
+      ],
+      "labelStatusCounts": {
+        "2": 350
+      },
+      "labelReasons": {
+        "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 174,
+        "ShortExecutionUnsupported": 170,
+        "NoFreshDecisionQuote": 6
+      },
+      "signals": 90,
+      "filled": 0,
+      "closed": 0,
+      "netPnlClosed": 0.0,
+      "grossPnlClosed": 0.0,
+      "commissionClosed": 0.0,
+      "winningClosed": 0,
+      "losingClosed": 0,
+      "excludedOpenPositions": 0,
+      "orderCount": 0,
+      "modelCount": 0
+    },
+    "50000": {
+      "runs": [
+        {
+          "window": "0900-0930",
+          "replayRunId": "5242b4b6-1328-4e91-8558-190a5067537c",
+          "inputSha256": "6f3a802ed52ed886fbf5ae43d1ed39d607fc88f8a08ebdd9867b584efb56edc0",
+          "outputSha256": "8d1cf997246ba5e5827c60f21c9b2fa7e88fd381876fe112c8fa7d628aaf3a4f",
+          "signalCount": 25,
+          "filledTradeCount": 8,
+          "closedTradeCount": 7,
+          "realizedNetPnl": -40.6763,
+          "grossPnlClosed": -5.0,
+          "commissionClosed": 28.0,
+          "safetyBufferClosed": 7.6763,
+          "tradeStatuses": {
+            "Closed": 7,
+            "Skipped": 15,
+            "Incomplete": 3
+          },
+          "tradeReasons": {
+            "Timer": 7,
+            "OverlappingPosition": 15,
+            "InsufficientCoverage: ": 3
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3471
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 25
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 41
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 33
+            }
+          ],
+          "labelStatusCounts": {
+            "1": 37,
+            "2": 62
+          },
+          "labelReasons": {
+            "Timer": 37,
+            "ShortExecutionUnsupported": 41,
+            "InsufficientCoverage: ": 16,
+            "NoFreshDecisionQuote": 3,
+            "NoFillOrOpenAtEnd": 2
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T09:10:42Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:13:22Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:19:42Z",
+              "entryTimeUtc": "2026-11-20T09:19:42.6876863Z",
+              "filledQuantity": 20000.0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            }
+          ]
+        },
+        {
+          "window": "0930-1000",
+          "replayRunId": "7ea506ae-72f5-4e9e-81cd-2f06ab323de3",
+          "inputSha256": "693a3ccf787c45057804abbb11bf64b86d8eb4989d996bd934c7b584bd29331e",
+          "outputSha256": "be3888279aa6215d978dfb06a46ead917dbd7004a5f38f9efa3eb8a8e5a2cd5c",
+          "signalCount": 20,
+          "filledTradeCount": 4,
+          "closedTradeCount": 3,
+          "realizedNetPnl": -22.29175,
+          "grossPnlClosed": -7.0,
+          "commissionClosed": 12.0,
+          "safetyBufferClosed": 3.29175,
+          "tradeStatuses": {
+            "Closed": 3,
+            "Skipped": 16,
+            "Incomplete": 1
+          },
+          "tradeReasons": {
+            "Timer": 3,
+            "OverlappingPosition": 16,
+            "InsufficientCoverage: ": 1
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3538
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 20
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 25
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 7
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 30,
+            "1": 22
+          },
+          "labelReasons": {
+            "ShortExecutionUnsupported": 25,
+            "Timer": 22,
+            "InsufficientCoverage: ": 2,
+            "NoFillOrOpenAtEnd": 3
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T09:41:47Z",
+              "entryTimeUtc": "2026-11-20T09:41:48.004795Z",
+              "filledQuantity": 20000.0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            }
+          ]
+        },
+        {
+          "window": "1000-1030",
+          "replayRunId": "9f8d64e8-9581-41fc-81f0-27ab8fd5bde8",
+          "inputSha256": "8cad73e51f7f69fe0bf66b3a2952c04ff53e8a6457af3e7747287eb137592387",
+          "outputSha256": "310e78200c58006df65ec07ed08e4c0f13d35d24e209c73fb8a1852fb69585c0",
+          "signalCount": 26,
+          "filledTradeCount": 6,
+          "closedTradeCount": 5,
+          "realizedNetPnl": -35.4857,
+          "grossPnlClosed": -10.0,
+          "commissionClosed": 20.0,
+          "safetyBufferClosed": 5.4857,
+          "tradeStatuses": {
+            "Closed": 5,
+            "Skipped": 20,
+            "Incomplete": 1
+          },
+          "tradeReasons": {
+            "Timer": 5,
+            "OverlappingPosition": 20,
+            "InsufficientCoverage: ": 1
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3474
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 26
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 81
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 9
+            }
+          ],
+          "labelStatusCounts": {
+            "1": 27,
+            "2": 89
+          },
+          "labelReasons": {
+            "Timer": 27,
+            "ShortExecutionUnsupported": 81,
+            "InsufficientCoverage: ": 7,
+            "NoFillOrOpenAtEnd": 1
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T10:12:37Z",
+              "entryTimeUtc": "2026-11-20T10:12:37.9840532Z",
+              "filledQuantity": 20000.0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            }
+          ]
+        },
+        {
+          "window": "1030-1100",
+          "replayRunId": "71489f87-3828-4bc3-9395-b98a23e2180f",
+          "inputSha256": "cad9ce4dd21f62037e9e359713e87b0fcfd2c0d13c5082380eecd77deab719f6",
+          "outputSha256": "223d6b05abaa068be0f5a8061c02fba80c4246371f6ed089e55923a0c542fb0c",
+          "signalCount": 19,
+          "filledTradeCount": 7,
+          "closedTradeCount": 6,
+          "realizedNetPnl": -34.579,
+          "grossPnlClosed": -4.0,
+          "commissionClosed": 24.0,
+          "safetyBufferClosed": 6.579,
+          "tradeStatuses": {
+            "Closed": 6,
+            "Skipped": 11,
+            "Incomplete": 2
+          },
+          "tradeReasons": {
+            "Timer": 6,
+            "OverlappingPosition": 11,
+            "NoFreshDecisionQuote": 1,
+            "InsufficientCoverage: ": 1
+          },
+          "candidates": [
+            {
+              "Outcome": 0,
+              "DecisionStage": "PatternHardConditions",
+              "Count": 3497
+            },
+            {
+              "Outcome": 1,
+              "DecisionStage": "FxShadowSignal",
+              "Count": 19
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxPatternFilter",
+              "Count": 23
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxRanking",
+              "Count": 3
+            },
+            {
+              "Outcome": 2,
+              "DecisionStage": "FxSignalGate",
+              "Count": 38
+            }
+          ],
+          "labelStatusCounts": {
+            "2": 38,
+            "1": 45
+          },
+          "labelReasons": {
+            "ShortExecutionUnsupported": 23,
+            "Timer": 45,
+            "NoFillOrOpenAtEnd": 1,
+            "NoFreshDecisionQuote": 3,
+            "InsufficientCoverage: ": 11
+          },
+          "incompletePositions": [
+            {
+              "signalTimeUtc": "2026-11-20T10:43:37Z",
+              "entryTimeUtc": null,
+              "filledQuantity": 0,
+              "exitedQuantity": 0,
+              "reason": "NoFreshDecisionQuote"
+            },
+            {
+              "signalTimeUtc": "2026-11-20T10:45:57Z",
+              "entryTimeUtc": "2026-11-20T10:45:57.6073731Z",
+              "filledQuantity": 20000.0,
+              "exitedQuantity": 0,
+              "reason": "InsufficientCoverage: "
+            }
+          ]
+        }
+      ],
+      "labelStatusCounts": {
+        "1": 131,
+        "2": 219
+      },
+      "labelReasons": {
+        "Timer": 131,
+        "ShortExecutionUnsupported": 170,
+        "InsufficientCoverage: ": 36,
+        "NoFreshDecisionQuote": 6,
+        "NoFillOrOpenAtEnd": 7
+      },
+      "signals": 90,
+      "filled": 25,
+      "closed": 21,
+      "netPnlClosed": -133.03275,
+      "grossPnlClosed": -26.0,
+      "commissionClosed": 84.0,
+      "winningClosed": 0,
+      "losingClosed": 21,
+      "excludedOpenPositions": 4,
+      "orderCount": 0,
+      "modelCount": 0
+    }
+  },
+  "latency": {
+    "Scope": "Completed minute windows selected by log UTC end, including the partial pre-open minute and excluding any unreported tail. Means are event-weighted; events include both bid and ask. These windows differ from Parquet audit cutoffs. SDK dispatch is connection-wide batch-drain time, not wire latency.",
+    "FromUtc": "2026-11-20T09:00:00Z",
+    "ToUtc": "2026-11-20T11:00:00Z",
+    "ActiveWindows": 119,
+    "Totals": {
+      "Events": 223786,
+      "FailedProcessing": 0,
+      "ReceiveAgeOverTwoSeconds": 2,
+      "NegativeQueueClockDeltas": 0,
+      "MeanReceiveMinusEventMs": 768.646090763497,
+      "MeanDequeueMinusReceiptMs": 57.970695051522426,
+      "MeanPipelineMs": 2.2940143869589695,
+      "MaxReceiveMinusEventMs": 2094.1219,
+      "MaxDequeueMinusReceiptMs": 1901.0439,
+      "MaxPipelineMs": 1880.2033
+    },
+    "maxDispatchBatchMs": 7.5204,
+    "dispatchBatchesOver250ms": 0.0,
+    "slowestPipelineWindows": [
+      {
+        "AsOfUtc": "2026-11-20T09:58:22.6839972Z",
+        "ElapsedSeconds": 60.5339292,
+        "Events": 2196,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 837.7671965391638,
+        "MaxReceiveMinusEventMs": 1561.0772,
+        "MeanDequeueMinusReceiptMs": 111.3820786429869,
+        "MaxDequeueMinusReceiptMs": 1901.0439,
+        "MeanPipelineMs": 3.7007675318761404,
+        "MaxPipelineMs": 1880.2033,
+        "OldestQuoteEventUtc": "2026-11-20T09:57:23Z",
+        "OldestQuoteReceivedUtc": "2026-11-20T09:57:24.5610772Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.0515,
+        "OldestQuotePipelineMs": 10.7892
+      },
+      {
+        "AsOfUtc": "2026-11-20T10:18:30.4718057Z",
+        "ElapsedSeconds": 60.5269154,
+        "Events": 2114,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 765.2077979186375,
+        "MaxReceiveMinusEventMs": 1745.7941,
+        "MeanDequeueMinusReceiptMs": 121.39592947019872,
+        "MaxDequeueMinusReceiptMs": 1881.4561,
+        "MeanPipelineMs": 3.7920186376537415,
+        "MaxPipelineMs": 1859.2275,
+        "OldestQuoteEventUtc": "2026-11-20T10:17:37Z",
+        "OldestQuoteReceivedUtc": "2026-11-20T10:17:38.7457941Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.0546,
+        "OldestQuotePipelineMs": 11.3428
+      },
+      {
+        "AsOfUtc": "2026-11-20T09:37:12.2364661Z",
+        "ElapsedSeconds": 60.3254526,
+        "Events": 1766,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 0,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 830.9505135334109,
+        "MaxReceiveMinusEventMs": 1508.9284,
+        "MeanDequeueMinusReceiptMs": 83.77358159682886,
+        "MaxDequeueMinusReceiptMs": 1698.2313,
+        "MeanPipelineMs": 3.847131879954698,
+        "MaxPipelineMs": 1679.1125,
+        "OldestQuoteEventUtc": "2026-11-20T09:36:59Z",
+        "OldestQuoteReceivedUtc": "2026-11-20T09:37:00.5089284Z",
+        "OldestQuoteDequeueMinusReceiptMs": 18.7379,
+        "OldestQuotePipelineMs": 2.3394
+      }
+    ],
+    "staleWindows": [
+      {
+        "AsOfUtc": "2026-11-20T09:14:00.8870966Z",
+        "ElapsedSeconds": 60.4139099,
+        "Events": 1386,
+        "FailedProcessing": 0,
+        "ReceiveAgeOverTwoSeconds": 2,
+        "NegativeQueueClockDeltas": 0,
+        "MeanReceiveMinusEventMs": 761.3507336219327,
+        "MaxReceiveMinusEventMs": 2094.1219,
+        "MeanDequeueMinusReceiptMs": 41.11954141414148,
+        "MaxDequeueMinusReceiptMs": 131.7362,
+        "MeanPipelineMs": 1.6521209956709986,
+        "MaxPipelineMs": 14.8204,
+        "OldestQuoteEventUtc": "2026-11-20T09:13:36Z",
+        "OldestQuoteReceivedUtc": "2026-11-20T09:13:38.0941219Z",
+        "OldestQuoteDequeueMinusReceiptMs": 0.0631,
+        "OldestQuotePipelineMs": 2.7729
+      }
+    ]
+  },
+  "operational": {
+    "observedUtc": "2026-11-20T12:51:25.994798+01:00",
+    "operationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    },
+    "liveCandidateGroups": [
+      {
+        "Outcome": 0,
+        "DecisionStage": "PatternHardConditions",
+        "Count": 13988
+      },
+      {
+        "Outcome": 2,
+        "DecisionStage": "FxPatternFilter",
+        "Count": 178
+      },
+      {
+        "Outcome": 2,
+        "DecisionStage": "FxSignalGate",
+        "Count": 184
+      }
+    ]
+  },
+  "gaps": [
+    {
+      "startUtc": "2026-11-20T09:13:20.2514441",
+      "endUtc": "2026-11-20T09:13:37.2725049",
+      "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+      "droppedEvents": 0
+    },
+    {
+      "startUtc": "2026-11-20T09:13:20.2308456",
+      "endUtc": "2026-11-20T09:13:20.2514441",
+      "reason": "IBKR connection lost.",
+      "droppedEvents": 0
+    }
+  ],
+  "repeat": {
+    "window": "1000-1030",
+    "inputMatches": true,
+    "outputMatches": true,
+    "outputSha256": "310e78200c58006df65ec07ed08e4c0f13d35d24e209c73fb8a1852fb69585c0",
+    "repeatRunId": "9c274067-cdee-4fcd-8a14-339ae9e1a486",
+    "countedAsNewEvidence": false
+  },
+  "localArtifactsSha256": {
+    "audit-0900-0905.json": "d804f900a302cf805e5e0743f98f9980413c4e1b065ae694009500a8ba72ad36",
+    "audit-0900-0930.json": "d9729c114fb0a490d7308ceb4c53043c14e6f680b096396f8a8a18da431adff5",
+    "audit-0930-1000.json": "dfb0f7aa5f461f940a0de4fabfb2fd5b45a4631928c5788eb7ee9ab025062b31",
+    "audit-1000-1030.json": "6fa2ec158f4168a39ccbe7a110788eb5b6178a97eaef2e7d944a1d99fb3b59ba",
+    "audit-1030-1100.json": "1e799d7622ee6fb1c8ce80530fdd2f31c7b9ee0bd7b748b66addb195331da4be",
+    "collection-status.json": "61464c808d2fecdf7ae5d34e8aec5568d1eb0117b0f0ffd8ca7af95a45f098cf",
+    "contract-100.json": "b0dbccbbb1356bd1c91a48d71d753ccfda5b13da35724c8f5e76e123c9366ac0",
+    "contract-50000.json": "023277c96c445880c5f9db4a8eb14ac1cca57ed50e2dce2339a51abe45f332d3",
+    "evaluation-blocker.json": "7b9dd29848b72a1f902bf6bb38b4fd430d072345df8e2cfa38d84e8ad7b49a1d",
+    "latency-first.json": "2d5f3ec7436bac9d5b78a2bfc548cd0df98d1ce5d759235714643ffdaaf917ce",
+    "latency-session.json": "69eb70d30262055e16fe8cb41767497ef0bf3ba862ad65a632f720adcebed2cd",
+    "operational-counts.json": "c88ef22ca61e1263c16c898f56bf751d5434b194f07ef2eee13663ceaae1b340",
+    "operational-session.json": "18f722ff0b6892102940097d14eff6f991761f4c316af6fac4d74ad869b46b6a",
+    "process-guards.json": "837d5c7a4947bb617c3a8c16692af50f65d210eb3e774f3d298854d6572da12f",
+    "replay-100-0900-0930.json": "c2bf6d42efed3a3c0478fa562ab5ede8b77ac7b980e19aa4a93d5d9c53f16230",
+    "replay-100-0930-1000.json": "c79ad5285d4c23988378627a5513f738d53c90154604852da86a87f3c28e2780",
+    "replay-100-1000-1030.json": "00d6ab5bce569324557368ca09ed2d15c8ee53467422942e5f592933f39b2676",
+    "replay-100-1030-1100.json": "abe42ae7a4c6847350cb3d36690a0fe7ec3931cea66190c9f476b03a60fa222e",
+    "replay-50000-0900-0930.json": "727f43b1d4679d11456c768898b809f57e7b8a353a107cd15a2ed27265f90b43",
+    "replay-50000-0930-1000.json": "1ed6f71f4b41bcb8678fa11d91603784854a83826cdcdb5149d35ec576abbd6e",
+    "replay-50000-1000-1030-repeat.json": "839ffc7ecdeffb76bb22b3a18c4675c3677194c1a6785f8eccf1e12ef0634376",
+    "replay-50000-1000-1030.json": "4bba07080ea0f71c5a4ebe34fcd97387c9fc2893be72eaec3da5a0aa1e6b406f",
+    "replay-50000-1030-1100.json": "6c1f6388f5c0c034a71cfef061020c714e82c84daa372005698d3cad57fe9e1e",
+    "research-100.json": "37811ac1cd38a822840879a5fa1ca2d5692076dc4c2813b9f4dd7b29e02c1748",
+    "research-50000.json": "4565bbd28a02780362a3e261111cfda0344b7d2f0e9c5391fd17483802497f49",
+    "runtime-status.json": "3f442be6cd12d66b8537a422e37808ba48af4135aa22ec93c2be2745d6a47969",
+    "session-gaps.json": "11dcc7b24a3870c698cad63763c772559e8827e2fa70906b2f64626f2d8b461c"
+  },
+  "incompleteCoverageDiagnosis": [
+    {
+      "window": "0900-0930",
+      "signalUtc": "2026-11-20T09:10:42Z",
+      "filled": 0,
+      "previousAvailableUtc": "2026-11-20T09:10:41.1919015Z",
+      "nextAvailableUtc": "2026-11-20T09:10:44.9201538Z",
+      "quoteGapSeconds": 3.7282523,
+      "receiveAgeSeconds": 0.9201538,
+      "sessionChange": false,
+      "reason": "InsufficientCoverage: "
+    },
+    {
+      "window": "0900-0930",
+      "signalUtc": "2026-11-20T09:13:22Z",
+      "filled": 0,
+      "previousAvailableUtc": "2026-11-20T09:13:20.2308456Z",
+      "nextAvailableUtc": "2026-11-20T09:13:38.0941219Z",
+      "quoteGapSeconds": 17.8632763,
+      "receiveAgeSeconds": 2.0941219,
+      "sessionChange": true,
+      "reason": "InsufficientCoverage: "
+    },
+    {
+      "window": "0900-0930",
+      "signalUtc": "2026-11-20T09:19:42Z",
+      "filled": 20000.0,
+      "previousAvailableUtc": "2026-11-20T09:20:25.929847Z",
+      "nextAvailableUtc": "2026-11-20T09:20:29.0317083Z",
+      "quoteGapSeconds": 3.1018613,
+      "receiveAgeSeconds": 1.0317083,
+      "sessionChange": false,
+      "reason": "InsufficientCoverage: "
+    },
+    {
+      "window": "0930-1000",
+      "signalUtc": "2026-11-20T09:41:47Z",
+      "filled": 20000.0,
+      "previousAvailableUtc": "2026-11-20T09:41:49.4000151Z",
+      "nextAvailableUtc": "2026-11-20T09:41:53.8147421Z",
+      "quoteGapSeconds": 4.414727,
+      "receiveAgeSeconds": 0.8147421,
+      "sessionChange": false,
+      "reason": "InsufficientCoverage: "
+    },
+    {
+      "window": "1000-1030",
+      "signalUtc": "2026-11-20T10:12:37Z",
+      "filled": 20000.0,
+      "previousAvailableUtc": "2026-11-20T10:13:15.3786201Z",
+      "nextAvailableUtc": "2026-11-20T10:13:18.9774586Z",
+      "quoteGapSeconds": 3.5988385,
+      "receiveAgeSeconds": 0.9774586,
+      "sessionChange": false,
+      "reason": "InsufficientCoverage: "
+    },
+    {
+      "window": "1030-1100",
+      "signalUtc": "2026-11-20T10:43:37Z",
+      "filled": 0,
+      "previousAvailableUtc": "2026-11-20T10:43:34.7810715Z",
+      "nextAvailableUtc": "2026-11-20T10:43:38.3126733Z",
+      "quoteGapSeconds": 3.5316018,
+      "receiveAgeSeconds": 1.3126733,
+      "sessionChange": false,
+      "reason": "NoFreshDecisionQuote"
+    },
+    {
+      "window": "1030-1100",
+      "signalUtc": "2026-11-20T10:45:57Z",
+      "filled": 20000.0,
+      "previousAvailableUtc": "2026-11-20T10:46:05.4822459Z",
+      "nextAvailableUtc": "2026-11-20T10:46:09.1229894Z",
+      "quoteGapSeconds": 3.6407435,
+      "receiveAgeSeconds": 1.1229894,
+      "sessionChange": false,
+      "reason": "InsufficientCoverage: "
+    }
+  ],
+  "evaluationBlocker": {
+    "Command": "evaluate",
+    "RangeFromUtc": "2026-11-20T10:00:00Z",
+    "RangeToUtc": "2026-11-20T10:30:00Z",
+    "ReplayRunId": "9f8d64e8-9581-41fc-81f0-27ab8fd5bde8",
+    "ExitCode": 1,
+    "Error": "Evaluation range is too short for the configured training, validation and untouched holdout windows.",
+    "TrainingWindowDays": 2,
+    "ValidationWindowDays": 1,
+    "HoldoutDays": 1,
+    "ModelTrained": false,
+    "ModelApproved": false
+  },
+  "reviewedAtUtc": "2026-11-20T13:10:29.619942Z",
+  "limitations": [
+    "Software baseline replay, not an approved ML model or actual IBKR fills.",
+    "Four independent chronological batches: warmup, capital and position state restart. Sums are descriptive, not a continuous portfolio equity curve.",
+    "Four filled positions have unknown exits after quote gaps; their unknown PnL is excluded. Incomplete filled positions block later entries until batch end.",
+    "Quote gaps exceeding three seconds are conservative coverage failures, not proof of network loss. No gap threshold was relaxed.",
+    "Gross PnL already includes spread and slippage; net also subtracts commission and hypothetical safety buffer.",
+    "131 complete counterfactual labels include overlapping and blocked candidates; they are not 131 independent portfolio trades.",
+    "All 21 closed baseline trades exit by timer and lose net; this short sample does not validate the strategy or justify tuning on holdout.",
+    "Only 1436 final 5s windows are countable across four as-of cutoffs; do not report 1433/1440 as data completeness.",
+    "One receive age >2s pair follows recorded broker reconnect. Other pipeline spikes are separate and root cause remains unmeasured.",
+    "Current evaluator accepts one explicit completed FX ReplayRunId; it does not merge these batches into a multi-day training set.",
+    "Two-hour sample and 200000-event per-replay bound do not satisfy configured multi-day validation. No model was trained or approved."
+  ],
+  "analysisHelperSha256": {
+    "summary": "E2F2452FAA4B3F776F1EC8CC508A2728DEF0A006BD9B685BAFB36AEB2ABA09A8",
+    "coverage": "E9F84192A316019D3931E646B47EF33A6AB733A2B119B889636C361426907995",
+    "latency": "F7BCE6090697EF007EA8A7FA3285D42611C7FAF4F2AA554CB7B578E277E3C3C2"
+  }
+}

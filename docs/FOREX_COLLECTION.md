@@ -1,5 +1,51 @@
 # Operativno EUR/USD prikupljanje
 
+## Analiza dnevne sesije — 20.11.2026.
+
+Analiziran je cijeli dogovoreni raspon **10–12 sati Zagreb / 09–11 UTC**, kroz unaprijed određena četiri nepreklapajuća polusatna uzorka. Sve izvedene snimke imaju isti izvorni manifest SHA i provjerene file hashove. Ukupno **223.886 događaja / 111.943 potpuna bid/ask para**, bez nepotpunih parova ili prekoračenja future tolerancije; 308 događaja ima tolerirano negativno receive-minus-event odstupanje. Samo dva događaja, odnosno **jedan par**, starija su od dvije sekunde. [Strukturirani rezultat](evidence/fx12-day-session-analysis-2026-11-20.json).
+
+| Raspon Zagreb | Quote parovi | Finalni 5s barovi / očekivani | 5s frameovi s najmanje 26 barova |
+| --- | ---: | ---: | ---: |
+| 10:00–10:30 | 30.525 | 357 / 359 | 307 |
+| 10:30–11:00 | 28.484 | 359 / 359 | 334 |
+| 11:00–11:30 | 32.345 | 359 / 359 | 334 |
+| 11:30–12:00 | 20.589 | 358 / 359 | 308 |
+
+Ukupno **1.433/1.436** očekivanih završenih 5s prozora i **1.283 zagrijana framea** u zasebnim rekonstrukcijama; tri prozora nemaju quote. Svaki batch ima vlastiti cold start i završni as-of cutoff, pa ovo nije potpuna rekonstrukcija neprekinutog dvosatnog feature stanja. Rubni bar svakog batcha još nije finaliziran do njegova cut-offa. Za 15s dobiveno je 476/476 finalnih barova i 351 zagrijani frame; to ne mijenja aktivni 5s profil. Kontinuitet je znatno bolji od noćnog uzorka, ali ostaju stvarni prekid i kraće quote praznine.
+
+### Prekid i kašnjenja
+
+TWS je prijavio code 1100 u **10:13:20**, a 1102 u **10:13:36,9**. Kolektor ima trajni coverage gap do 10:13:37,27. Prvi stari par nakon obnove ima event 09:13:36 UTC, receipt 09:13:38,094 UTC, odnosno **2.094,12 ms**; njegov queue/pipeline iznose samo 0,063/2,773 ms. To povezuje ovu staru kotaciju s vremenom obnove, ne dokazuje uzrok svih ranijih i kasnijih zastoja. Minutni backfill ne popravlja izgubljenu tick pokrivenost.
+
+U 119 dovršenih latency prozora završetkom unutar sesije zabilježeno je 223.786 događaja, nula processing grešaka i negativnih queue delti. Ponderirani prosjek pipelinea je **2,29 ms**, queuea **57,97 ms**. Maksimumi su **1.880,20 / 1.901,04 ms**, u prozoru koji završava 10:58:22 Zagreb, izvan TWS prekida. SDK queue-drain batch maksimum je 7,52 ms, bez batcha >250 ms. Izmjerena su 11 minutnih prozora s pipeline maksimumom >250 ms. Postojeći logovi ne razdvajaju quality SQLite upit/upis, dataset enqueue i primjenu agregata; konkretan uzrok ovih lokalnih vrhova još nije dokazan. Granice log prozora nisu iste kao audit događaja. Nije mijenjana tolerancija, freshness ni runtime.
+
+### Offline replay i ograničenja rezultata
+
+Oba scenarija koriste **identične konfiguracijske bajtove pripremljene prije sesije**, nove odvojene baze s 23 migracije i postojeća važeća povijesna pravila. Svih osam replaya završava. To je deterministički pattern baseline, ne odobreni ML model. Nije bilo brokerskog pristupa kroz replay niti stvarnog naloga.
+
+| Scenarij | Prihvaćeni istraživački signali | Simulirani ulazi | Potpuno zatvoreni | Neto samo zatvorenih |
+| --- | ---: | ---: | ---: | ---: |
+| 100 USD | 90 | 0 | 0 | 0 USD; nema izvedivog tradea |
+| 50.000 virtualnih USD | 90 | 25 | 21 | −133,03275 USD |
+
+Kod 100 USD 89 prihvaćenih signala odbija risk zbog kapitala/troškova/standardnog minimuma količine, a jedan nema svježu decision kotaciju. To ne dokazuje mogućnost trgovanja sa 100 USD; odd-lot izvršenje nije izmišljeno.
+
+Kod većeg tehničkog scenarija **svih 21 zatvorenih tradeova izlazi timerom i ima negativan neto rezultat**. Zbroj gross PnL-a (već sa spreadom/slippageom) je −26 USD, provizije 84 USD, a dodatni hipotetski safety buffer 23,03275 USD. To nije preporuka većeg kapitala. Četiri dodatne simulirane pozicije imaju ulaz, ali nedokazan izlaz; njihov PnL nije uključen u taj zbroj. Zbroj rezultata četiri batcha nije dvosatni portfelj: kapital i stanje pozicija ponovno počinju u svakom batchu, a nepotpuna otvorena pozicija konzervativno blokira preostale ulaze do njegova kraja.
+
+Posebna read-only rekonstrukcija potvrđuje da su četiri otvorene simulacije prekinute razmacima između quoteova od **3,10 / 4,41 / 3,60 / 3,64 s**, preko postojećeg maksimuma od 3 s, bez promjene callback sesije. To nisu rubovi polusatnih batchova ni isti TWS prekid. Odsutnost nove kotacije nije sama po sebi dokaz mrežnog gubitka; za pouzdaniji replay treba razdvojiti tiho tržište od nepoznate pokrivenosti uz dokaz i eksplicitnu politiku, ne povećati prag da bi test prošao.
+
+Dobiveno je i **131 potpuno zatvorena counterfactual labela** te 219 nepotpunih u većem scenariju: 170 short/nepodržano izvršenje, 36 coverage, šest bez svježeg decision quotea i sedam bez filla/zatvaranja do kraja. Labele uključuju blokirane i preklapajuće kandidate, pa nisu nezavisni portfeljni tradeovi. U scenariju 100 USD svih 350 labela je nepotpuno. Ponovljeni 11:00–11:30 Zagreb replay daje isti input i output SHA (`310e78200c58006df65ec07ed08e4c0f13d35d24e209c73fb8a1852fb69585c0`); ponavljanje nije dodatni uzorak.
+
+### Što sada blokira FX-12
+
+Stvarni poziv `evaluate` nad replayem 11:00–11:30 Zagreb odbijen je porukom **“Evaluation range is too short for the configured training, validation and untouched holdout windows.”** Ostaju 2 dana treninga, 1 validacije i 1 netaknuti holdout; minimumi nisu spušteni. Model nije treniran ili odobren. Operativna baza i obje istraživačke baze imaju nula naloga i modela.
+
+Analiza je konkretizirala i **ograničenje istraživačkog toka**: cijela sesija već ima više od 200.000 događaja, a trenutna FX evaluacija prihvaća jedan eksplicitni dovršeni `ReplayRunId` i provjerava njegov output hash. Četiri odvojena replaya ne spaja u višednevni trening. Prije takve evaluacije treba inkrementalna/veća obrada s očuvanim stanjem ili verzioniran skup kompatibilnih replay segmenata s jasnim granicama, deduplikacijom i vremenskim razdvajanjem. Samo dodatni dani prikupljanja uz sadašnji ograničeni batch nisu potpuno rješenje.
+
+Slijed nastavka: razraditi i testirati quote coverage pravila i dijagnostiku nepotpunih izlaza, omogućiti provjerljiv višesegmentni istraživački tok, izmjeriti izvore lokalnih pipeline vrhova, zatim prikupiti reprezentativne višednevne sesije s pravodobnim rule snapshotovima i provesti evaluaciju. Tek zadovoljavajući rezultat vodi do model shadowa i zasebnog FX-12 paper order testa. Loš baseline ne podešavati na završnom holdoutu. Post-FX12 strategije i UI ostaju odgođeni.
+
+Artefakti su lokalno u `TestResults/fx12-day-20261120`: četiri snimke/audita, osam replay rezultata i jedno ponavljanje, zasebne baze/configi, latency/gap analiza i dokaz odbijene evaluacije. Analitički pomoćni program samo je čitao snimke; produkcijski kod, profil, baza i proces kolektora nisu mijenjani. Nije ponavljana puna regresija za dokumentacijski checkpoint; provjereni su manifest/file hashovi, stvarni CLI replay/evaluation guard, ponovljivost rezultata i JSON dokazi. **FX-12 ostaje otvoren; današnji test potvrđuje prikupljanje i dio offline obrade, ne profitabilnost ni stvarno izvršenje.**
+
 ## Početak dnevne sesije — 20.11.2026.
 
 Planirani raspon je **10–12 sati Europe/Zagreb (09–11 UTC)**. Postojeći kolektor PID 25364 nastavio je rad bez restarta: stvarni IBKR adapter 10.49.2.0, paper TWS 7497, Connected, AnalysisOnly. Command-line zaštite potvrđuju read-only, isključene stock/live/FX paper naloge i automatske FX signale. Read-only provjera operativne baze u 09:08:54 UTC nalazi nula naloga, izvršenja, tradeova, rezervacija i modela. [Početni strukturirani dokaz](evidence/fx12-day-session-start-2026-11-20.json).
