@@ -1,5 +1,7 @@
 # FX-12 — priprema stvarnog IBKR paper testa
 
+**Aktualno 20.11.2026.:** [dnevni rezultati](FOREX_COLLECTION.md#analiza-dnevne-sesije--20112026) sada uključuju stvarni dataset i simulirane tradeove; baseline je neto negativan, dio izlaza nepotpun, evaluacija/model/shadow još nisu dovršeni. [N1–N9 predloženog nastavka](NEXT_STEPS_2026-11-20.md) vode kroz preostale preduvjete do ovog protokola. Ne radi se o odobrenju naloga; raniji datirani preflighti niže nisu aktualni prolaz kriterija.
+
 25.10.2026.: **u tijeku; priprema implementirana, stvarni paper E2E nije proveden**. Početna osnova bila je čisti `cc1a831` u radnom worktreeu i na zajedničkom `trading-bot-v2`. Nije slan nalog, mijenjano operativno odobrenje niti uključen live trading. FX-12 i točke 25/30/31 ostaju otvorene.
 
 ## Utvrđeni preduvjeti

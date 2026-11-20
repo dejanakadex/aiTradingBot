@@ -3,6 +3,8 @@
 Datum: 2026-09-21. Pregledana osnova: [`9f80683`](https://github.com/dejanakadex/aiTradingBot/tree/9f806833713d4b77f70275570e60dce2f8160aac).
 Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_PLAN.md).
 
+**Aktualizacija 20.11.2026.:** [pregled dovršenosti i sljedeći koraci](NEXT_STEPS_2026-11-20.md) povezuje novije dokaze, 741 prolazni lokalni test i preostale blokade. Nalazi i opis koda niže povijesni su, osim izričitih dopuna; ne predstavljaju ponovljenu potvrdu svake stare greške. DLL je danas obvezan, EUR/USD feed radi, a `MarketDataValidator` uvažava trajanje 1m/5m/15m barova. Produkcijski poziv post-trade analize i dalje nije pronađen; jedan-replay/200k limit i stari history put bez `asOf` potvrđeni su u aktualnom kodu. Stvarni paper E2E ostaje otvoren.
+
 ## Sažetak
 
 Dopuna 26.10.2026.: stvarni FX kolektor ima valjan spremljeni quote uzorak, ali nije radio cijelu noć: TWS socket zatvoren je u 22:45 UTC, a kasniji reconnect odbijen. Nedovoljan 26-bar warmup pretežno dolazi iz praznih 5s intervala, dodatno iz stroge vremenske provjere. Windows Time servis je zaustavljen; uzrok negativne receive/event razlike treba potvrditi nakon sinkronizacije. Novi offline audit reproducira samo tri zagrijana 5s framea; dva bara razlike prema live auditu ostaju navedena u [operativnom izvještaju](FOREX_COLLECTION.md#provjera-26-listopada-2026). FX-12 nije zatvoren.

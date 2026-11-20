@@ -1,5 +1,7 @@
 # EUR/USD — priprema nastavka
 
+**Aktualno 20.11.2026.:** [pregled dovršenosti i nastavak N1–N12](NEXT_STEPS_2026-11-20.md). Dnevni stvarni feed i FX troškovni replay sada su potvrđeni u ograničenom uzorku; stariji opisi stock-only simulatora i noćnog warmupa niže predstavljaju stanje tih datuma. FX-10/11 operativni model workflow i FX-12 stvarni paper ciklus ostaju otvoreni. Nema potvrđene profitabilnosti.
+
 Status 25.10.2026.: **FX-1 do FX-11 programski su provedeni uz granice opisane niže**. Stvarni paper TWS potvrdio je ugovore i ograničeni EUR/USD MIDPOINT povijesni uzorak s SQLite/Parquet pohranom. Agregati, featurei, patterni, signali, risk, long USD paper lifecycle te FX replay/labele/modeli provjereni su lokalno; stvarni cijeli tok i fillovi još nisu potvrđeni. Prikupljanje radi uz `TradingEnabled=false`; primjeri ostaju u `AnalysisOnly`. FX-10 dodaje zaseban, zadano isključen opt-in za odobren model → FX-9 paper put. Nema produkcijskog odobrenog EUR/USD modela. Ovaj dokument ne potvrđuje profitabilnost.
 
 ## Što je već provjereno
