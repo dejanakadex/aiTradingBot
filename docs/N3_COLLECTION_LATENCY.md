@@ -72,3 +72,42 @@ Windows detaljno DiskIO/FileIO snimanje odbijeno je s **0x80070005 (Access denie
 Provjera ove dopune: **781/781 .NET testova**, 2 testa izvještaja, obvezni IBKR publish/DLL guard prolaze. Novi test namjerno usporava tek drugi SQL rezultat i potvrđuje da ga Execute mjerenje propušta, a ReaderLifetime bilježi. Odluke/trading logika nisu mijenjane; prethodni N2 paritet ostaje prethodni dokaz, ne novo mjerenje. Kolektor je uredno restartan radi dijagnostike; planirana rupa ostaje u evidenciji. Naloga, izvršenja, tradeova, rezervacija i modela u operativnoj bazi i dalje je nula.
 
 Artefakti: `TestResults/n3-stable-20261120`; sažetak [stabilne sesije](evidence/n3-stable-session-2026-11-20.json). **N3 ostaje otvoren:** nedostaje potvrđen niži uzrok sporog SQL dovršavanja, ciljani popravak i usporediva prihvatna sesija nakon njega. N4 nije započet.
+
+## ETL potvrda diskovnog čekanja — 20.11.2026.
+
+Korisnik je u administratorskom prozoru potvrdio aktivno DiskIO/FileIO snimanje i uspješno ga spremio. Prethodna neprivilegirana provjera `wpr -status` nije ga vidjela; njezin rezultat nije bio pouzdan dokaz da administratorsko snimanje ne radi. **Administratorska blokada prikupljanja ETL-a je riješena.** Analizirana snimka obuhvaća **21:29:50.608–21:36:52.324 UTC (22:29:50–22:36:52 Zagreb)**, bez izgubljenih događaja/buffera.
+
+Pet primarnih SQL zastoja vremenski odgovara zapisu u `trading.db-wal` procesa kolektora 23344, na fizičkom disku 0:
+
+| Kraj SQL operacije (Zagreb) | SQL faza | SQL ms | Najsporiji pripadajući WAL write ms |
+| --- | --- | ---: | ---: |
+| 22:30:42.652 | ReaderLifetime | 1.377,968 | 1.314,066 |
+| 22:31:37.719 | ReaderLifetime | 965,087 | 963,177 |
+| 22:33:02.759 | ReaderLifetime | 562,531 | 561,162 |
+| 22:34:13.104 | Commit | 705,897 | 701,172 |
+| 22:35:48.953 | Commit | 1.558,483 | 1.554,364 |
+
+Za prvi slučaj kernel `FileIoFlush` iste WAL datoteke traje **1.377,808 ms** (SQL 1.377,968 ms). Isti 12 KiB write povezan je kroz originalni IRP s StorPort dispatch/completion intervalom **1.314,044 ms**, `RequestDuration` **1.314,036 ms**, dok BuildIo/StartIo traju samo **0,0037/0,0077 ms**. Zahtjev završava uspješno. Čekanje je tako dokazano i ispod datotečnog sustava, u storage putu. Istodobno čekaju drugi zapisi na istom disku. Dodatna Begin/Execute čekanja drugih contexta preklapaju se s tim zastojima, što je u skladu s posljedicom SQLite single-writer zaključavanja, a ne zasebnom potvrdom sporog SELECT-a.
+
+**Zaključak:** neposredni uzrok tih dugih save/commit poziva jest čekanje završetka diskovnog zapisa/flush-a. To nije dokaz kvara SSD-a, antivirusnog skeniranja ni konkretnog firmware buga. Xperf `Disk SrvT` se ne smije tumačiti izolirano kao fizičko vrijeme svake paralelne operacije; u ovom nalazu korišteni su ukupni intervali i povezani StorPort zahtjev. [Microsoftov opis storage mjerenja](https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/high-cpu-usage-issue-smb-server) uključuje i vrijeme reda upravljačkog programa.
+
+Snimka sama piše **1.799.358.464 bajta** svojih ETL podataka, naspram 45.043.712 bajtova WAL writeova. Zato učestalost i opterećenje ovog intervala nisu neopterećeni benchmark. Zastoji su dokazani i prije WPR-a, ali snimanje može utjecati na raspored/opterećenje. Sirovih 1,84 GB ETL-a i CSV izvozi s lokalnim putanjama ostaju izvan Gita; [sažeti dokaz i hash](evidence/n3-storage-trace-2026-11-20.json) omogućuju ponovnu provjeru.
+
+### Hipoteza i kontrolirani sljedeći test
+
+Disk je **KINGSTON OM8SEP4512Q-AA**, firmware **SBI00111**, na Acer Aspire A517-58GM. Računalo je na mrežnom napajanju s planom Balanced: primarna/sekundarna NVMe tolerancija 15/100 ms, PCIe ASPM 2. U izdvojenom intervalu StorNVMe šalje Set Features za FID 2 s traženim PS3 pa PS0 neposredno uz zastoj. [Power Management polje](https://learn.microsoft.com/en-us/windows/win32/api/nvme/ns-nvme-nvme_cdw11_feature_power_management) označava traženo power stanje; vremenska blizina još ne dokazuje uzročnost. [Microsoftova NVMe pravila](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/power-management-for-storage-hardware-devices-nvme) opisuju odabir idle stanja prema tim tolerancijama; 0/0 ms odgovara AC tolerancijama performance plana.
+
+Pripremljen je opt-in `scripts/test-nvme-power.ps1`:
+
+```powershell
+# Pregled bez promjena:
+./scripts/test-nvme-power.ps1
+# Samo u administratorskom PowerShellu, na punjaču i uz aktivne kotacije:
+./scripts/test-nvme-power.ps1 -Run -Minutes 10
+```
+
+Skripta kopira aktivni plan u jedinstveni privremeni plan, mijenja **samo dvije AC NVMe tolerancije na 0 ms**, aktivira kopiju i nakon mjerenja vraća izvorni plan. Izvorne postavke, battery/DC, PCIe ASPM, zaštite, SQLite i bot ne mijenjaju se. Ako korisnik tijekom testa sam odabere drugi plan, taj se izbor čuva. Briše se samo vlastita neaktivna testna kopija. JSON s UTC početkom/krajem i potvrdom cleanup-a nalazi se u `TestResults/nvme-power-<guid>/session.json`. Prozor treba ostati otvoren; nasilno gašenje procesa/računala može preskočiti finally. Za takav slučaj skripta unaprijed ispisuje točnu naredbu za vraćanje izvornog plana.
+
+Syntax/preview provjere prolaze; četiri izolirana mock scenarija potvrđuju normalan povratak, pogrešku prije aktivacije, pogrešku nakon aktivacije i očuvanje naknadnog korisnikova izbora. To nije dokaz da konkretni Windows prihvaća/primjenjuje testni plan; stvarni test i njegov rezultat moraju se zasebno potvrditi. Pri usporedbi koristiti potpune minutne prozore unutar testa, svjež feed i isti PID, bez WPR-a/builda/backtesta. Kratko poboljšanje nije dokaz trajnog rješenja: potreban je povratni uzorak nakon restore-a i kasnije reprezentativna dnevna prihvatna sesija. Ako nema aktivnih kotacija, rezultat je **nedovoljan uzorak**, nikad prolaz.
+
+Botov kod i persistence pravila u ovoj dopuni nisu mijenjani. Nema razloga oslabiti `synchronous`, gasiti antivirus ili naslijepo mijenjati checkpoint/indexe. **N3 ostaje otvoren:** dokaz diskovnog čekanja postoji; okidač na razini SSD-a/napajanja i provjereno rješenje još nedostaju.

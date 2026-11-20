@@ -1,0 +1,142 @@
+{
+  "date": "2026-11-20",
+  "status": "Storage waits confirmed; NVMe power-transition hypothesis awaits controlled comparison; N3 remains open",
+  "trace": {
+    "sha256": "6B9FC2C88F4CF3D77A0E2BBB156ED9A764144EC249B89BFAA3EBFF82BAF3781F",
+    "bytes": 1843396608,
+    "startUtc": "2026-11-20T21:29:50.6080449Z",
+    "endUtc": "2026-11-20T21:36:52.3244781Z",
+    "lostEvents": 0,
+    "lostBuffers": 0,
+    "rawTraceCommitted": false
+  },
+  "primarySqlWalMatches": [
+    {
+      "sqlEndUtc": "2026-11-20T21:30:42.6517612Z",
+      "sqlMs": 1377.968,
+      "sqlPhase": "ReaderLifetime",
+      "walWriteMs": 1314.066,
+      "walStartUtc": "2026-11-20T21:30:41.273237+00:00",
+      "walEndUtc": "2026-11-20T21:30:42.587303+00:00",
+      "walBytes": 12288,
+      "pid": 23344,
+      "disk": 0
+    },
+    {
+      "sqlEndUtc": "2026-11-20T21:31:37.7185315Z",
+      "sqlMs": 965.0874,
+      "sqlPhase": "ReaderLifetime",
+      "walWriteMs": 963.177,
+      "walStartUtc": "2026-11-20T21:31:36.752606+00:00",
+      "walEndUtc": "2026-11-20T21:31:37.715783+00:00",
+      "walBytes": 12288,
+      "pid": 23344,
+      "disk": 0
+    },
+    {
+      "sqlEndUtc": "2026-11-20T21:33:02.7592927Z",
+      "sqlMs": 562.5314,
+      "sqlPhase": "ReaderLifetime",
+      "walWriteMs": 561.162,
+      "walStartUtc": "2026-11-20T21:33:02.194313+00:00",
+      "walEndUtc": "2026-11-20T21:33:02.755474+00:00",
+      "walBytes": 12288,
+      "pid": 23344,
+      "disk": 0
+    },
+    {
+      "sqlEndUtc": "2026-11-20T21:34:13.1035843Z",
+      "sqlMs": 705.8973,
+      "sqlPhase": "Commit",
+      "walWriteMs": 701.172,
+      "walStartUtc": "2026-11-20T21:34:12.396920+00:00",
+      "walEndUtc": "2026-11-20T21:34:13.098092+00:00",
+      "walBytes": 65536,
+      "pid": 23344,
+      "disk": 0
+    },
+    {
+      "sqlEndUtc": "2026-11-20T21:35:48.9525362Z",
+      "sqlMs": 1558.4828,
+      "sqlPhase": "Commit",
+      "walWriteMs": 1554.364,
+      "walStartUtc": "2026-11-20T21:35:47.392559+00:00",
+      "walEndUtc": "2026-11-20T21:35:48.946923+00:00",
+      "walBytes": 16384,
+      "pid": 23344,
+      "disk": 0
+    }
+  ],
+  "additionalWaits": 4,
+  "exactFirstStall": {
+    "sqlReaderMs": 1377.968,
+    "fileFlushMs": 1377.808,
+    "fileWriteMs": 1314.155,
+    "diskWriteMs": 1314.066,
+    "storportDispatchToCompletionMs": 1314.044,
+    "storportRequestMs": 1314.0358,
+    "buildIoMs": 0.0037,
+    "startIoMs": 0.0077,
+    "bytes": 12288,
+    "ntStatus": "0x00000000",
+    "srbStatus": "0x01",
+    "matchingOriginalIrp": true
+  },
+  "powerObservations": {
+    "model": "KINGSTON OM8SEP4512Q-AA",
+    "firmware": "SBI00111",
+    "activeScheme": "Balanced",
+    "acPrimaryNvmeToleranceMs": 15,
+    "acSecondaryNvmeToleranceMs": 100,
+    "acPcieAspm": 2,
+    "batteryPercent": 100,
+    "onAc": true,
+    "observedFeatureId": 2,
+    "requestedPowerStates": [
+      3,
+      0
+    ],
+    "causalityProven": false
+  },
+  "ioCategories": {
+    "WPR trace": {
+      "bytes": 1799358464,
+      "count": 3649,
+      "slow": 4
+    },
+    "NTFS metadata": {
+      "bytes": 103084032,
+      "count": 15977,
+      "slow": 3
+    },
+    "Bot WAL": {
+      "bytes": 45043712,
+      "count": 2040,
+      "slow": 15
+    },
+    "Other": {
+      "bytes": 531817984,
+      "count": 13843,
+      "slow": 25
+    },
+    "Bot DB": {
+      "bytes": 10764288,
+      "count": 1446,
+      "slow": 0
+    }
+  },
+  "verification": {
+    "powerScriptSyntax": "passed",
+    "previewNoMutation": "passed",
+    "mockRestorationScenariosPassed": 4,
+    "applicationCodeChanged": false,
+    "lastApplicationTestsPassed": 781
+  },
+  "limits": [
+    "ETL contains 1.799 GB of its own disk writes, so trace frequency is not an unloaded benchmark",
+    "Storage request duration does not identify SSD firmware vs hardware vs power management as the ultimate cause",
+    "No evidence justifying antivirus exclusion or SQLite durability reduction",
+    "Power test is preliminary, requires active quotes and AC power, and does not close N3",
+    "Original ETL, raw file paths, addresses and event exports stay local"
+  ]
+}
