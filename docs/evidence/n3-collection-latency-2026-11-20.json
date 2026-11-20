@@ -1,0 +1,199 @@
+{
+  "date": "2026-11-20",
+  "status": "N3 in progress; instrumentation and flush fixes implemented; latency root cause and acceptance session remain open",
+  "tests": {
+    "dotnetPassed": 780,
+    "dotnetFailed": 0,
+    "reportTestsPassed": 2,
+    "requiredIbkrPublishAndDllGuards": "passed",
+    "trx": "TestResults/n3-20261120/n3-complete-code.trx"
+  },
+  "parity": {
+    "sameInput": true,
+    "sameOutput": true
+  },
+  "beforeMaxPipelineMs": 2005.7646,
+  "initialMixedLoadInvestigation": {
+    "version": "n3-report-v1",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-20T18:57:00+00:00",
+    "toUtc": "2026-11-20T19:13:08.108982+00:00",
+    "scope": "Offline log report; window quantiles are approximate upper bounds, not global percentiles. Does not approve N3 or trading.",
+    "tickWindows": 13,
+    "events": 20052,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 22,
+    "worstWindowPipelineP99UpperMs": 24.7856425964843,
+    "maxPipelineMs": 1946.962,
+    "worstWindowQueueP99UpperMs": 1949.6961,
+    "maxQueueMonotonicMs": 2107.9109,
+    "maxQualityReadMs": 75.456,
+    "maxQualitySaveMs": 1946.3233,
+    "storageWindows": 16,
+    "maxFlushMs": 2536.7809,
+    "maxEnqueueToDurableMs": 8282.1205,
+    "storageFailures": 0,
+    "maxProcessCpuPercent": 5.313538616620119,
+    "maxWorkingSetBytes": 286171136,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": false,
+    "minimum60TickWindowsPresent": false,
+    "processIds": [
+      4388,
+      21192
+    ],
+    "remainingChecks": [
+      "Gap/drop/reconnect evidence from collection status and SQLite",
+      "Explain outliers and compare equivalent market/load sessions",
+      "Source timestamp resolution and Windows clock synchronization",
+      "Feature/signal parity and repeat after restart"
+    ]
+  },
+  "worstPipelineExamples": [
+    {
+      "EventId": "IBKR:FXQ:fd813504adee454ead1e7f834eb9b99b:1168:bid",
+      "EventUtc": "2026-11-20T19:08:00Z",
+      "ReceivedUtc": "2026-11-20T19:08:01.186935Z",
+      "DequeuedUtc": "2026-11-20T19:08:01.1869757Z",
+      "SourceAgeMs": 1186.935,
+      "QueueWallMs": 0.0407,
+      "QueueMonotonicMs": 0.0386,
+      "PipelineMs": 1946.962,
+      "Phases": {
+        "Quality": 1946.8906,
+        "QualityGate": 0.0006,
+        "QualityRead": 0.4524,
+        "QualityAssess": 0.0104,
+        "QualitySave": 1946.3233,
+        "DatasetEnqueue": 0.0213,
+        "Aggregates": 0.0229
+      }
+    },
+    {
+      "EventId": "IBKR:FXQ:d22b7b23374f47e5a7cef17c88bb9fea:6673:bid",
+      "EventUtc": "2026-11-20T19:06:02Z",
+      "ReceivedUtc": "2026-11-20T19:06:02.9536971Z",
+      "DequeuedUtc": "2026-11-20T19:06:02.9537738Z",
+      "SourceAgeMs": 953.6971,
+      "QueueWallMs": 0.0767,
+      "QueueMonotonicMs": 0.0747,
+      "PipelineMs": 1910.8806,
+      "Phases": {
+        "Quality": 1910.8402,
+        "QualityGate": 0.0003,
+        "QualityRead": 0.406,
+        "QualityAssess": 0.0061,
+        "QualitySave": 1910.3673,
+        "DatasetEnqueue": 0.0119,
+        "Aggregates": 0.0065
+      }
+    },
+    {
+      "EventId": "IBKR:FXQ:fd813504adee454ead1e7f834eb9b99b:3130:bid",
+      "EventUtc": "2026-11-20T19:08:55Z",
+      "ReceivedUtc": "2026-11-20T19:08:56.4984951Z",
+      "DequeuedUtc": "2026-11-20T19:08:56.4985548Z",
+      "SourceAgeMs": 1498.4951,
+      "QueueWallMs": 0.0597,
+      "QueueMonotonicMs": 0.0583,
+      "PipelineMs": 1775.7001,
+      "Phases": {
+        "Quality": 1775.6344,
+        "QualityGate": 0.0005,
+        "QualityRead": 0.3561,
+        "QualityAssess": 0.0056,
+        "QualitySave": 1775.2202,
+        "DatasetEnqueue": 0.0176,
+        "Aggregates": 0.0073
+      }
+    }
+  ],
+  "slowDatabaseExamples": [
+    "command AsOfUtc=2026-11-20T19:08:43.3109594Z Milliseconds=883.9293 Operation=UPDATE Table=MarketDataStreamStateRecords Context=24043775-605f-4294-90e3-cceea5721c81 Source=SaveChanges",
+    "command AsOfUtc=2026-11-20T19:10:33.5347573Z Milliseconds=1316.7757 Operation=INSERT Table=ResearchCandidateRecords Context=66acaea3-73ee-4207-9a3f-221b44700aa4 Source=SaveChanges",
+    "command AsOfUtc=2026-11-20T19:10:33.5579603Z Milliseconds=958.729 Operation=UPDATE Table=MarketDataStreamStateRecords Context=ef44cd7c-774e-4273-bc05-515d3f8c2146 Source=SaveChanges",
+    "command AsOfUtc=2026-11-20T19:11:21.5365728Z Milliseconds=618.4963 Operation=INSERT Table=InstrumentRolloutEvaluationRecords Context=3a0619ad-b7ee-4f36-8c7e-60897342f7f9 Source=SaveChanges",
+    "command AsOfUtc=2026-11-20T19:11:41.5673821Z Milliseconds=2041.6824 Operation=INSERT Table=TickCoverageGapRecords Context=ebd5ce2d-92e1-497e-8d34-8039c957efaa Source=SaveChanges",
+    "command AsOfUtc=2026-11-20T19:11:48.0126764Z Milliseconds=562.1288 Operation=SELECT Table=ResearchCandidateRecords Context=d0d3c6d4-ec6c-494a-a25b-412d8f0183b3 Source=LinqQuery",
+    "command AsOfUtc=2026-11-20T19:11:51.4139655Z Milliseconds=1522.2582 Operation=SELECT Table=ReplayRunRecords Context=21f51c56-e594-4dea-af48-c4574f3cceef Source=LinqQuery",
+    "command AsOfUtc=2026-11-20T19:12:32.7408020Z Milliseconds=305.8734 Operation=SELECT Table=ResearchCandidateRecords Context=7f6a9197-bdb3-4f50-b912-df9ff93ae2be Source=LinqQuery"
+  ],
+  "runtime": {
+    "processId": 4388,
+    "startedUtc": "2026-11-20T19:11:35.8227628Z",
+    "readOnly": true,
+    "tradingOff": true,
+    "fxExecutionOff": true,
+    "automaticSignalsOff": true
+  },
+  "operationalCheck": {
+    "checkedUtc": "2026-11-20T19:13:08.098068+00:00",
+    "orderModelCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    },
+    "gapsSinceFirstRestart": [
+      [
+        "2026-11-20 18:56:37.1810817",
+        "2026-11-20 18:57:07.695628",
+        "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+        0
+      ],
+      [
+        "2026-11-20 19:02:01.894759",
+        "2026-11-20 19:02:13.8170527",
+        "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+        0
+      ],
+      [
+        "2026-11-20 19:07:07.5125277",
+        "2026-11-20 19:07:21.2548353",
+        "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+        0
+      ],
+      [
+        "2026-11-20 19:11:31.4883596",
+        "2026-11-20 19:11:39.4868419",
+        "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.",
+        0
+      ]
+    ],
+    "unmanifestedFilesOlderThan60Seconds": 0
+  },
+  "windowsClock": {
+    "source": "time.windows.com",
+    "samplesOffsetMilliseconds": [
+      25.9707,
+      27.6245,
+      27.1817
+    ],
+    "observedLocalTime": "2026-11-20T19:51:31+01:00",
+    "meaning": "NTP comparison, not proof of absolute or continuous clock accuracy"
+  },
+  "changes": [
+    "Bounded minute phase histograms and source/queue/pipeline attribution",
+    "Monotonic queue timestamp not persisted in market datasets",
+    "Process/disk/log and slow SQL/transaction diagnostics without account values",
+    "Flush deadline anchored to first buffered row, disposed wait timers",
+    "Graceful stop finishes in-flight write and drains bounded batches",
+    "Read-only instrument-filtered log report; no false global p99"
+  ],
+  "limits": [
+    "13 initial minute windows cross planned deployment restarts and local build/test load; not a qualifying session",
+    "QualitySave is confirmed dominant phase; lock versus commit/I/O versus other contention not yet proven",
+    "Real 60-120 minute comparable session and explained outliers still required",
+    "Offline parity is not proof of all live scheduling behavior",
+    "No real orders/model approval, no relaxation of quality/risk thresholds"
+  ]
+}

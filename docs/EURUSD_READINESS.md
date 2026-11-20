@@ -1,5 +1,7 @@
 # EUR/USD — priprema nastavka
 
+**N3 checkpoint, 20.11.2026.:** [fazna mjerenja i stanje provjere](N3_COLLECTION_LATENCY.md) uvedeni su uz ispravak vremenskog flush-a i urednog završetka zapisa pri stopu. Nova mjerenja potvrđuju da gotovo dvije sekunde mogu nastati u SQLite spremanju quality stanja; dublji uzrok nije još dokazan. 780/780 .NET testova, 2 testa izvještaja i nepromijenjen N2 replay rezultat; stvarna prihvatna sesija i uklanjanje outliera još nedostaju. **N3 ostaje otvoren**, N4 nije započet; nema naloga ni model approvala.
+
 **N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
 
 **Aktualno 20.11.2026.:** [pregled dovršenosti i nastavak N1–N12](NEXT_STEPS_2026-11-20.md). Dnevni stvarni feed i FX troškovni replay sada su potvrđeni u ograničenom uzorku; stariji opisi stock-only simulatora i noćnog warmupa niže predstavljaju stanje tih datuma. FX-10/11 operativni model workflow i FX-12 stvarni paper ciklus ostaju otvoreni. Nema potvrđene profitabilnosti.

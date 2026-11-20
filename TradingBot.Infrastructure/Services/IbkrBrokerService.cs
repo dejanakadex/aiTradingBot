@@ -1536,6 +1536,7 @@ namespace TradingBot.Infrastructure.Services
                     Kind = kind,
                     EventTimeUtc = eventTime,
                     ReceivedTimeUtc = received,
+                    EnqueuedMonotonicTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(),
                     Source = _source,
                     Price = Convert.ToDecimal(price, CultureInfo.InvariantCulture),
                     Size = size < 0 || size == decimal.MaxValue ? null : size,

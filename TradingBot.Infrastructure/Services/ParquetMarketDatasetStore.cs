@@ -46,11 +46,14 @@ namespace TradingBot.Infrastructure.Services
             if (!_settings.Enabled || records.Count == 0) return new DatasetWriteResult(0, 0, 0);
 
             var normalized = records.Select(NormalizeAndValidate).ToArray();
-            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            using (CollectionTiming.Measure(CollectionPhase.DatasetWriteGate))
+                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 Directory.CreateDirectory(_rootPath);
-                var manifest = await LoadManifestCoreAsync(cancellationToken).ConfigureAwait(false);
+                DatasetManifest manifest;
+                using (CollectionTiming.Measure(CollectionPhase.ManifestRead))
+                    manifest = await LoadManifestCoreAsync(cancellationToken).ConfigureAwait(false);
                 if (manifest.Files.Count > 0
                     && !manifest.SchemaVersion.Equals(_settings.SchemaVersion, StringComparison.Ordinal))
                 {
@@ -104,6 +107,7 @@ namespace TradingBot.Infrastructure.Services
                             131072,
                             FileOptions.Asynchronous | FileOptions.WriteThrough))
                         {
+                            using var measurement = CollectionTiming.Measure(CollectionPhase.ParquetSerialize);
                             await ParquetSerializer.SerializeAsync(
                                 ordered,
                                 stream,
@@ -152,7 +156,8 @@ namespace TradingBot.Infrastructure.Services
                     manifest.Files = manifest.Files
                         .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
                         .ToList();
-                    await WriteManifestCoreAsync(manifest, cancellationToken).ConfigureAwait(false);
+                    using (CollectionTiming.Measure(CollectionPhase.ManifestWrite))
+                        await WriteManifestCoreAsync(manifest, cancellationToken).ConfigureAwait(false);
                 }
 
                 return new DatasetWriteResult(filesCreated, rowsWritten, filesSkipped);

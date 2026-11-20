@@ -29,8 +29,12 @@ namespace TradingBot.Persistence
             // Use IDbContextFactory to avoid injecting long-lived DbContext in background services.
             // SQLite still has a single-writer model; WAL plus a short command timeout keeps
             // expected read/write overlap from becoming immediate "database is locked" failures.
-            services.AddDbContextFactory<TradingBotDbContext>(options =>
-                options.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(5)));
+            services.AddSingleton<SlowDatabaseCommandInterceptor>();
+            services.AddSingleton<SlowDatabaseTransactionInterceptor>();
+            services.AddDbContextFactory<TradingBotDbContext>((provider, options) =>
+                options.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(5))
+                    .AddInterceptors(provider.GetRequiredService<SlowDatabaseCommandInterceptor>(),
+                        provider.GetRequiredService<SlowDatabaseTransactionInterceptor>()));
 
             // Register a scoped TradingBotDbContext that is created from the factory per scope
             services.AddScoped<TradingBotDbContext>(sp => sp.GetRequiredService<IDbContextFactory<TradingBotDbContext>>().CreateDbContext());

@@ -172,12 +172,16 @@ namespace TradingBot.Tests
                 clock: clock,
                 datasetSink: sink);
 
+            using var timing = new CollectionTiming();
             var assessment = await pipeline.ProcessCanonicalEventAsync(
                 Tick("dataset-bid", MarketDataEventKind.Bid, NowUtc, NowUtc, 100m));
 
             Assert.True(assessment.IsHealthy);
             var stored = Assert.Single(sink.Records);
             Assert.Equal("dataset-bid", stored.EventId);
+            var phases = timing.Snapshot();
+            Assert.True(phases.ContainsKey("QualityRead") && phases.ContainsKey("QualitySave"));
+            Assert.True(phases.ContainsKey("DatasetEnqueue") && phases.ContainsKey("Aggregates"));
             Assert.Equal("bid", stored.DataType);
             Assert.Equal("Healthy", stored.QualityStatus);
             await using var db = await factory.CreateDbContextAsync();

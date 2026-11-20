@@ -245,6 +245,8 @@ seven-day/200,000-event limit with bounded Parquet reads and a temporary disk in
 `--batch-size` changes processing only; `--resume-run-id` rebuilds identical frozen input in a new attempt and preserves the old attempt. The optional
 [forex-research.example.json](TradingBot.Web/forex-research.example.json) requires reviewed inputs and is not loaded automatically.
 No real EUR/USD model or trading permission has been approved by the synthetic tests.
+[N3 collection diagnostics](docs/N3_COLLECTION_LATENCY.md) adds bounded phase percentiles, slow SQL attribution and a fixed flush deadline.
+The remaining SQLite save stalls and operational acceptance session are still open; collection telemetry is not trading readiness.
 
 - Database connection string: set in `TradingBot.Web/appsettings.json` or provide the environment variable `ConnectionStrings__TradingBot`.
 - The persistence registration creates the configured SQLite directory; startup applies migrations.

@@ -10,6 +10,9 @@ namespace TradingBot.Application.DTOs
         public MarketDataEventKind Kind { get; init; }
         public DateTime EventTimeUtc { get; init; }
         public DateTime ReceivedTimeUtc { get; init; }
+        // Process-local diagnostics only; never serialized, replayed or used as market time.
+        [System.Text.Json.Serialization.JsonIgnore]
+        public long EnqueuedMonotonicTimestamp { get; init; }
         public string Source { get; init; } = string.Empty;
         public long? Sequence { get; init; }
         public bool IsFinal { get; init; } = true;

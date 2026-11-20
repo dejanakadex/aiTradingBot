@@ -43,15 +43,18 @@ namespace TradingBot.Infrastructure.Services
 
             var streamKey = marketEvent.StreamKey;
             var gate = _streamLocks.GetOrAdd(streamKey, _ => new SemaphoreSlim(1, 1));
-            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            using (CollectionTiming.Measure(CollectionPhase.QualityGate))
+                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-                var state = await db.MarketDataStreamStateRecords
-                    .SingleOrDefaultAsync(item => item.StreamKey == streamKey, cancellationToken)
-                    .ConfigureAwait(false);
-
-                var assessment = Assess(marketEvent, state, allowStaleHistoricalData);
+                MarketDataStreamStateRecord? state;
+                using (CollectionTiming.Measure(CollectionPhase.QualityRead))
+                    state = await db.MarketDataStreamStateRecords
+                        .SingleOrDefaultAsync(item => item.StreamKey == streamKey, cancellationToken).ConfigureAwait(false);
+                MarketDataQualityAssessment assessment;
+                using (CollectionTiming.Measure(CollectionPhase.QualityAssess))
+                    assessment = Assess(marketEvent, state, allowStaleHistoricalData);
                 var now = ToUtc(_clock.UtcNow);
                 state ??= CreateState(marketEvent, streamKey, now);
                 if (state.Id == 0)
@@ -80,7 +83,8 @@ namespace TradingBot.Infrastructure.Services
                     });
                 }
 
-                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                using (CollectionTiming.Measure(CollectionPhase.QualitySave))
+                    await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 if (!assessment.IsHealthy)
                 {
                     _logger.LogWarning(

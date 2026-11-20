@@ -63,6 +63,9 @@ jobs:
         shell: pwsh
         run: ./scripts/verify-ibkr-adapter.ps1 -SkipBuildAndTests
 
+      - name: Verify collection diagnostics report
+        run: python3 -m unittest discover -s scripts/tests -p test_collection_latency.py
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6

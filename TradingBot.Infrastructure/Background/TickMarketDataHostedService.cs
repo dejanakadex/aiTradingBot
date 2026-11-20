@@ -96,6 +96,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
         var dropped = 0L;
         var latency = new TickLatencyWindow();
         var latencyReport = Stopwatch.StartNew();
+        var resources = new CollectionProcessSampler();
+        var subscriptionGeneration = 0;
         void ReportLatency()
         {
             if (latencyReport.Elapsed < TimeSpan.FromMinutes(1)) return;
@@ -106,6 +108,9 @@ public sealed class TickMarketDataHostedService : BackgroundService
                 || summary.MaxPipelineMs > 1000 ? LogLevel.Warning : LogLevel.Information;
             _logger.Log(level, "Tick latency Instrument={Instrument} AsOfUtc={AsOfUtc:O} ElapsedSeconds={ElapsedSeconds} Metrics={Metrics}",
                 instrument.InstrumentId, _clock.UtcNow, elapsed, JsonSerializer.Serialize(summary));
+            var resourceSnapshot = resources.Take();
+            _logger.Log(resourceSnapshot.DiskLow || resourceSnapshot.LogsLarge ? LogLevel.Warning : LogLevel.Information, "Collection resources Instrument={Instrument} AsOfUtc={AsOfUtc:O} Connection={Connection} SubscriptionGeneration={Generation} Metrics={Metrics}",
+                instrument.InstrumentId, _clock.UtcNow, _connection.Status, subscriptionGeneration, JsonSerializer.Serialize(resourceSnapshot));
         }
         while (!token.IsCancellationRequested)
         {
@@ -124,6 +129,8 @@ public sealed class TickMarketDataHostedService : BackgroundService
                 await using var subscription = await _ticks!.SubscribeTicksAsync(
                     instrument.InstrumentId, instrument.Symbol, token).ConfigureAwait(false);
                 var subscribedAt = _clock.UtcNow;
+                subscriptionGeneration++;
+                _logger.LogInformation("Tick subscription Instrument={Instrument} AsOfUtc={AsOfUtc:O} Generation={Generation}", instrument.InstrumentId, subscribedAt, subscriptionGeneration);
                 if (gapStart.HasValue && gapStart.Value < subscribedAt)
                 {
                     await RecordGapAsync(instrument, gapStart.Value, subscribedAt,
@@ -172,6 +179,9 @@ public sealed class TickMarketDataHostedService : BackgroundService
                     {
                         var dequeued = _clock.UtcNow;
                         var processingStarted = Stopwatch.GetTimestamp();
+                        var queueMs = marketEvent.EnqueuedMonotonicTimestamp > 0
+                            ? Stopwatch.GetElapsedTime(marketEvent.EnqueuedMonotonicTimestamp, processingStarted).TotalMilliseconds : (double?)null;
+                        using var timing = new CollectionTiming();
                         var failed = true;
                         MarketDataQualityAssessment assessment;
                         try
@@ -181,7 +191,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
                         }
                         finally
                         {
-                            latency.Record(marketEvent, dequeued, Stopwatch.GetElapsedTime(processingStarted), failed);
+                            latency.Record(marketEvent, dequeued, Stopwatch.GetElapsedTime(processingStarted), failed, timing.Snapshot(), queueMs);
                             ReportLatency();
                         }
                         if (!assessment.CanPersist)

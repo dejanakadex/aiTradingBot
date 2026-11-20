@@ -1,5 +1,7 @@
 # Pregled dovršenosti i redoslijed nastavka
 
+**N3 checkpoint, 20.11.2026.:** [fazna mjerenja i stanje provjere](N3_COLLECTION_LATENCY.md) uvedeni su uz ispravak vremenskog flush-a i urednog završetka zapisa pri stopu. Nova mjerenja potvrđuju da gotovo dvije sekunde mogu nastati u SQLite spremanju quality stanja; dublji uzrok nije još dokazan. 780/780 .NET testova, 2 testa izvještaja i nepromijenjen N2 replay rezultat; stvarna prihvatna sesija i uklanjanje outliera još nedostaju. **N3 ostaje otvoren**, N4 nije započet; nema naloga ni model approvala.
+
 **N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
 
 **N1 dopuna 20.11.2026.:** [pravila kotacija i ponovljena analiza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni s 764/764 testa. Četiri izlaza ostaju opravdano nepoznata; zabilježeni TWS prekid sada se zasebno koristi u simulaciji. N1 commit `ed5355e` prošao je CI; N2 dopuna iznad ima prednost. N3–N12 ostaju plan.
@@ -58,6 +60,8 @@ Odabrati ograničeno streaming procesiranje s nastavkom stanja ili verzionirani 
 **Završetak:** reprezentativan višednevni ulaz radi uz ograničenu memoriju; prekid/nastavak i različite veličine segmenta daju isti rezultat; nekompatibilni i preklopljeni inputi ne prolaze neopaženo. Moguće su odvojene train/validation/holdout cjeline bez leakagea. Ovo uklanja glavnu tehničku blokadu FX-10/25.
 
 ### N3 — Izmjeriti i ukloniti preostale zastoje prikupljanja
+
+Status: **u tijeku**. Mjerenja i potvrđeni flush ispravak implementirani su; [N3 protokol i dokazi](N3_COLLECTION_LATENCY.md). Preostali SQL save outlieri i operativna prihvatna sesija još ne prolaze kriterij završetka.
 
 Dodati trajanja pojedinih faza obrade: queue, quality provjera/baza, pohrana i agregati. Mjeriti raspodjelu p50/p95/p99 i maksimum te ih povezati s TWS prekidima i opterećenjem procesa. Popravljati potvrđeni uzrok. Provjeriti reconnect, restart, sinkronizaciju sata i nadzor diska/logova; zadržati granice kvalitete i postojeće podatke.
 

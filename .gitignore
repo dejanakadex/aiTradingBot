@@ -64,6 +64,7 @@ appsettings.*.Local.json
 *~
 
 # Build
+__pycache__/
 dist/
 build/
 
