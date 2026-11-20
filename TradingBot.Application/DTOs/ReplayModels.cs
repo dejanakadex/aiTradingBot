@@ -10,6 +10,8 @@ namespace TradingBot.Application.DTOs
         string StrategyId = "deterministic-patterns")
     {
         public ForexReplayCoverageEvidence? ForexCoverage { get; init; }
+        public int ForexBatchSize { get; init; } = 4096;
+        public Guid? ForexResumeRunId { get; init; }
     }
 
     public sealed record ReplaySpeedRequest(decimal SpeedMultiplier);

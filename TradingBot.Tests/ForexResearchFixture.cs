@@ -34,6 +34,7 @@ internal sealed class ForexResearchFixture : IDisposable, IDbContextFactory<Trad
     public ForexSignalSettings Signals = new() { Profiles = [new() { Selection = new() { Enabled = true, InstrumentId = "EURUSD", StrategyId = "patterns",
         MinimumBars = 26, PatternTypes = [PatternType.Hammer], MinimumConfidence = 0, MaximumSignalAgeSeconds = 3, CooldownSeconds = 30 } }] };
     public FeatureEngine Features = new();
+    public Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor? SaveInterceptor;
     public ParquetMarketDatasetStore Dataset;
     public string DatabasePath => Path.Combine(root, "state.db");
     public string DatasetPath => Path.Combine(root, "parquet");
@@ -56,7 +57,12 @@ internal sealed class ForexResearchFixture : IDisposable, IDbContextFactory<Trad
     public DeterministicReplayService Replay() => new(Dataset, this, Features, new PatternDetectorFactory(Options.Create(new PatternDetectorOptions()), NullLoggerFactory.Instance),
         this, Options.Create(new ReplaySettings()), NullLogger<DeterministicReplayService>.Instance, Research(), Options.Create(Trading),
         shortAggregateSettings: Options.Create(Aggregates), forexContract: Contract(), forexSimulator: Simulator(), forexSignals: Options.Create(Signals), forexPatterns: Options.Create(Patterns));
-    public TradingBotDbContext CreateDbContext() => new(new DbContextOptionsBuilder<TradingBotDbContext>().UseSqlite($"Data Source={Path.Combine(root, "state.db")};Pooling=False").Options);
+    public TradingBotDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<TradingBotDbContext>().UseSqlite($"Data Source={Path.Combine(root, "state.db")};Pooling=False");
+        if (SaveInterceptor != null) options.AddInterceptors(SaveInterceptor);
+        return new(options.Options);
+    }
     public static ForexReplayQuote Q(int second, decimal bid = 1.10000m, decimal ask = 1.10002m) => new($"IBKR:FXQ:fx10:{second:D5}", Start.AddSeconds(second), Start.AddSeconds(second), bid, ask);
     public static MarketDatasetRecord[] Records()
     {

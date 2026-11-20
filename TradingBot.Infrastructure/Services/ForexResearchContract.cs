@@ -12,7 +12,7 @@ namespace TradingBot.Infrastructure.Services;
 public sealed class ForexResearchContract
 {
     public const string LabelFamily = "labels-fx-execution-";
-    public const string Labels = "labels-fx-execution-v2";
+    public const string Labels = "labels-fx-execution-v3";
     public const string Model = "numerical-model-fx-v1";
     private readonly ForexResearchSettings _research;
     private readonly ForexRiskSettings _costs;
@@ -63,6 +63,7 @@ public sealed class ForexResearchContract
         var featureVersion = $"{feature.ForexFeatureVersion}+basis-{ForexQuoteAggregator.CandleSource}.{ForexQuoteAggregator.VersionFor(_aggregates)}.{p.IntervalSeconds}s";
         var patternVersion = new ForexPatternDetector(pattern, feature, NullLogger<PatternDetector>.Instance).Version + "+" + signal.Version;
         var label = Labels + "+config-" + Hash(JsonSerializer.Serialize(new { p, costs, risk = _risk, coveragePolicy = ForexReplayCoveragePolicy.Version,
+            simulation = ForexTradeSimulator.Version,
             instrument = new { instrument.InstrumentId, instrument.Symbol, instrument.BaseCurrency, instrument.Currency, instrument.Exchange,
                 instrument.SecurityType, instrument.AllowedDirections, instrument.MaximumHoldingSeconds }, featureVersion, patternVersion }));
         return (Copy(p), Copy(costs), featureVersion, patternVersion, label);

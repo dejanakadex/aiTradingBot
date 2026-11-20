@@ -69,7 +69,8 @@ namespace TradingBot.Infrastructure.Services
         {
             if (!_settings.Enabled) throw new InvalidOperationException("Deterministic replay is disabled by configuration.");
             if (request == null) throw new ArgumentNullException(nameof(request));
-            if (request.ForexCoverage != null) throw new NotSupportedException("FX coverage evidence belongs to fx-replay, not stock replay.");
+            if (request.ForexCoverage != null || request.ForexResumeRunId.HasValue || request.ForexBatchSize != 4096)
+                throw new NotSupportedException("FX coverage/recovery/batch options belong to fx-replay, not stock replay.");
             var instrumentId = Required(request.InstrumentId, nameof(request.InstrumentId));
             if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == instrumentId && x.InstrumentType == InstrumentType.Forex))
                 throw new NotSupportedException("Use RunForexResearchAsync (ModelOps fx-replay) for FX pattern/trade replay.");
@@ -752,13 +753,15 @@ namespace TradingBot.Infrastructure.Services
             Guid replayRunId,
             CancellationToken cancellationToken)
         {
-            var signals = await db.ReplaySignalRecords.AsNoTracking()
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var canonical = new StringBuilder(1024);
+            void FlushRow() { hash.AppendData(Encoding.UTF8.GetBytes(canonical.ToString())); canonical.Clear(); }
+            var signals = db.ReplaySignalRecords.AsNoTracking()
                 .Where(item => item.ReplayRunId == replayRunId)
                 .OrderBy(item => item.DetectedAtUtc)
                 .ThenBy(item => item.SignalId)
-                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-            var canonical = new StringBuilder(signals.Length * 160);
-            foreach (var item in signals)
+                .AsAsyncEnumerable().WithCancellation(cancellationToken);
+            await foreach (var item in signals)
             {
                 canonical.Append(item.SignalId.ToString("D")).Append('|')
                     .Append(item.SourceEventId).Append('|').Append(item.PatternType).Append('|')
@@ -768,12 +771,13 @@ namespace TradingBot.Infrastructure.Services
                     .Append(item.Confidence.ToString(CultureInfo.InvariantCulture)).Append('|')
                     .Append(item.RelevantPriceLevelsJson).Append('|').Append(item.MetadataJson).Append('|')
                     .Append(item.FeaturesJson).Append('\n');
+                FlushRow();
             }
-            var candidates = await db.ResearchCandidateRecords.AsNoTracking()
+            var candidates = db.ResearchCandidateRecords.AsNoTracking()
                 .Where(item => item.ReplayRunId == replayRunId)
                 .OrderBy(item => item.EvaluatedAtUtc).ThenBy(item => item.CandidateKey)
-                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var item in candidates)
+                .AsAsyncEnumerable().WithCancellation(cancellationToken);
+            await foreach (var item in candidates)
             {
                 canonical.Append(item.CandidateKey).Append('|').Append(item.SourceEventId).Append('|')
                     .Append(item.EvaluatedAtUtc.ToString("O", CultureInfo.InvariantCulture)).Append('|')
@@ -785,13 +789,14 @@ namespace TradingBot.Infrastructure.Services
                     .Append(Decimal(item.NormalizedVolatility)).Append('|')
                     .Append(item.HardConditionsJson).Append('|').Append(item.ScoreComponentsJson).Append('|')
                     .Append(item.ReasonsJson).Append('|').Append(item.LabelVersion).Append('\n');
+                FlushRow();
             }
-            var labels = await db.CandidateLabelRecords.AsNoTracking()
+            var labels = db.CandidateLabelRecords.AsNoTracking()
                 .Where(item => item.ResearchCandidate.ReplayRunId == replayRunId)
                 .OrderBy(item => item.ResearchCandidate.CandidateKey).ThenBy(item => item.HorizonSeconds)
                 .Select(item => new { item.ResearchCandidate.CandidateKey, Label = item })
-                .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var item in labels)
+                .AsAsyncEnumerable().WithCancellation(cancellationToken);
+            await foreach (var item in labels)
             {
                 var label = item.Label;
                 canonical.Append(item.CandidateKey).Append('|').Append(label.HorizonSeconds).Append('|')
@@ -805,8 +810,9 @@ namespace TradingBot.Infrastructure.Services
                     .Append(Decimal(label.EstimatedCostBps)).Append('|').Append(Decimal(label.NetReturnBps)).Append('|')
                     .Append(label.ReasonsJson).Append('|').Append(label.LabelVersion).Append('|')
                     .Append(label.InputSha256).Append('\n');
+                FlushRow();
             }
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()))).ToLowerInvariant();
+            return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         }
 
         private sealed class ReplayQuoteState

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Domain.Enums;
@@ -18,6 +20,9 @@ public sealed record ForexSimulationResult(ReplayTradeResult Trade, DateTime Lab
 /// <summary>Quote-driven historical scenario, never a claim of executable liquidity or an IBKR fill.</summary>
 public sealed class ForexTradeSimulator(ForexRiskService risk)
 {
+    public const string Version = "fx-trade-stream-v1";
+    public static DateTime WindowEnd(DateTime decisionUtc, ForexResearchProfile p) =>
+        decisionUtc.AddSeconds(p.EntryTimeoutSeconds + p.HoldingSeconds + p.MaximumQuoteGapSeconds).AddMilliseconds(p.LatencyMilliseconds * 2);
     public static ForexReplayQuote[] ReadQuotes(IReadOnlyList<MarketDatasetRecord> records, string instrumentId, string symbol,
         ShortAggregateSettings? aggregates = null)
     {
@@ -51,19 +56,19 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
     }
 
     public ForexSimulationResult Simulate(Guid signalId, TradeDirection direction, DateTime decisionUtc,
-        IReadOnlyList<ForexReplayQuote> quotes, IReadOnlyList<ForexReplayAtr> atrFrames,
+        IEnumerable<ForexReplayQuote> quotes, IReadOnlyList<ForexReplayAtr> atrFrames,
         ForexResearchProfile p, ForexRiskProfile costs, decimal equity, decimal dailyLoss = 0m,
         ForexReplayCoverageEvidence? coverageEvidence = null)
     {
-        var end = decisionUtc.AddSeconds(p.EntryTimeoutSeconds + p.HoldingSeconds + p.MaximumQuoteGapSeconds)
-            .AddMilliseconds(p.LatencyMilliseconds * 2);
-        var prior = quotes.LastOrDefault(x => x.AvailableUtc <= decisionUtc);
-        var future = quotes.Where(x => x.AvailableUtc > decisionUtc && x.AvailableUtc <= end).ToArray();
+        var end = WindowEnd(decisionUtc, p);
+        var prior = quotes.TakeWhile(x => x.AvailableUtc <= decisionUtc).LastOrDefault();
+        var future = quotes.Where(x => x.AvailableUtc > decisionUtc && x.AvailableUtc <= end);
         var policy = new ForexReplayCoveragePolicy(p.MaximumQuoteGapSeconds, costs.MaximumSnapshotAgeSeconds, coverageEvidence);
         ForexReplayCoverageIssue? coverageIssue = null;
-        var inputHash = ForexResearchContract.Hash(JsonSerializer.Serialize(new { policy = ForexReplayCoveragePolicy.Version, coverageEvidence,
+        var proofHeader = JsonSerializer.Serialize(new { simulation = Version, policy = ForexReplayCoveragePolicy.Version, coverageEvidence,
             signalId, direction, decisionUtc, p, costs, equity, dailyLoss,
-            prior, future, atr = atrFrames.Where(x => x.AvailableUtc <= end).ToArray() }));
+            prior, atr = atrFrames.Where(x => x.AvailableUtc <= end).ToArray() });
+        var inputHash = ForexResearchContract.Hash(proofHeader); // Early rejection does not depend on future quotes.
         string requestJson = "", assessmentJson = "";
         ForexSimulationResult Empty(string reason, decimal requested = 0) => new(
             new ReplayTradeResult(signalId, "Incomplete", reason, decisionUtc, null, null, requested, 0, 0, null, null, null, null, null, null)
@@ -88,6 +93,12 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
         if (!a.Passed) return Empty("RiskRejected: " + string.Join(" ", a.Reasons));
         var capacity = decimal.Floor(p.FillBaseUnitsPerQuote / rules.Rules.BaseUnitIncrement) * rules.Rules.BaseUnitIncrement;
         if (capacity < rules.Rules.MinimumBaseUnits) return Empty("ScenarioBelowMinimum", a.BaseUnits);
+        using (var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        {
+            hasher.AppendData(Encoding.UTF8.GetBytes(proofHeader + "\n"));
+            foreach (var quote in future) hasher.AppendData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(quote) + "\n"));
+            inputHash = Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
+        }
         var ready = decisionUtc.AddMilliseconds(p.LatencyMilliseconds);
         var expires = decisionUtc.AddSeconds(p.EntryTimeoutSeconds);
         var entryLimit = ForexRiskService.RoundPrice(prior.Ask + costs.SlippagePerSidePips * costs.PipSize, true, rules.Rules.PriceBands);
@@ -153,8 +164,12 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
         var horizon = horizonAt.HasValue ? quotes.FirstOrDefault(x => x.AvailableUtc >= horizonAt && x.AvailableUtc <= horizonAt.Value.AddSeconds(p.MaximumQuoteGapSeconds)) : null;
         if (horizon != null)
         {
-            var covered = quotes.Where(x => x.AvailableUtc >= prior.AvailableUtc && x.AvailableUtc <= horizon.AvailableUtc).ToArray();
-            if (covered.Zip(covered.Skip(1)).Any(x => policy.Between(x.First, x.Second) != null)) horizon = null;
+            ForexReplayQuote? last = null;
+            foreach (var quote in quotes.SkipWhile(x => x.AvailableUtc < prior.AvailableUtc).TakeWhile(x => x.AvailableUtc <= horizon.AvailableUtc))
+            {
+                if (last != null && policy.Between(last, quote) != null) { horizon = null; break; }
+                last = quote;
+            }
         }
         var gross = complete ? exitValue - entryValue : (decimal?)null;
         var buffer = entryValue * costs.SafetyBufferBps / 10000m;

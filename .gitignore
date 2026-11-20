@@ -42,6 +42,7 @@ data/eurusd-collection/
 *.db-wal
 *.db-shm
 *.db-journal
+*.fx-manifests/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm

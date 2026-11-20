@@ -11,7 +11,7 @@ using TradingBot.Application.Interfaces;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class ParquetMarketDatasetStore : IMarketDatasetStore
+    public sealed partial class ParquetMarketDatasetStore : IMarketDatasetStore
     {
         private const string ManifestFileName = "_manifest.json";
         private const string ManifestHashFileName = "_manifest.sha256";
@@ -107,6 +107,7 @@ namespace TradingBot.Infrastructure.Services
                             await ParquetSerializer.SerializeAsync(
                                 ordered,
                                 stream,
+                                options: new Parquet.ParquetOptions { RowGroupSize = 32768 },
                                 customMetadata: new Dictionary<string, string>(StringComparer.Ordinal)
                                 {
                                     ["schemaVersion"] = _settings.SchemaVersion,

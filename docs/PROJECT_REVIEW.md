@@ -1,9 +1,11 @@
 # Detaljni pregled projekta
 
+**N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
+
 Datum: 2026-09-21. Pregledana osnova: [`9f80683`](https://github.com/dejanakadex/aiTradingBot/tree/9f806833713d4b77f70275570e60dce2f8160aac).
 Radni branch za nastavak: `trading-bot-v2`. Prijedlog nastavka: [V2_PLAN.md](V2_PLAN.md).
 
-**Aktualizacija 20.11.2026.:** [pregled dovršenosti i sljedeći koraci](NEXT_STEPS_2026-11-20.md) povezuje novije dokaze, 741 prolazni lokalni test i preostale blokade. Nalazi i opis koda niže povijesni su, osim izričitih dopuna; ne predstavljaju ponovljenu potvrdu svake stare greške. DLL je danas obvezan, EUR/USD feed radi, a `MarketDataValidator` uvažava trajanje 1m/5m/15m barova. Produkcijski poziv post-trade analize i dalje nije pronađen; jedan-replay/200k limit i stari history put bez `asOf` potvrđeni su u aktualnom kodu. Stvarni paper E2E ostaje otvoren.
+**Aktualizacija 20.11.2026.:** [pregled dovršenosti i sljedeći koraci](NEXT_STEPS_2026-11-20.md) povezuje novije dokaze, 741 prolazni lokalni test i preostale blokade. Nalazi i opis koda niže povijesni su, osim izričitih dopuna; ne predstavljaju ponovljenu potvrdu svake stare greške. DLL je danas obvezan, EUR/USD feed radi, a `MarketDataValidator` uvažava trajanje 1m/5m/15m barova. Produkcijski poziv post-trade analize i dalje nije pronađen; jedan-replay/200k limit bio je potvrđen prije N2, koji uklanja 200k blokadu za FX trade replay. Stari history put bez `asOf` ostaje zaseban nalaz. Stvarni paper E2E ostaje otvoren.
 
 ## Sažetak
 

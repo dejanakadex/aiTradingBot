@@ -1,0 +1,230 @@
+{
+  "date": "2026-11-20",
+  "scope": "N2 offline continuous FX replay; no broker connection, orders, operational settings or model approval",
+  "versions": {
+    "stream": "fx-stream-replay-v1",
+    "simulation": "fx-trade-stream-v1",
+    "label": "labels-fx-execution-v3"
+  },
+  "tests": {
+    "passed": 773,
+    "failed": 0,
+    "trx": "TestResults/n2-validation/n2-full.trx",
+    "requiredIbkrPublishAndDllGuards": "passed"
+  },
+  "runs": {
+    "50000-4096": {
+      "replayRunId": "159ed9dc-bbf1-4400-ac04-4a90a6a29c9c",
+      "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+      "requestSha256": "8af551e7ba591a4665e15cbec756823e0ef1a786cb4c83d55fd94a54e417c134",
+      "outputSha256": "0b87a9d9f8ab542022f74bdc6a5be7dc93b9fada12caf2f9f6806434d87e500e",
+      "signalCount": 94,
+      "filledTradeCount": 8,
+      "closedTradeCount": 7,
+      "realizedNetPnl": -40.6763,
+      "forexDataset": {
+        "version": "fx-stream-replay-v1",
+        "manifestSha256": "2D33CB8834BCD8EBE84496B85BAB08640CDCE7D8784FD01FBF90437D10041C27",
+        "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+        "uniqueEvents": 223922,
+        "duplicateEvents": 0,
+        "processingBatchSize": 4096,
+        "maximumYieldedBatchEvents": 4096,
+        "maximumParquetRowGroupRows": 65536,
+        "rebuiltFromRunId": null,
+        "recoveryMode": "ContinuousStream"
+      },
+      "unknownFilledPositions": 1,
+      "outcomes": {
+        "Closed: Timer": 7,
+        "Skipped: OverlappingPosition": 84,
+        "Incomplete: InsufficientCoverage: UnobservedQuoteInterval": 2,
+        "Incomplete: NoFreshDecisionQuote": 1
+      }
+    },
+    "50000-257": {
+      "replayRunId": "602e4283-d849-45e7-a237-428854acef1c",
+      "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+      "requestSha256": "8af551e7ba591a4665e15cbec756823e0ef1a786cb4c83d55fd94a54e417c134",
+      "outputSha256": "0b87a9d9f8ab542022f74bdc6a5be7dc93b9fada12caf2f9f6806434d87e500e",
+      "signalCount": 94,
+      "filledTradeCount": 8,
+      "closedTradeCount": 7,
+      "realizedNetPnl": -40.6763,
+      "forexDataset": {
+        "version": "fx-stream-replay-v1",
+        "manifestSha256": "2D33CB8834BCD8EBE84496B85BAB08640CDCE7D8784FD01FBF90437D10041C27",
+        "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+        "uniqueEvents": 223922,
+        "duplicateEvents": 0,
+        "processingBatchSize": 257,
+        "maximumYieldedBatchEvents": 257,
+        "maximumParquetRowGroupRows": 65536,
+        "rebuiltFromRunId": null,
+        "recoveryMode": "ContinuousStream"
+      },
+      "unknownFilledPositions": 1,
+      "outcomes": {
+        "Closed: Timer": 7,
+        "Skipped: OverlappingPosition": 84,
+        "Incomplete: InsufficientCoverage: UnobservedQuoteInterval": 2,
+        "Incomplete: NoFreshDecisionQuote": 1
+      }
+    },
+    "100-4096": {
+      "replayRunId": "00fe3bb0-c86f-41ab-a7df-8def72b7eee3",
+      "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+      "requestSha256": "42fd7d1004f6cd5c1167875580ed48a7d2104b7dc37deff582a30f3c3dc33988",
+      "outputSha256": "d9b78b826c721858a5f0b57190327bb5d22175c9d788a0544b2fee6cdd37bfe9",
+      "signalCount": 94,
+      "filledTradeCount": 0,
+      "closedTradeCount": 0,
+      "realizedNetPnl": 0,
+      "forexDataset": {
+        "version": "fx-stream-replay-v1",
+        "manifestSha256": "2D33CB8834BCD8EBE84496B85BAB08640CDCE7D8784FD01FBF90437D10041C27",
+        "inputSha256": "12e0e788da04280bd94fb7e329433c6213d25817a0a6fe6a11c9dca9b720eb24",
+        "uniqueEvents": 223922,
+        "duplicateEvents": 0,
+        "processingBatchSize": 4096,
+        "maximumYieldedBatchEvents": 4096,
+        "maximumParquetRowGroupRows": 65536,
+        "rebuiltFromRunId": null,
+        "recoveryMode": "ContinuousStream"
+      },
+      "unknownFilledPositions": 0,
+      "outcomes": {
+        "Incomplete: RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 92,
+        "Incomplete: NoFreshDecisionQuote": 2
+      }
+    },
+    "crossdate": {
+      "replayRunId": "8740b933-c7ab-4d36-9a09-aafd462d1862",
+      "inputSha256": "e611557a289634f0a9085afaed511be3d72d9b7a4246255d78f6b68167df8bef",
+      "requestSha256": "8af551e7ba591a4665e15cbec756823e0ef1a786cb4c83d55fd94a54e417c134",
+      "outputSha256": "2f03d4368db0227714a7af8c153f6e1dc92277b9a021eb9aa9ed85252379dedd",
+      "signalCount": 99,
+      "filledTradeCount": 1,
+      "closedTradeCount": 0,
+      "realizedNetPnl": 0,
+      "forexDataset": {
+        "version": "fx-stream-replay-v1",
+        "manifestSha256": "A85224D00F4307C1A2ECFED386324420FB87CF8B0E7AB32BFBA9F570C5B5FB1D",
+        "inputSha256": "e611557a289634f0a9085afaed511be3d72d9b7a4246255d78f6b68167df8bef",
+        "uniqueEvents": 237540,
+        "duplicateEvents": 0,
+        "processingBatchSize": 4096,
+        "maximumYieldedBatchEvents": 4096,
+        "maximumParquetRowGroupRows": 65536,
+        "rebuiltFromRunId": null,
+        "recoveryMode": "ContinuousStream"
+      },
+      "unknownFilledPositions": 1,
+      "outcomes": {
+        "Incomplete: NoFreshDecisionQuote": 1,
+        "Incomplete: InsufficientCoverage: UnobservedQuoteInterval": 1,
+        "Skipped: OverlappingPosition": 97
+      }
+    },
+    "n1-comparison": {
+      "replayRunId": "e23d4630-78c0-4b4c-aeac-f0b7ef36e5e7",
+      "inputSha256": "012a9142ad18c1c658c365cc8d5889e1c04661d55eef753b6f9b11cab3b6cb20",
+      "requestSha256": "8af551e7ba591a4665e15cbec756823e0ef1a786cb4c83d55fd94a54e417c134",
+      "outputSha256": "ffe1832ce6dfa15aa23994c88d1623c26512fd318cd6ef73b58df550985278f9",
+      "signalCount": 25,
+      "filledTradeCount": 8,
+      "closedTradeCount": 7,
+      "realizedNetPnl": -40.6763,
+      "forexDataset": {
+        "version": "fx-stream-replay-v1",
+        "manifestSha256": "058C201BA986482B662849CBA3047CFA04E1631531F1D57C7D488CC899295FA4",
+        "inputSha256": "012a9142ad18c1c658c365cc8d5889e1c04661d55eef753b6f9b11cab3b6cb20",
+        "uniqueEvents": 61050,
+        "duplicateEvents": 0,
+        "processingBatchSize": 4096,
+        "maximumYieldedBatchEvents": 4096,
+        "maximumParquetRowGroupRows": 65536,
+        "rebuiltFromRunId": null,
+        "recoveryMode": "ContinuousStream"
+      },
+      "unknownFilledPositions": 1,
+      "outcomes": {
+        "Closed: Timer": 7,
+        "Skipped: OverlappingPosition": 15,
+        "Incomplete: InsufficientCoverage: UnobservedQuoteInterval": 2,
+        "Incomplete: NoFreshDecisionQuote": 1
+      }
+    }
+  },
+  "processMetrics": [
+    {
+      "capital": "50000",
+      "batch": 4096,
+      "seconds": 71.6743221,
+      "observedPeakWorkingSetBytes": 188518400,
+      "exitCode": 0
+    },
+    {
+      "capital": "50000",
+      "batch": 257,
+      "seconds": 72.5850326,
+      "observedPeakWorkingSetBytes": 183001088,
+      "exitCode": 0
+    },
+    {
+      "capital": "100",
+      "batch": 4096,
+      "seconds": 77.5307151,
+      "observedPeakWorkingSetBytes": 191619072,
+      "exitCode": 0
+    }
+  ],
+  "deterministicBatchRepeat": true,
+  "unchangedN1HalfHourTradeResults": true,
+  "configFileSha256": {
+    "TestResults\\n2-20261120\\research-100.json": "37811ac1cd38a822840879a5fa1ca2d5692076dc4c2813b9f4dd7b29e02c1748",
+    "TestResults\\n2-20261120\\research-50000.json": "4565bbd28a02780362a3e261111cfda0344b7d2f0e9c5391fd17483802497f49"
+  },
+  "snapshots": {
+    "day": {
+      "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "fromUtc": "2026-11-20T09:00:00Z",
+      "toUtc": "2026-11-20T11:00:00Z",
+      "files": 454,
+      "manifestRows": 224406,
+      "sourceManifestSha256": "25665E72423C2C04405144BBEA03E374AE34134287FEEFD8474141A197DFC64F",
+      "snapshotManifestSha256": "2D33CB8834BCD8EBE84496B85BAB08640CDCE7D8784FD01FBF90437D10041C27",
+      "canSendOrders": false
+    },
+    "crossdate": {
+      "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "fromUtc": "2026-11-19T22:58:10Z",
+      "toUtc": "2026-11-20T11:00:00Z",
+      "files": 554,
+      "manifestRows": 237965,
+      "sourceManifestSha256": "873365F4A0EFC8A5251E68459FF22C77683070CC3FA0759214AC28D4F1080F4F",
+      "snapshotManifestSha256": "A85224D00F4307C1A2ECFED386324420FB87CF8B0E7AB32BFBA9F570C5B5FB1D",
+      "canSendOrders": false
+    }
+  },
+  "evaluation": {
+    "actualDay": "ModelOps: Evaluation range is too short for the configured training, validation and untouched holdout windows.",
+    "exit": {
+      "exitCode": 1,
+      "expectedRefusal": true
+    },
+    "syntheticFourSessions": "One replay feeds 2-day train/1-day validation/1-day holdout; test-only minima=1; no real model approval"
+  },
+  "limits": [
+    "Recovery rebuilds from start into new attempt; not incremental position-checkpoint resume",
+    "Parquet row group <=65536; writes use32768; processing batches1..16384; temp disk space required",
+    "250000 non-rejected candidate/report cap, independently of raw tick count; manifest metadata retained in memory",
+    "Real crossdate sample spans ~12 hours over two UTC dates, not multiple representative full trading days",
+    "Synthetic eight-day-range capacity test contains200002 events within10seconds, not eight days of representative data",
+    "Single pair/strategy, hypothetical fills; production lifecycle/shared portfolio parity remains N4/N10",
+    "Known quote gaps remain incomplete; no synthetic execution quotes or forced portfolio reset",
+    "N5 representative real data and N7 valid real evaluation still required; FX12 and25/30/31 remain open"
+  ]
+}

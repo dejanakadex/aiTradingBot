@@ -156,7 +156,15 @@ internal static class ModelOpsProgram
                 case "fx-replay":
                     Print(await provider.GetRequiredService<IDeterministicReplayService>().RunForexResearchAsync(new(
                         Required(options, "instrument-id"), ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to")),
-                        StrategyId: Required(options, "strategy-id")) { ForexCoverage = await ReadForexCoverageAsync(options) }));
+                        StrategyId: Required(options, "strategy-id")) { ForexCoverage = await ReadForexCoverageAsync(options),
+                        ForexBatchSize = options.TryGetValue("batch-size", out var batchSize) ? int.Parse(batchSize, CultureInfo.InvariantCulture) : 4096,
+                        ForexResumeRunId = options.TryGetValue("resume-run-id", out var resumeId) ? Guid.Parse(resumeId) : null }));
+                    break;
+                case "fx-replay-status":
+                    await using (var statusDb = await factory.CreateDbContextAsync())
+                        Print(await statusDb.ReplayRunRecords.AsNoTracking().Where(x => x.StrategyVersion.StartsWith(ForexResearchContract.LabelFamily))
+                            .OrderByDescending(x => x.CreatedAtUtc).Take(20).Select(x => new { x.Id, x.Status, x.FromUtc, x.ToUtc,
+                                x.InputEventCount, x.ProcessedEventCount, x.InputSha256, x.OutputSha256, x.StrategyVersion, x.LastError }).ToArrayAsync());
                     break;
                 case "evaluate":
                     Print(await evaluations.RunAsync(new ResearchEvaluationRequest(
@@ -311,7 +319,8 @@ internal static class ModelOpsProgram
         Commands require --db ABSOLUTE_SQLITE_PATH except fx-collection-audit; optional --config APPSETTINGS_JSON overrides TradingBot.Web/appsettings.json.
 
         migrate
-        fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC [--coverage ABSOLUTE_FROZEN_JSON]
+        fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC [--coverage ABSOLUTE_FROZEN_JSON] [--batch-size 4096] [--resume-run-id INCOMPLETE_RUN_ID]
+        fx-replay-status (last 20 FX attempts; recovery rebuilds identical frozen input in a new attempt, preserving the incomplete attempt)
         fx-prepare --config COLLECTION_JSON [--rules RULES_REPORT] --equity-usd DECIMAL --output NEW_ABSOLUTE_CONFIG
         fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
         fx-contract --instrument-id ID --strategy-id ID

@@ -1,6 +1,8 @@
 # Pregled dovršenosti i redoslijed nastavka
 
-**N1 dopuna 20.11.2026.:** [pravila kotacija i ponovljena analiza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni s 764/764 testa. Četiri izlaza ostaju opravdano nepoznata; zabilježeni TWS prekid sada se zasebno koristi u simulaciji. CI za commit ove promjene prati se u GitHub Actions; prije N2 potreban je prolaz. N2–N12 ostaju plan, bez početka implementacije.
+**N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
+
+**N1 dopuna 20.11.2026.:** [pravila kotacija i ponovljena analiza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni s 764/764 testa. Četiri izlaza ostaju opravdano nepoznata; zabilježeni TWS prekid sada se zasebno koristi u simulaciji. N1 commit `ed5355e` prošao je CI; N2 dopuna iznad ima prednost. N3–N12 ostaju plan.
 
 Pregled 20.11.2026., kod `cd1e653`, zajednički branch `trading-bot-v2`. Ovo je prijedlog redoslijeda za odobravanje **jedne točke po jedne**, a ne početak implementacije ili dopuštenje za naloge. Zadržavamo .NET 10, Blazor, SQLite/EF, Parquet, ML.NET/LightGBM, postojeći risk/arbitration/lifecycle te stock i FX podršku. Live, short proširenje i crypto nisu dio ovog nastavka.
 
@@ -31,7 +33,7 @@ Dokazi se oslanjaju na aktualni kod, [status](IMPLEMENTATION_STATUS.md), [FX pla
 - U većem scenariju ima 25 simuliranih ulaza, **21 zatvoreni trade, svih 21 neto negativnih**, ukupno **−133,03 USD zatvorenog podskupa** nakon provizija i safety buffera. Četiri pozicije imaju nepoznat završetak. Četiri batcha resetiraju stanje; zbroj nije potpuni kontinuirani portfeljni prinos. Svi potvrđeni izlazi su vremenski: ovaj uzorak nije empirijska potvrda SL/TP izvršenja.
 - Četiri nepotpuna izlaza nastaju nakon 3,10–4,41 s bez nove kotacije. To nije samo po sebi dokaz izgubljene veze. Zasebno postoji potvrđen TWS prekid; događaje ne smijemo poistovjetiti.
 - Lokalni pipeline ima vrh **1,88 s**. Uzrok nije dokazan; ranija SQL optimizacija ne znači da su svi zastoji riješeni.
-- Evaluacija odbija prekratak raspon. `DeterministicReplayService.Forex.cs` učitava input u memoriju, ograničava ga na **200.000 događaja i sedam dana**, a `ResearchEvaluationService.cs` za FX zahtijeva jedan dovršeni `ReplayRunId`. Ova dva sata već sadrže 223.886 događaja. Samo dulje prikupljanje ne rješava taj put evaluacije.
+- Povijesni nalaz prije N2: evaluacija odbija prekratak raspon. `DeterministicReplayService.Forex.cs` tada učitava input u memoriju, ograničava ga na **200.000 događaja i sedam dana**, a `ResearchEvaluationService.cs` za FX zahtijeva jedan dovršeni `ReplayRunId`. Ova dva sata već sadrže 223.886 događaja. Samo dulje prikupljanje ne rješava taj put evaluacije.
 - Pretraga `StoreCompletedTradeAnalysisAsync` nalazi ugovor, implementaciju i test, **bez produkcijskog pozivatelja**. Postojanje servisa nije automatska analiza svakog zatvorenog tradea. To ne znači da nema drugih trade/execution evidencija.
 - Stari `CandleHistoryService` i `MarketSnapshotService` put još nema eksplicitnu `asOf` granicu u čitanju posljednjih barova. FX paritet na provjerenom uzorku ne dokazuje isti rezultat za sve druge putove.
 
@@ -45,9 +47,11 @@ Status: **implementirano i lokalno provjereno**; [dokaz i granice](N1_QUOTE_COVE
 
 Razdvojiti vrijeme tržišnog događaja, lokalnog primitka, zadnje valjane kotacije i stvarnog prekida veze. Utvrditi kada posljednja poznata kotacija smije ostati dostupna za odluku, a kada nema dokaza za fill/exit. Ne povećavati prag od tri sekunde samo da bi nestali nepotpuni rezultati; ne izmišljati tickove ili volumen. Ako nema dovoljno podataka za pouzdanu razliku, zadržati neizvjestan ishod i prikazati njegov utjecaj na rezultat.
 
-**Završetak:** dokumentirana pravila i testovi mirnog tržišta, stale kotacije, prekida/reconnecta i granica dataseta; ponovljena analiza postojeća četiri nepotpuna tradea uz nove verzije, bez prepisivanja starih dokaza. Sljedeća preporučena razvojna točka.
+**Završetak:** dokumentirana pravila i testovi mirnog tržišta, stale kotacije, prekida/reconnecta i granica dataseta; ponovljena analiza postojeća četiri nepotpuna tradea uz nove verzije, bez prepisivanja starih dokaza. N1 dovršen; sljedeća razvojna točka nakon N2 je N3.
 
 ### N2 — Omogućiti višednevni, ponovljiv research dataset i replay
+
+Status: **tehnička implementacija i offline provjere dovršene**; [N2 dokaz i ograničenja](N2_STREAMING_RESEARCH.md). Višednevni kontinuitet/evaluacija provjereni su sintetski; stvarni dokaz pokriva dva sata i zaseban prelazak ponoći. Reprezentativne pune tržišne dane još treba prikupiti i validirati u N5. Sljedeći tekst čuva izvorne kriterije.
 
 Odabrati ograničeno streaming procesiranje s nastavkom stanja ili verzionirani skup kompatibilnih replay segmenata. Sačuvati warmup, otvorene pozicije i rokove gdje postoji kontinuitet; eksplicitno označiti reset i stvarni gap. Ukloniti duplikate i spriječiti skriveno resetiranje kapitala. Povezati manifest/hashove i verzije s evaluacijom, treningom i odobrenjem modela. Ne zaobići ograničenje ručnim spajanjem SQLite redaka ili pukim povećanjem limita u memoriji.
 

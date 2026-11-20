@@ -1,10 +1,12 @@
 # FX-12 — priprema prvog EUR/USD backtesta
 
-**N1 dopuna 20.11.:** [nova pravila pokrivenosti](N1_QUOTE_COVERAGE.md), label ugovor v2 i `fx-replay --coverage` provjereni su na istim konfiguracijama i snapshotima u zasebnim bazama. Stari v1 rezultati niže ostaju povijesni dokaz. Četiri izlaza ostaju nepoznata; prije višednevne evaluacije slijedi N2. Nema model approvala ili naloga.
+**N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
+
+**N1 dopuna 20.11.:** [nova pravila pokrivenosti](N1_QUOTE_COVERAGE.md), label ugovor v2 i `fx-replay --coverage` provjereni su na istim konfiguracijama i snapshotima u zasebnim bazama. Stari v1 rezultati niže ostaju povijesni dokaz. Četiri izlaza ostaju nepoznata; N2 nadogradnja dokumentirana je iznad. Nema model approvala ili naloga.
 
 Priprema 19./20.11.2026. koristi postojeći FX-10 replay; ne mijenja aktivni kolektor, SPY/FX podršku, operativne approvale ili dopuštenje naloga. Istraživačke baze/configi su zasebni. **Nije odobren model i FX-12 ostaje otvoren.**
 
-**Dnevni nastavak 20.11.:** [analizirana sesija 10–12 Zagreb](FOREX_COLLECTION.md#analiza-dnevne-sesije--20112026) i osam replaya s ovdje pripremljenim nepromijenjenim konfiguracijama. Kontinuitet sada daje zagrijane frameove; veći tehnički scenarij daje 21 zatvoren, neto negativan baseline trade i četiri nedokazana izlaza. Evaluacija je odbila prekratak raspon. Osim dodatnih dana podataka, potreban je provjerljiv višesegmentni istraživački tok: trenutni evaluator veže jedan replay, a današnja sesija već prelazi njegov limit od 200.000 događaja. To se ne rješava spuštanjem minimuma ili proglašavanjem zbroja polusatnih replaya jednim portfeljem.
+**Dnevni nastavak 20.11.:** [analizirana sesija 10–12 Zagreb](FOREX_COLLECTION.md#analiza-dnevne-sesije--20112026) i osam replaya s ovdje pripremljenim nepromijenjenim konfiguracijama. Kontinuitet sada daje zagrijane frameove; veći tehnički scenarij daje 21 zatvoren, neto negativan baseline trade i četiri nedokazana izlaza. Evaluacija je odbila prekratak raspon. Povijesna blokada, uklonjena tehničkom N2 nadogradnjom: trenutni evaluator veže jedan replay, a današnja sesija već prelazi njegov limit od 200.000 događaja. To se ne rješava spuštanjem minimuma ili proglašavanjem zbroja polusatnih replaya jednim portfeljem.
 
 **Prva stvarna obrada završena:** snimka 22:58:10–23:02 UTC ima 18 provjerenih datoteka / 1.188 manifest redaka, od toga 1.172 događaja (586 potpunih parova) unutar raspona. Oba scenarija završavaju replay s istim input hashom i po 370 odbijenih pattern provjera, bez signala, labela ili tradeova. Najdulji 5s niz je 13, pa nema 26-bar warmupa. Nulti PnL ovdje nije rezultat izvedivog trgovanja. [Strukturirani dokaz](evidence/fx12-research-preparation-2026-11-20.json). Lokalno **741/741 testova**, Release build i obvezni IBKR publish/negative guards prolaze.
 
@@ -60,7 +62,7 @@ Za osvježavanje opažanja koristiti `--forex-rules-config` s istim sigurnim Tra
 dotnet TradingBot.ShadowProbe/bin/Release/net10.0/TradingBot.ShadowProbe.dll --forex-rules-config "$PWD/TestResults/fx12-research-20261119/rules-probe.json" --port 7497 --client-id 97 --output "$PWD/TestResults/rules-new.json"
 ```
 
-Novi `fx-snapshot` sprema provjeren podskup quote datoteka i izvorni manifest; ne zaustavlja writer. Odbija postojeći odredišni direktorij, ugniježđivanje sa sourceom, nevaljane putanje/hashove i više od 200.000 manifest redaka. Ako se izvorni manifest promijeni tijekom početnog čitanja, ponoviti naredbu s novim odredištem. Naknadno dodavanje novih source datoteka ne mijenja snimku. Na pogrešci ostavlja djelomične kopije za pregled, bez dovršenog manifesta.
+Novi `fx-snapshot` sprema provjeren podskup quote datoteka i izvorni manifest; ne zaustavlja writer. Odbija postojeći odredišni direktorij, ugniježđivanje sa sourceom, nevaljane putanje/hashove i ponovljene putanje manifesta. N2 uklanja stari limit od 200.000 manifest redaka i sedam dana. Ako se izvorni manifest promijeni tijekom početnog čitanja, ponoviti naredbu s novim odredištem. Naknadno dodavanje novih source datoteka ne mijenja snimku. Na pogrešci ostavlja djelomične kopije za pregled, bez dovršenog manifesta.
 
 Primjer **nakon** završetka dnevne sesije 20.11. 10–12 Zagreb:
 
@@ -68,7 +70,7 @@ Primjer **nakon** završetka dnevne sesije 20.11. 10–12 Zagreb:
 dotnet TradingBot.ModelOps/bin/Release/net10.0/TradingBot.ModelOps.dll fx-snapshot --dataset C:\PrivateGit\aiTradingBot\data\eurusd-collection\datasets --output-dir "$PWD/TestResults/eurusd-day-20261120" --instrument-id FX-CASH-EUR-USD-IDEALPRO --from 2026-11-20T09:00:00Z --to 2026-11-20T11:00:00Z
 ```
 
-Prvo provesti `fx-collection-audit` nad tom snimkom. Ako prelazi 200.000 događaja, odabrati manji unaprijed određen raspon; ne birati samo profitabilne fragmente. Razdvojeni runovi nemaju prijenos otvorene pozicije među batchovima.
+`fx-collection-audit` ostaje zaseban ograničeni dijagnostički alat; po potrebi analizirati unaprijed određene manje raspone. N2 `fx-replay` može obraditi veći snapshot kao jedan kontinuirani run, uz zasebnu provjeru svih parova i manifesta. Ne zbrajati neovisne replaye kao jedan portfelj i ne birati samo profitabilne fragmente.
 
 Zatim `fx-replay` s eksplicitnim apsolutnim `--db`, `--config`, `--dataset`, instrumentom/strategijom i istim `--from/--to`. Koristiti isključivo zasebnu istraživačku bazu. Za novu bazu: napraviti novu praznu datoteku bez prepisivanja, `ModelOps migrate`, pa `fx-contract` prije replaya. CLI ne pokreće host/brokera i ne kreira stvarne naloge.
 

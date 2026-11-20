@@ -48,4 +48,10 @@ public sealed record ReplayBacktestSnapshot(
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public ForexReplayCoverageEvidence? ForexCoverage { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ForexReplayDatasetEvidence? ForexDataset { get; init; }
 }
+
+public sealed record ForexReplayDatasetEvidence(string Version, string ManifestSha256, string InputSha256,
+    int UniqueEvents, long DuplicateEvents, int ProcessingBatchSize, int MaximumYieldedBatchEvents, int MaximumParquetRowGroupRows,
+    Guid? RebuiltFromRunId, string RecoveryMode);

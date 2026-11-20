@@ -240,7 +240,9 @@ venue acceptance of partial-size exits remain unverified until FX-12. See [FX-9 
 Use ModelOps `fx-contract` and `fx-replay` with an explicit FX configuration and verified paired-quote Parquet dataset,
 then the existing `evaluate --replay-run-id`, `train`, `show`, `approve/reject` and `rollback` workflow.
 [FX-10 instructions and simulation limits](docs/FX10_RESEARCH.md) explain the historical rule snapshots, hypothetical
-fill capacity, costs, seven-day/200,000-event batch limit and model gates. The optional
+fill capacity, costs and model gates. [N2 continuous research](docs/N2_STREAMING_RESEARCH.md) replaces the FX trade replay
+seven-day/200,000-event limit with bounded Parquet reads and a temporary disk index, preserving portfolio state.
+`--batch-size` changes processing only; `--resume-run-id` rebuilds identical frozen input in a new attempt and preserves the old attempt. The optional
 [forex-research.example.json](TradingBot.Web/forex-research.example.json) requires reviewed inputs and is not loaded automatically.
 No real EUR/USD model or trading permission has been approved by the synthetic tests.
 

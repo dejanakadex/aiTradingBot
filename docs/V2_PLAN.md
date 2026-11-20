@@ -1,8 +1,10 @@
 # Plan nastavka — multi-instrument scalping v2
 
+**N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
+
 Status: **odobreno za implementaciju jednu točku po jednu**. Zajednički radni branch je `trading-bot-v2`. Nakon svake točke kod, testovi, dokumentacija i CI moraju biti završeni prije nastavka.
 
-**N1, 20.11.2026.:** [valjanost kotacija i razlozi nepotpunih izlaza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni (764/764). Četiri dnevna izlaza ostaju nepoznata; rezultat nije uljepšan. Sljedeći planirani zahvat je N2, višednevni research; Prije N2 potreban je prolaz CI-ja za N1 commit.
+**N1, 20.11.2026.:** [valjanost kotacija i razlozi nepotpunih izlaza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni (764/764). Četiri dnevna izlaza ostaju nepoznata; rezultat nije uljepšan. N1 commit `ed5355e` prošao je CI; novija N2 dopuna iznad ima prednost.
 
 **Pregled 20.11.2026.:** [dovršenost ranijeg plana i predloženi nastavak N1–N12](NEXT_STEPS_2026-11-20.md). Lokalno ponovno prolazi 741/741 testova; nema stvarnog paper E2E ni dokazane profitabilnosti. Noviji pregled ima prednost pred povijesnim operativnim checkpointima niže.
 

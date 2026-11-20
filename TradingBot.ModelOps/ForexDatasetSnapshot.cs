@@ -11,8 +11,8 @@ internal static class ForexDatasetSnapshot
     {
         if (!Path.IsPathFullyQualified(source) || !Directory.Exists(source) || !Path.IsPathFullyQualified(output)
             || Directory.Exists(output) || File.Exists(output) || string.IsNullOrWhiteSpace(instrumentId)
-            || from.Kind != DateTimeKind.Utc || to.Kind != DateTimeKind.Utc || from >= to || to - from > TimeSpan.FromDays(7))
-            throw new ArgumentException("Snapshot needs an existing absolute source, a new absolute directory and a UTC range of at most 7 days.");
+            || from.Kind != DateTimeKind.Utc || to.Kind != DateTimeKind.Utc || from >= to)
+            throw new ArgumentException("Snapshot needs an existing absolute source, a new absolute directory and a positive UTC range.");
         source = Path.GetFullPath(source); output = Path.GetFullPath(output);
         if (IsInside(source, output) || IsInside(output, source)) throw new ArgumentException("Snapshot and source directories must be separate.");
         var raw = await File.ReadAllBytesAsync(Path.Combine(source, "_manifest.json"));
@@ -22,8 +22,9 @@ internal static class ForexDatasetSnapshot
         var manifest = JsonSerializer.Deserialize<DatasetManifest>(raw, Json) ?? throw new InvalidDataException("Missing manifest.");
         var files = manifest.Files.Where(x => x.InstrumentId == instrumentId && x.DataType is "bid" or "ask"
             && x.MaximumEventTimeUtc >= from && x.MinimumEventTimeUtc < to).ToList();
-        if (files.Count == 0 || files.Sum(x => (long)x.RowCount) > 200000)
-            throw new InvalidDataException("Snapshot needs 1–200,000 manifest quote rows; select a smaller nonempty range.");
+        if (files.Count == 0) throw new InvalidDataException("Snapshot needs a nonempty quote range.");
+        if (files.Select(x => x.RelativePath).Distinct(StringComparer.Ordinal).Count() != files.Count)
+            throw new InvalidDataException("Snapshot manifest contains repeated file entries.");
         foreach (var entry in files)
         {
             _ = Resolve(source, entry.RelativePath); _ = Resolve(output, entry.RelativePath);
