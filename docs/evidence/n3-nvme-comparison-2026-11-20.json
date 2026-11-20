@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-20",
+  "status": "Controlled microbenchmark completed; no live-feed validation; N3 remains open",
+  "powerTest": {
+    "OriginalPlan": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "TestPlan": "c7a1931d-a209-4e84-9bf0-78378850522e",
+    "Minutes": 10,
+    "StartedUtc": "2026-11-20T22:01:05.0504731Z",
+    "EndedUtc": "2026-11-20T22:11:05.8618445Z",
+    "OriginalRestored": true,
+    "TestPlanDeleted": true,
+    "Error": null,
+    "CleanupError": null
+  },
+  "probeMethod": {
+    "startedUtc": "2026-11-20T22:03:23.913022+00:00",
+    "sqliteVersion": "3.53.1",
+    "journalMode": "wal",
+    "synchronous": 2,
+    "walAutocheckpoint": 0,
+    "periodSeconds": 0.5,
+    "phaseSeconds": 300,
+    "warmupExcludedSeconds": 30,
+    "database": "isolated-probe.db",
+    "scope": "Disposable isolated SQLite commit probe, not live feed or EF Core benchmark; no operational DB or broker access"
+  },
+  "results": {
+    "B-nvme-zero": {
+      "totalSamples": 599,
+      "includedSamples": 539,
+      "startUtc": "2026-11-20T22:03:23.931729+00:00",
+      "lastUtc": "2026-11-20T22:08:23.812303+00:00",
+      "p50Ms": 1.7726,
+      "p95Ms": 2.3137,
+      "p99Ms": 3.9902,
+      "maxMs": 829.4147,
+      "over250ms": 1,
+      "over1000ms": 0,
+      "meanMs": 3.25087439703154
+    },
+    "A-original": {
+      "totalSamples": 599,
+      "includedSamples": 539,
+      "startUtc": "2026-11-20T22:11:09.728025+00:00",
+      "lastUtc": "2026-11-20T22:16:09.213018+00:00",
+      "p50Ms": 9.7707,
+      "p95Ms": 10.7229,
+      "p99Ms": 12.4048,
+      "maxMs": 13.1112,
+      "over250ms": 0,
+      "over1000ms": 0,
+      "meanMs": 8.177875324675325
+    }
+  },
+  "marketEvidence": {
+    "sessionClosedUtc": "2026-11-20T22:00:00Z",
+    "lastTickEventUtc": "2026-11-20T21:59:59Z",
+    "freshQuotesDuringPowerTest": false
+  },
+  "powerChecks": {
+    "temporaryAcNvmeToleranceMs": [
+      0,
+      0
+    ],
+    "restoredAcNvmeToleranceMs": [
+      15,
+      100
+    ],
+    "dcNvmeToleranceMs": [
+      50,
+      100
+    ],
+    "allProbePowerSamplesOnAc": true
+  },
+  "artifactSha256": {
+    "probe.py": "E9798C6B2407CC504F44060C81AF102AD6FB511CC257A2A9777B46C857CEF60D",
+    "metadata.json": "58F2D61AB6A97693E41BB0ADA6FA34B2CE074EA4387549FC33CB3719B337AF2D",
+    "power-session.json": "EA1584FF184B267DC4BDC6AD108F4599D5CBA1823A8E86A0FC400FE532DF25DD",
+    "B-nvme-zero.jsonl": "7B7FABE49E8202F310FA52FA85B5A1356E977E3303E87D8DCE6EDF06059A4C97",
+    "A-original.jsonl": "F94B1FD6C84365755F304FF6A5578E671361B6258FE696D5F9C8A4F256513E36"
+  },
+  "limits": [
+    "Same disposable DB, fixed workload and WAL/FULL, but Python SQLite 3.53.1 rather than EF Core collector",
+    "Two sequential five-minute phases, B then A; first 30 seconds excluded in each",
+    "Background OS work is uncontrolled; neither phase is a representative live session",
+    "At least one >250ms stall persisted with both AC NVMe tolerances at zero",
+    "No operational database, market dataset, bot code or permanent power settings were changed"
+  ]
+}

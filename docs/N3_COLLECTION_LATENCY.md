@@ -111,3 +111,22 @@ Skripta kopira aktivni plan u jedinstveni privremeni plan, mijenja **samo dvije 
 Syntax/preview provjere prolaze; četiri izolirana mock scenarija potvrđuju normalan povratak, pogrešku prije aktivacije, pogrešku nakon aktivacije i očuvanje naknadnog korisnikova izbora. To nije dokaz da konkretni Windows prihvaća/primjenjuje testni plan; stvarni test i njegov rezultat moraju se zasebno potvrditi. Pri usporedbi koristiti potpune minutne prozore unutar testa, svjež feed i isti PID, bez WPR-a/builda/backtesta. Kratko poboljšanje nije dokaz trajnog rješenja: potreban je povratni uzorak nakon restore-a i kasnije reprezentativna dnevna prihvatna sesija. Ako nema aktivnih kotacija, rezultat je **nedovoljan uzorak**, nikad prolaz.
 
 Botov kod i persistence pravila u ovoj dopuni nisu mijenjani. Nema razloga oslabiti `synchronous`, gasiti antivirus ili naslijepo mijenjati checkpoint/indexe. **N3 ostaje otvoren:** dokaz diskovnog čekanja postoji; okidač na razini SSD-a/napajanja i provjereno rješenje još nedostaju.
+
+## Usporedni NVMe test — 20.11.2026.
+
+Stvarni administratorski test trajao je **22:01:05–22:11:05 UTC (23:01–23:11 Zagreb)**. Potvrđene su ciljane AC tolerancije 0/0 ms; DC vrijednosti 50/100 ms ostale su iste. Skripta je uredno vratila izvorni **Balanced** plan s AC 15/100 ms i uklonila vlastitu testnu kopiju, bez greške. Nema trajne promjene postavki.
+
+FX sesija se zatvorila u **22:00 UTC**; posljednji tick je 21:59:59 UTC. Zato odsutnost sporih quality zapisa nakon početka testa **nije dokaz poboljšanja bota**: novih kotacija više nema. N3 prihvatna sesija i live/replay paritet time nisu provjereni.
+
+Umjesto toga izveden je izolirani storage pokus na istom C: disku, bez pristupa operativnoj bazi/brokeru. Python SQLite 3.53.1, jedna mala testna baza, isti UPDATE + commit svakih 500 ms, **WAL + synchronous FULL** u obje faze. Samo testna baza ima auto-checkpoint 0 kako checkpoint ne bi pao u samo jednu fazu; WAL je ograničen trajanjem i malim brojem zapisa. To ne mijenja operativne SQLite postavke. Ista konekcija/baza koristi se u oba petominutna intervala, prvo B (testni plan), zatim A (izvorni plan nakon automatskog povratka). Prvih 30 sekundi svake faze isključeno je unaprijed. Sve periodične provjere potvrđuju očekivani plan i AC napajanje.
+
+| Faza | Uzorci nakon zagrijavanja | Medijan ms | p95 ms | p99 ms | Maksimum ms | Zapisi >250 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| B — NVMe AC 0/0 | 539 | 1,77 | 2,31 | 3,99 | 829,41 | 1 |
+| A — izvorni Balanced | 539 | 9,77 | 10,72 | 12,40 | 13,11 | 0 |
+
+Rezultat pokazuje razliku u uobičajenoj latenciji ovog malog workload-a. Međutim, u B fazi postoji **829,41 ms** commit u **22:07:33.910–22:07:34.739 UTC**, pa sama promjena NVMe tolerancija **nije potpuno uklonila zastoj**. To nije mjerenje EF Core pipelinea, nema randomiziranog ponavljanja niti kontrole svih pozadinskih Windows operacija. Povoljan p99 ili mali broj outliera ne dokazuje uzročnost/rješenje i ne zatvara N3.
+
+[Strukturirani rezultat i hashovi](evidence/n3-nvme-comparison-2026-11-20.json); lokalni ulazi i skripta: `TestResults/n3-power-20261120`. Nakon usporedbe testna konekcija se zatvara; operativni kolektor ostaje aktivan s izvornim postavkama i zabranom naloga.
+
+Sljedeći smisleni koraci: tijekom aktivne dnevne sesije ponoviti reprezentativno mjerenje; preostali outlier povezati s kratkom storage snimkom pri poznatim power postavkama. Tek potom razdvojiti NVMe idle, PCIe ASPM, firmware/driver i drugo I/O opterećenje. Ovaj pokus nije razlog za trajno mijenjanje plana, isključivanje antivirusne zaštite, slabljenje SQLite trajnosti ili naslijepo prepisivanje persistence sloja. **N3 ostaje otvoren.**

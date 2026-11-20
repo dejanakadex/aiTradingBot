@@ -1,6 +1,6 @@
 # EUR/USD — priprema nastavka
 
-**N3 ETL analiza, 20.11.2026.:** [diskovno čekanje je potvrđeno](N3_COLLECTION_LATENCY.md#etl-potvrda-diskovnog-čekanja--20112026): pet SQL zastoja odgovara WAL writeovima; jedan SQL 1.378 ms prati flush 1.378 ms i StorPort zahtjev 1.314 ms. Uzrok na razini SSD-a/napajanja još se provjerava. Pripremljen je povratni 10-minutni NVMe power test, bez promjene bota ili SQLite trajnosti. **N3 nije zatvoren; nema naloga.**
+**N3 NVMe usporedba, 20.11.2026.:** [povratni test je dovršen](N3_COLLECTION_LATENCY.md#usporedni-nvme-test--20112026), Balanced je vraćen i testna kopija uklonjena. FX sesija bila je zatvorena, pa je usporedba provedena na izoliranoj WAL/FULL testnoj bazi. NVMe AC 0/0 ubrzava uobičajene zapise u uzorku, ali ostaje commit od 829 ms. **N3 nije zatvoren; nema trajne promjene Windows/SQLite/bot postavki ni naloga.**
 
 **N3 stabilna sesija, 20.11.2026.:** [analiza i SQL dopuna](N3_COLLECTION_LATENCY.md#stabilna-večernja-sesija-i-dopuna-sql-mjerenja--20112026): 77.772 potpuna EUR/USD para, svih 1.259 finalnih 5s barova i 1.234 zagrijana framea. Nema gapova/dropova, ali 17 minuta ima lokalni pipeline maksimum >250 ms (najviše 1,883 s). Novo ReaderLifetime mjerenje stvarno je uhvatilo 1,553 s u dovršavanju UPDATE-a. Dublji I/O uzrok nije još dokazan; **N3 ostaje otvoren**. 781/781 testova i IBKR publish guard prolaze. Nema naloga ni model approvala.
 
