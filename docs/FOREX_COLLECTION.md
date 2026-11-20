@@ -1,5 +1,17 @@
 # Operativno EUR/USD prikupljanje
 
+## Početak dnevne sesije — 20.11.2026.
+
+Planirani raspon je **10–12 sati Europe/Zagreb (09–11 UTC)**. Postojeći kolektor PID 25364 nastavio je rad bez restarta: stvarni IBKR adapter 10.49.2.0, paper TWS 7497, Connected, AnalysisOnly. Command-line zaštite potvrđuju read-only, isključene stock/live/FX paper naloge i automatske FX signale. Read-only provjera operativne baze u 09:08:54 UTC nalazi nula naloga, izvršenja, tradeova, rezervacija i modela. [Početni strukturirani dokaz](evidence/fx12-day-session-start-2026-11-20.json).
+
+Izdvojen i provjeren **prvi uzorak 09:00–09:05 UTC**, 26 Parquet datoteka / 12.995 manifest redaka; od toga 12.846 događaja unutar raspona, odnosno **6.423 potpuna bid/ask para**. Nema nepotpunih parova, starosti >2 s ni prekoračenja future tolerancije. Postoje 32 događaja (16 parova) s brokerovim vremenom do 66,963 ms ispred primitka, unutar postojeće granice 250 ms; izvorna vremena nisu mijenjana. Medijan receive-minus-event je 747,5 ms, p95 1.285,6 ms, uz sekundnu rezoluciju brokerskog vremena.
+
+Offline rekonstrukcija prvih pet minuta daje **59/59 završenih 5s barova**, bez praznih intervala, i **34 framea s najmanje 26 barova**. Za 15s daje 19/19 barova; pet minuta nije dovoljno za 26 takvih barova. Rubni nezavršeni prozori ne broje se. Živi kolektor ima i raniji warmup: u 09:07:02 UTC sažetku ima 133 uzastopna 5s bara. To nije ista početna povijest kao u izdvojenom auditu niti potpuni live/replay dokaz.
+
+Pet dovršenih latency log prozora s krajem između 09:00 i 09:05 UTC broji 12.704 događaja, bez processing grešaka i stale događaja. Ponderirani prosjek obrade je 1,68 ms, internog čekanja 46,39 ms; maksimumi su **1.286,47 / 1.332,50 ms**. Ovaj izolirani zastoj ostaje za daljnju korelaciju; nije dokaz uklanjanja svih problema kašnjenja. Granice log prozora razlikuju se od quote audita. Windows stripchart u 10:07 lokalno mjeri zaostajanje 111,5–114,1 ms prema referenci; to nije mjerenje brokerskog sata niti dugoročne stabilnosti.
+
+Kolektor ostaje aktivan bez naloga. Za nastavak ostaviti računalo budnim i paper TWS prijavljen barem do 12 sati. Nije instaliran dodatni nadzor ili automatska završna analiza. Nakon sesije napraviti stabilne snimke i audit, pregled kašnjenja/praznina te izolirani replay s pripremljenim scenarijima. Zbog dnevnog prometa i limita od 200.000 događaja unaprijed koristiti kronološke 30-minutne raspone (po potrebi manje fiksne podjele), bez biranja prema profitu; odvojeni replayi ne prenose otvorene pozicije preko granice. Lokalni početni artefakti su u `TestResults/fx12-day-20261120`. Ova provjera ne završava FX-12 niti opravdava trening/odobrenje modela na pet minuta podataka. Promijenjeni su samo dokumentacija i dokaz; aplikacija i konfiguracija ostaju iste.
+
 ## Provjera nakon pauze — 19.11.2026.
 
 Runtime `2a73e9a` nastavio je prikupljanje nakon 22:15 UTC / 23:15 Zagreb, bez restarta ili promjene postavki. TWS je Connected, host AnalysisOnly, adapter read-only. Nema lokalnih naloga, izvršenja, tradeova, rezervacija ni modela. [Strukturirani dokaz](evidence/fx12-postpause-2026-11-19.json) čuva odvojene granice svakog mjerenja.

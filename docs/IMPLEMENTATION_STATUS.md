@@ -2,6 +2,8 @@
 
 Ovaj dokument je checkpoint za nastavak rada na branchu `trading-bot-v2`. Svaka točka mora završiti testovima, zelenim CI-jem i jasnim izvještajem prije prelaska na sljedeću.
 
+**20.11.2026. — dnevna FX-12 sesija aktivna, početni uzorak provjeren.** Paper TWS i postojeći AnalysisOnly/read-only kolektor povezani; bez restarta, promjene konfiguracije ili naloga. Prvih pet minuta 10:00–10:05 Zagreb sadrži 6.423 potpuna quote para, nula stale/nepotpunih parova, 59/59 završenih 5s barova i 34 zagrijana framea. Manifest/file hash provjera prolazi. Jedan lokalni pipeline zastoj od 1,29 s ostaje otvoren; ne tvrdi se da su sva kašnjenja riješena. [Početni dokaz i nastavak do 12 sati](FOREX_COLLECTION.md#početak-dnevne-sesije--20112026). Cijela sesija, replay/model/shadow i FX-12 još nisu potvrđeni. Samo operativna provjera i dokumentacija; raniji testovi nisu ponovno pokretani.
+
 **20.11.2026. — odgođena dorada korisničkog sučelja.** Korisnik želi jasno i pregledno sučelje; detaljna razrada i provedba slijede nakon trenutačnog plana. [Zabilježeni dogovor](FX12_RESEARCH_PREPARATION.md#dorada-korisničkog-sučelja-nakon-trenutačnog-plana). Ova dopuna mijenja samo dokumentaciju, bez implementacije UI-ja ili promjene aktualnih prioriteta.
 
 **20.11.2026. — sačuvani prijedlozi za nakon FX-12.** Po korisnikovu dogovoru zabilježen je odgođeni backlog iz pregleda DaviddTech / AI Trading Arena: preglednik eksperimenata, jednostavan trend/breakout kandidat, provjera filtara, otpornost i kontrola višestrukog testiranja, praćenje slabljenja te povezanost strategija. [Redoslijed, izvori i ograničenja](FX12_RESEARCH_PREPARATION.md#dogovoreni-prijedlozi-nakon-fx-12--20112026). Nema implementacije ni promjene konfiguracije; FX-12 ostaje prioritet i otvoren.
