@@ -1,0 +1,435 @@
+{
+  "scope": "N1 offline coverage reanalysis of the same four independent EUR/USD half-hour batches. No broker orders. Not a continuous portfolio return.",
+  "basisCommit": "818a96d",
+  "policyVersion": "fx-quote-coverage-v1",
+  "labelVersion": "labels-fx-execution-v2",
+  "preservedPriorArtifactCount": 539,
+  "coverageEvidence": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-20T09:00:00Z",
+    "toUtc": "2026-11-20T11:00:00Z",
+    "source": "Frozen prior session-gaps.json; original UTC database fields; SHA256=11DCC7B24A3870C698CAD63763C772559E8827E2FA70906B2F64626F2D8B461C",
+    "interruptions": [
+      {
+        "startUtc": "2026-11-20T09:13:20.2514441Z",
+        "endUtc": "2026-11-20T09:13:37.2725049Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-20T09:13:20.2308456Z",
+        "endUtc": "2026-11-20T09:13:20.2514441Z",
+        "reason": "IBKR connection lost."
+      }
+    ]
+  },
+  "coverageFileSha256": "bdf63a1de2314f3f3d5dcdc932fa84a7682c41e4ba6d8c2924d8465b4dcd6ab0",
+  "originalGapFileSha256": "11dcc7b24a3870c698cad63763c772559e8827e2fa70906b2f64626f2d8b461c",
+  "scenarios": {
+    "100": {
+      "runs": [
+        {
+          "window": "0900-0930",
+          "replayRunId": "1da6afa1-8b61-47cc-94dc-66518a92ebcb",
+          "inputSha256": "3721d3e2f134eeba750755977b395906d99e8499728438fe9aa45349b8a884a7",
+          "requestSha256": "9889b401d8835b2b79e945e20b08699fb2aad0b16afbc46ed19d5a29d698ca59",
+          "outputSha256": "aad04c140c3e53feccbe8708fa5a108a044a99baec4f1ceb5b74e3adf4871eda",
+          "signalCount": 25,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "priorOutputSha256": "3af2da767dcdc07a34fb5ac8b6cdfd70359c2b4ce9bad3b5a51c0970b04e1302",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {
+            "RecordedInterruption": 1
+          },
+          "sourceManifestSha256": "058c201ba986482b662849cba3047cfa04e1631531f1d57c7d488cc899295fa4",
+          "reportSha256": "cc13e521e46bc802629e5b3f4ca051922b61905d4cf23abfc23c82d8c232c0d6"
+        },
+        {
+          "window": "0930-1000",
+          "replayRunId": "eeb55f07-44a0-4dac-b92c-65e2b795101f",
+          "inputSha256": "c974a421bbaa50cbcf55c3d59fce476e02e3a1c26e43c1ce7b8b9f8134b691bc",
+          "requestSha256": "9889b401d8835b2b79e945e20b08699fb2aad0b16afbc46ed19d5a29d698ca59",
+          "outputSha256": "9c165bc75f8ed99909ab104f1930904cf324851d54e7e642c6d40d05a210db02",
+          "signalCount": 20,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "priorOutputSha256": "5cb5959a668339606ee0f54454f5255b43e4f130f6498d20e9565bbcb99e4590",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {},
+          "sourceManifestSha256": "e9860bf1f3a8f5547ae5e09ed9ccd1fe71dba05ac73701420e7559c5f508d0cd",
+          "reportSha256": "ad994daceebe945eae2ea2426075afe06476eeef121c195fb1b47d62c90fedd8"
+        },
+        {
+          "window": "1000-1030",
+          "replayRunId": "5fc5a091-5636-4f01-ae76-f92d510b7b7e",
+          "inputSha256": "5239ed63b9d7f5e90fdc32f6c7855ac56290e09a098c285b942fa59514c20ba4",
+          "requestSha256": "9889b401d8835b2b79e945e20b08699fb2aad0b16afbc46ed19d5a29d698ca59",
+          "outputSha256": "4125dd54402b35b76650cf1fa83968f3880290739e1adb9ec40561eabba4fa33",
+          "signalCount": 26,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "priorOutputSha256": "f2a8d62aeafbcc6e59cc884b5d674e849871d7108bcac47ff32b9f563b5ac86d",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {},
+          "sourceManifestSha256": "e99552c76657bd6c3116ae13014aa2935d2ce086b5f03242f1660d0ecf17de68",
+          "reportSha256": "a059ef494f9050b858796e5ffb25ce948937027b7756231b6667bb26de17bbd1"
+        },
+        {
+          "window": "1030-1100",
+          "replayRunId": "5d387f44-000c-43f8-8a3c-be9e0ef8a448",
+          "inputSha256": "eaa2bf77b44b2263621a87a31447a227ed27592a679f9998f9cf2b6f429f9d0e",
+          "requestSha256": "9889b401d8835b2b79e945e20b08699fb2aad0b16afbc46ed19d5a29d698ca59",
+          "outputSha256": "344c7e6435f8e5618bc6314f9bae5e93294c01dbf4eace7b7fd289a37cf64e39",
+          "signalCount": 19,
+          "filledTradeCount": 0,
+          "closedTradeCount": 0,
+          "realizedNetPnl": 0,
+          "priorOutputSha256": "c56e008a0d5ab6579163ba84fc4617acc52b07dc025ed08ff3b98067eb67f74a",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {
+            "StaleDecisionQuote": 1
+          },
+          "sourceManifestSha256": "109a01dc150ce6d5e781d443629669685a5ecf542f2fd8cf14d6487960e360db",
+          "reportSha256": "dc85f5961c3b0e527e3a554fb492cff0be08dfd44aef3a5cda6623ab4dd64be7"
+        }
+      ],
+      "signalCount": 90,
+      "filledCount": 0,
+      "closedCount": 0,
+      "closedNetUsd": "0",
+      "closedGrossUsd": "0",
+      "closedCommissionUsd": "0",
+      "negativeClosedTrades": 0,
+      "completePortfolioReturn": false,
+      "tradeRecordFieldsUnchanged": true,
+      "filledTradeOutcomesUnchanged": true,
+      "labelReasons": {
+        "RiskRejected: Risk, costs, buying power or exposure leaves less than broker minimum base units.": 173,
+        "ShortExecutionUnsupported": 170,
+        "NoFreshDecisionQuote": 7
+      },
+      "operationalCounts": {
+        "OrderRecords": 0,
+        "ExecutionRecords": 0,
+        "NumericalModelRecords": 0
+      },
+      "configSha256": "37811ac1cd38a822840879a5fa1ca2d5692076dc4c2813b9f4dd7b29e02c1748"
+    },
+    "50000": {
+      "runs": [
+        {
+          "window": "0900-0930",
+          "replayRunId": "32e6c503-4774-4295-9044-e31169cb7d52",
+          "inputSha256": "3721d3e2f134eeba750755977b395906d99e8499728438fe9aa45349b8a884a7",
+          "requestSha256": "d5f979b9e5104ed09d011870c178a8575498232fa2bc06021dab939a9a0e743f",
+          "outputSha256": "9ef771bd6e7f7ef7cf114993bfc5bf74d217bd2a2f70fa91ba5bbdd0db96db62",
+          "signalCount": 25,
+          "filledTradeCount": 8,
+          "closedTradeCount": 7,
+          "realizedNetPnl": -40.6763,
+          "priorOutputSha256": "8d1cf997246ba5e5827c60f21c9b2fa7e88fd381876fe112c8fa7d628aaf3a4f",
+          "tradeRecordFieldsUnchanged": false,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [
+            {
+              "signalTimeUtc": "2026-11-20T09:13:22Z",
+              "field": "requestedQuantity",
+              "prior": 20000.0,
+              "current": 0
+            },
+            {
+              "signalTimeUtc": "2026-11-20T09:13:22Z",
+              "field": "commission",
+              "prior": 0,
+              "current": null
+            }
+          ],
+          "coverageReasons": {
+            "UnobservedQuoteInterval": 2,
+            "RecordedInterruption": 1
+          },
+          "sourceManifestSha256": "058c201ba986482b662849cba3047cfa04e1631531f1d57c7d488cc899295fa4",
+          "reportSha256": "1542ad2d8f3e0054ba041f419150cef089f8850fba7e2d30691db616baccf2b5"
+        },
+        {
+          "window": "0930-1000",
+          "replayRunId": "fbc71e96-779f-4671-bc97-a8ff46d5456e",
+          "inputSha256": "c974a421bbaa50cbcf55c3d59fce476e02e3a1c26e43c1ce7b8b9f8134b691bc",
+          "requestSha256": "d5f979b9e5104ed09d011870c178a8575498232fa2bc06021dab939a9a0e743f",
+          "outputSha256": "c41ce752484306ab283d8c4e1c753733a5915a7e744451a4177c5c4ae99c54db",
+          "signalCount": 20,
+          "filledTradeCount": 4,
+          "closedTradeCount": 3,
+          "realizedNetPnl": -22.29175,
+          "priorOutputSha256": "be3888279aa6215d978dfb06a46ead917dbd7004a5f38f9efa3eb8a8e5a2cd5c",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {
+            "UnobservedQuoteInterval": 1
+          },
+          "sourceManifestSha256": "e9860bf1f3a8f5547ae5e09ed9ccd1fe71dba05ac73701420e7559c5f508d0cd",
+          "reportSha256": "e3377837e55f4e0bc00a10b1753f18848fd0a8017a788a86d2dc9ca81452632e"
+        },
+        {
+          "window": "1000-1030",
+          "replayRunId": "0f149234-164f-4eb2-b07d-c09159aaee7c",
+          "inputSha256": "5239ed63b9d7f5e90fdc32f6c7855ac56290e09a098c285b942fa59514c20ba4",
+          "requestSha256": "d5f979b9e5104ed09d011870c178a8575498232fa2bc06021dab939a9a0e743f",
+          "outputSha256": "78efaa56a49581b3e83ba76edbb070e9c465ead154a32bccedd99d9429983b24",
+          "signalCount": 26,
+          "filledTradeCount": 6,
+          "closedTradeCount": 5,
+          "realizedNetPnl": -35.4857,
+          "priorOutputSha256": "310e78200c58006df65ec07ed08e4c0f13d35d24e209c73fb8a1852fb69585c0",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {
+            "UnobservedQuoteInterval": 1
+          },
+          "sourceManifestSha256": "e99552c76657bd6c3116ae13014aa2935d2ce086b5f03242f1660d0ecf17de68",
+          "reportSha256": "ce2fe09987616e6aa0d1a4c53d27c26e43fc855561028e1b9def2c19ae660e54"
+        },
+        {
+          "window": "1030-1100",
+          "replayRunId": "59903afa-2675-4bbe-aaf2-87251465a12e",
+          "inputSha256": "eaa2bf77b44b2263621a87a31447a227ed27592a679f9998f9cf2b6f429f9d0e",
+          "requestSha256": "d5f979b9e5104ed09d011870c178a8575498232fa2bc06021dab939a9a0e743f",
+          "outputSha256": "76fd3821d75ea88469f1f5254ea333244371a2577e449f52511613e4ffb4d574",
+          "signalCount": 19,
+          "filledTradeCount": 7,
+          "closedTradeCount": 6,
+          "realizedNetPnl": -34.579,
+          "priorOutputSha256": "223d6b05abaa068be0f5a8061c02fba80c4246371f6ed089e55923a0c542fb0c",
+          "tradeRecordFieldsUnchanged": true,
+          "filledTradeOutcomesUnchanged": true,
+          "recordDifferences": [],
+          "coverageReasons": {
+            "StaleDecisionQuote": 1,
+            "UnobservedQuoteInterval": 1
+          },
+          "sourceManifestSha256": "109a01dc150ce6d5e781d443629669685a5ecf542f2fd8cf14d6487960e360db",
+          "reportSha256": "e2d478332fbccaa9685b9296bd6b9183983b29724aa746126b6dff41e8cb358c"
+        }
+      ],
+      "signalCount": 90,
+      "filledCount": 25,
+      "closedCount": 21,
+      "closedNetUsd": "-133.03275",
+      "closedGrossUsd": "-26.0",
+      "closedCommissionUsd": "84",
+      "negativeClosedTrades": 21,
+      "completePortfolioReturn": false,
+      "tradeRecordFieldsUnchanged": false,
+      "filledTradeOutcomesUnchanged": true,
+      "labelReasons": {
+        "Timer": 131,
+        "ShortExecutionUnsupported": 170,
+        "InsufficientCoverage: UnobservedQuoteInterval": 32,
+        "InsufficientCoverage: RecordedInterruption": 3,
+        "NoFreshDecisionQuote": 7,
+        "NoFillWithinEntryWindow": 3,
+        "InsufficientCoverage: QuoteDatasetBoundaryWithOpenPosition": 4
+      },
+      "operationalCounts": {
+        "OrderRecords": 0,
+        "ExecutionRecords": 0,
+        "NumericalModelRecords": 0
+      },
+      "configSha256": "4565bbd28a02780362a3e261111cfda0344b7d2f0e9c5391fd17483802497f49"
+    }
+  },
+  "unresolvedFilledTrades": [
+    {
+      "capital": "50000",
+      "window": "0900-0930",
+      "signalTimeUtc": "2026-11-20T09:19:42Z",
+      "filledQuantity": 20000.0,
+      "exitedQuantity": 0,
+      "netPnl": null,
+      "gapSeconds": 3.101861,
+      "issue": {
+        "policyVersion": "fx-quote-coverage-v1",
+        "reason": "UnobservedQuoteInterval",
+        "checkedAtUtc": "2026-11-20T09:20:29.0317083Z",
+        "previousQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:18241",
+          "eventUtc": "2026-11-20T09:20:25Z",
+          "receivedUtc": "2026-11-20T09:20:25.929847Z",
+          "availableUtc": "2026-11-20T09:20:25.929847Z"
+        },
+        "currentQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:18244",
+          "eventUtc": "2026-11-20T09:20:28Z",
+          "receivedUtc": "2026-11-20T09:20:29.0317083Z",
+          "availableUtc": "2026-11-20T09:20:29.0317083Z"
+        },
+        "maximumQuoteGapSeconds": 3,
+        "maximumSnapshotAgeSeconds": 2,
+        "recordedInterruption": null
+      }
+    },
+    {
+      "capital": "50000",
+      "window": "0930-1000",
+      "signalTimeUtc": "2026-11-20T09:41:47Z",
+      "filledQuantity": 20000.0,
+      "exitedQuantity": 0,
+      "netPnl": null,
+      "gapSeconds": 4.414727,
+      "issue": {
+        "policyVersion": "fx-quote-coverage-v1",
+        "reason": "UnobservedQuoteInterval",
+        "checkedAtUtc": "2026-11-20T09:41:53.8147421Z",
+        "previousQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:69187",
+          "eventUtc": "2026-11-20T09:41:49Z",
+          "receivedUtc": "2026-11-20T09:41:49.4000151Z",
+          "availableUtc": "2026-11-20T09:41:49.4000151Z"
+        },
+        "currentQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:69190",
+          "eventUtc": "2026-11-20T09:41:53Z",
+          "receivedUtc": "2026-11-20T09:41:53.8147421Z",
+          "availableUtc": "2026-11-20T09:41:53.8147421Z"
+        },
+        "maximumQuoteGapSeconds": 3,
+        "maximumSnapshotAgeSeconds": 2,
+        "recordedInterruption": null
+      }
+    },
+    {
+      "capital": "50000",
+      "window": "1000-1030",
+      "signalTimeUtc": "2026-11-20T10:12:37Z",
+      "filledQuantity": 20000.0,
+      "exitedQuantity": 0,
+      "netPnl": null,
+      "gapSeconds": 3.598838,
+      "issue": {
+        "policyVersion": "fx-quote-coverage-v1",
+        "reason": "UnobservedQuoteInterval",
+        "checkedAtUtc": "2026-11-20T10:13:18.9774586Z",
+        "previousQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:168916",
+          "eventUtc": "2026-11-20T10:13:15Z",
+          "receivedUtc": "2026-11-20T10:13:15.3786201Z",
+          "availableUtc": "2026-11-20T10:13:15.3786201Z"
+        },
+        "currentQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:168919",
+          "eventUtc": "2026-11-20T10:13:18Z",
+          "receivedUtc": "2026-11-20T10:13:18.9774586Z",
+          "availableUtc": "2026-11-20T10:13:18.9774586Z"
+        },
+        "maximumQuoteGapSeconds": 3,
+        "maximumSnapshotAgeSeconds": 2,
+        "recordedInterruption": null
+      }
+    },
+    {
+      "capital": "50000",
+      "window": "1030-1100",
+      "signalTimeUtc": "2026-11-20T10:45:57Z",
+      "filledQuantity": 20000.0,
+      "exitedQuantity": 0,
+      "netPnl": null,
+      "gapSeconds": 3.640744,
+      "issue": {
+        "policyVersion": "fx-quote-coverage-v1",
+        "reason": "UnobservedQuoteInterval",
+        "checkedAtUtc": "2026-11-20T10:46:09.1229894Z",
+        "previousQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:262651",
+          "eventUtc": "2026-11-20T10:46:04Z",
+          "receivedUtc": "2026-11-20T10:46:05.4822459Z",
+          "availableUtc": "2026-11-20T10:46:05.4822459Z"
+        },
+        "currentQuote": {
+          "id": "IBKR:FXQ:3e57bd817f7941dd9f15ec0b452ed192:262654",
+          "eventUtc": "2026-11-20T10:46:08Z",
+          "receivedUtc": "2026-11-20T10:46:09.1229894Z",
+          "availableUtc": "2026-11-20T10:46:09.1229894Z"
+        },
+        "maximumQuoteGapSeconds": 3,
+        "maximumSnapshotAgeSeconds": 2,
+        "recordedInterruption": null
+      }
+    }
+  ],
+  "limits": [
+    "UnobservedQuoteInterval is absence of adequate observation coverage, not evidence of a broker disconnect or proof of a quiet market.",
+    "RecordedInterruption uses the explicitly supplied frozen operational evidence; no interruption listed does not prove connectivity.",
+    "No interpolation, invented quotes, threshold relaxation or carry-forward fills. Existing raw event and receipt times are preserved.",
+    "Only closed-trade subtotal is reported. Four filled but incomplete trades remain excluded, not assumed zero-return trades.",
+    "Each half-hour resets equity and position state. Multi-day/continuous portfolio work remains N2 and N10.",
+    "Coverage evidence constrains the execution simulation; it does not reconstruct historical feature reset events or complete N4 parity.",
+    "Paper execution and positive net expectancy have not been established."
+  ],
+  "deterministicRepeat": {
+    "firstRunId": "0f149234-164f-4eb2-b07d-c09159aaee7c",
+    "repeatRunId": "d70e182d-7b93-43a2-90d7-c7394edaac3d",
+    "inputSha256": "5239ed63b9d7f5e90fdc32f6c7855ac56290e09a098c285b942fa59514c20ba4",
+    "outputSha256": "78efaa56a49581b3e83ba76edbb070e9c465ead154a32bccedd99d9429983b24",
+    "sameInput": true,
+    "sameOutput": true
+  },
+  "artifactHashes": {
+    "contract-100.json": "f72c8f83aa38916f7a2633a75bddd1871fa81bdac0f7791133ecc54d96b928ef",
+    "contract-50000.json": "63596f83d782077ffcf507bf42169f86c71832917a20562fe750686466683033",
+    "coverage.json": "bdf63a1de2314f3f3d5dcdc932fa84a7682c41e4ba6d8c2924d8465b4dcd6ab0",
+    "publish-evidence.py": "1aca802e66aa0d6b23150dda6940669405f953fdb4c0c09608dd609691d4e437",
+    "replay-100-0900-0930.json": "cc13e521e46bc802629e5b3f4ca051922b61905d4cf23abfc23c82d8c232c0d6",
+    "replay-100-0930-1000.json": "ad994daceebe945eae2ea2426075afe06476eeef121c195fb1b47d62c90fedd8",
+    "replay-100-1000-1030.json": "a059ef494f9050b858796e5ffb25ce948937027b7756231b6667bb26de17bbd1",
+    "replay-100-1030-1100.json": "dc85f5961c3b0e527e3a554fb492cff0be08dfd44aef3a5cda6623ab4dd64be7",
+    "replay-50000-0900-0930.json": "1542ad2d8f3e0054ba041f419150cef089f8850fba7e2d30691db616baccf2b5",
+    "replay-50000-0930-1000.json": "e3377837e55f4e0bc00a10b1753f18848fd0a8017a788a86d2dc9ca81452632e",
+    "replay-50000-1000-1030-repeat.json": "eda1a7b977f18ddf57d8132a132ef1b01cb2b9572f8905669fb74a1306beec13",
+    "replay-50000-1000-1030.json": "ce2fe09987616e6aa0d1a4c53d27c26e43fc855561028e1b9def2c19ae660e54",
+    "replay-50000-1030-1100.json": "e2d478332fbccaa9685b9296bd6b9183983b29724aa746126b6dff41e8cb358c",
+    "research-100.json": "37811ac1cd38a822840879a5fa1ca2d5692076dc4c2813b9f4dd7b29e02c1748",
+    "research-50000.json": "4565bbd28a02780362a3e261111cfda0344b7d2f0e9c5391fd17483802497f49",
+    "run-scenario.ps1": "5c4b434e6e03aebecd89c5a4bbcaff2f23f0a650876848d1d0cc382dc942db7d",
+    "summarize.py": "6ad35a1a3f6f5062052c152cfee7b6dcce295f5e9b3986f8f88792356c7bcb59"
+  },
+  "validation": {
+    "localTests": {
+      "total": 764,
+      "executed": 764,
+      "passed": 764,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    "trxSha256": "dca5fdb5e9a9d6be5f343fec669ef4f0a3a7a7afd67c6b37163993dd74baebfa",
+    "ibkrPublishAndMissingChangedDllGuards": "Passed locally; no broker connection",
+    "ci": "Tracked separately on GitHub Actions for the committed source",
+    "artifactsDirectory": "TestResults/n1-final-20261120"
+  },
+  "normalizedLfSourceSha256": {
+    "TradingBot.Application/DTOs/ForexReplayCoverageModels.cs": "80801ceb87d289588e482746dd9f0b98941f9be89ebde9caf62359738c07710e",
+    "TradingBot.Application/DTOs/ReplayBacktestModels.cs": "6e98aad1189ee2603c72b42c034093ca4ce3d8e41a56120579bb0febf6ed8554",
+    "TradingBot.Application/DTOs/ReplayModels.cs": "91a5cbdede270e1cf6e47fe0fc45bfb21d6cdb0b3ddd002b78c8bfa4b048b58a",
+    "TradingBot.Infrastructure/Services/ForexReplayCoveragePolicy.cs": "12b15f418f957ba308fe1cbc036e1e4aad3ef62a15dc4b4696da184d69527d5f",
+    "TradingBot.Infrastructure/Services/ForexTradeSimulator.cs": "8cacbe20308884294a50e7e2fbe90e003a418fe99c14093d24603c79b020ff30",
+    "TradingBot.Infrastructure/Services/ForexResearchContract.cs": "aac0a232dcb36a79f726b2694804ea4dea0ad7a888ba3361a799925829d9c9eb",
+    "TradingBot.Infrastructure/Services/DeterministicReplayService.Forex.cs": "4cfd05969db0baf8a22ad2c9493c6815073a53e95156e7742d90218a516489db",
+    "TradingBot.Infrastructure/Services/DeterministicReplayService.cs": "55f819360e103380886921dcb41e348e3f619c3ed5b9fdbebb8e2db96038ee62",
+    "TradingBot.Infrastructure/Services/ReplayBacktestService.cs": "e8a9eb68c3f4ddc14c588dea0eb7e50984fe7ec42fba62bf8fd12623d96d10c8",
+    "TradingBot.ModelOps/ModelOpsProgram.cs": "819311451a36d9e59035e1129a13af6e904ae3ae05c61e1a01c01301d6e4f52d",
+    "TradingBot.Tests/ForexReplayCoverageTests.cs": "f1bbff870ecc0bd3e930c50032c2f2d9037739a64444019d4bdaaa92c885b73c",
+    "TradingBot.Tests/ForexResearchTests.cs": "e7fcc9ddd9e8a21edbdb745c5f2eb264b9e607ee22d744eb82b3d7e2c3bcf18b"
+  }
+}

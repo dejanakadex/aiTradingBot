@@ -1,0 +1,18 @@
+{
+  "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+  "fromUtc": "2026-11-20T09:00:00Z",
+  "toUtc": "2026-11-20T11:00:00Z",
+  "source": "Frozen prior session-gaps.json; original UTC database fields; SHA256=11DCC7B24A3870C698CAD63763C772559E8827E2FA70906B2F64626F2D8B461C",
+  "interruptions": [
+    {
+      "startUtc": "2026-11-20T09:13:20.2514441Z",
+      "endUtc": "2026-11-20T09:13:37.2725049Z",
+      "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+    },
+    {
+      "startUtc": "2026-11-20T09:13:20.2308456Z",
+      "endUtc": "2026-11-20T09:13:20.2514441Z",
+      "reason": "IBKR connection lost."
+    }
+  ]
+}

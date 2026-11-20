@@ -1,5 +1,7 @@
 # Pregled dovršenosti i redoslijed nastavka
 
+**N1 dopuna 20.11.2026.:** [pravila kotacija i ponovljena analiza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni s 764/764 testa. Četiri izlaza ostaju opravdano nepoznata; zabilježeni TWS prekid sada se zasebno koristi u simulaciji. CI za commit ove promjene prati se u GitHub Actions; prije N2 potreban je prolaz. N2–N12 ostaju plan, bez početka implementacije.
+
 Pregled 20.11.2026., kod `cd1e653`, zajednički branch `trading-bot-v2`. Ovo je prijedlog redoslijeda za odobravanje **jedne točke po jedne**, a ne početak implementacije ili dopuštenje za naloge. Zadržavamo .NET 10, Blazor, SQLite/EF, Parquet, ML.NET/LightGBM, postojeći risk/arbitration/lifecycle te stock i FX podršku. Live, short proširenje i crypto nisu dio ovog nastavka.
 
 ## Zaključak provjere
@@ -38,6 +40,8 @@ Detalji i ograničenja rezultata: [dnevni izvještaj](FOREX_COLLECTION.md#analiz
 ## Predloženi redoslijed
 
 ### N1 — Razjasniti valjanost kotacije i nedostajuće podatke
+
+Status: **implementirano i lokalno provjereno**; [dokaz i granice](N1_QUOTE_COVERAGE.md). Prihvat N1 dopušta zadržavanje neizvjesnog ishoda kada nedostaje dokaz; ne zahtijeva izmišljanje izlaza. Sljedeća razvojna točka je N2, nakon potrebne CI potvrde i odobrenja nastavka.
 
 Razdvojiti vrijeme tržišnog događaja, lokalnog primitka, zadnje valjane kotacije i stvarnog prekida veze. Utvrditi kada posljednja poznata kotacija smije ostati dostupna za odluku, a kada nema dokaza za fill/exit. Ne povećavati prag od tri sekunde samo da bi nestali nepotpuni rezultati; ne izmišljati tickove ili volumen. Ako nema dovoljno podataka za pouzdanu razliku, zadržati neizvjestan ishod i prikazati njegov utjecaj na rezultat.
 

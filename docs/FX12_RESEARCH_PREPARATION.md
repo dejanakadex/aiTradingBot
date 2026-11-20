@@ -1,5 +1,7 @@
 # FX-12 — priprema prvog EUR/USD backtesta
 
+**N1 dopuna 20.11.:** [nova pravila pokrivenosti](N1_QUOTE_COVERAGE.md), label ugovor v2 i `fx-replay --coverage` provjereni su na istim konfiguracijama i snapshotima u zasebnim bazama. Stari v1 rezultati niže ostaju povijesni dokaz. Četiri izlaza ostaju nepoznata; prije višednevne evaluacije slijedi N2. Nema model approvala ili naloga.
+
 Priprema 19./20.11.2026. koristi postojeći FX-10 replay; ne mijenja aktivni kolektor, SPY/FX podršku, operativne approvale ili dopuštenje naloga. Istraživačke baze/configi su zasebni. **Nije odobren model i FX-12 ostaje otvoren.**
 
 **Dnevni nastavak 20.11.:** [analizirana sesija 10–12 Zagreb](FOREX_COLLECTION.md#analiza-dnevne-sesije--20112026) i osam replaya s ovdje pripremljenim nepromijenjenim konfiguracijama. Kontinuitet sada daje zagrijane frameove; veći tehnički scenarij daje 21 zatvoren, neto negativan baseline trade i četiri nedokazana izlaza. Evaluacija je odbila prekratak raspon. Osim dodatnih dana podataka, potreban je provjerljiv višesegmentni istraživački tok: trenutni evaluator veže jedan replay, a današnja sesija već prelazi njegov limit od 200.000 događaja. To se ne rješava spuštanjem minimuma ili proglašavanjem zbroja polusatnih replaya jednim portfeljem.

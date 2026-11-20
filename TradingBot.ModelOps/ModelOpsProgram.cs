@@ -156,7 +156,7 @@ internal static class ModelOpsProgram
                 case "fx-replay":
                     Print(await provider.GetRequiredService<IDeterministicReplayService>().RunForexResearchAsync(new(
                         Required(options, "instrument-id"), ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to")),
-                        StrategyId: Required(options, "strategy-id"))));
+                        StrategyId: Required(options, "strategy-id")) { ForexCoverage = await ReadForexCoverageAsync(options) }));
                     break;
                 case "evaluate":
                     Print(await evaluations.RunAsync(new ResearchEvaluationRequest(
@@ -278,6 +278,18 @@ internal static class ModelOpsProgram
         return 0;
     }
 
+    private static async Task<ForexReplayCoverageEvidence?> ReadForexCoverageAsync(IReadOnlyDictionary<string, string> options)
+    {
+        var path = Optional(options, "coverage");
+        if (path == null) return null;
+        if (!Path.IsPathFullyQualified(path) || !File.Exists(path))
+            throw new ArgumentException("--coverage must name an existing absolute frozen FX coverage JSON file.");
+        var json = await File.ReadAllTextAsync(path);
+        return JsonSerializer.Deserialize<ForexReplayCoverageEvidence>(json, new JsonSerializerOptions(JsonOptions)
+        { UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow })
+            ?? throw new InvalidDataException("FX coverage evidence must not be null.");
+    }
+
     private static string Required(IReadOnlyDictionary<string, string> options, string name) =>
         options.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value : throw new ArgumentException($"Required option --{name} is missing.");
@@ -299,7 +311,7 @@ internal static class ModelOpsProgram
         Commands require --db ABSOLUTE_SQLITE_PATH except fx-collection-audit; optional --config APPSETTINGS_JSON overrides TradingBot.Web/appsettings.json.
 
         migrate
-        fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC
+        fx-replay --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --strategy-id ID --from UTC --to UTC [--coverage ABSOLUTE_FROZEN_JSON]
         fx-prepare --config COLLECTION_JSON [--rules RULES_REPORT] --equity-usd DECIMAL --output NEW_ABSOLUTE_CONFIG
         fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
         fx-contract --instrument-id ID --strategy-id ID

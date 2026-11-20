@@ -30,7 +30,11 @@ public sealed class ForexResearchTests
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(f.Patterns), System.Text.Json.JsonSerializer.Serialize(boundPatterns));
         string[] common = ["--db", f.DatabasePath, "--config", f.ConfigPath, "--instrument-id", "EURUSD", "--strategy-id", "patterns"];
         Assert.Equal(0, await ModelOpsProgram.RunAsync(["fx-contract", .. common]));
-        Assert.Equal(0, await ModelOpsProgram.RunAsync(["fx-replay", .. common, "--dataset", f.DatasetPath, "--from", Start.ToString("O"), "--to", Start.AddSeconds(192).ToString("O")]));
+        var coveragePath = f.ConfigPath + ".coverage.json";
+        await File.WriteAllTextAsync(coveragePath, System.Text.Json.JsonSerializer.Serialize(new ForexReplayCoverageEvidence(
+            "EURUSD", Start, Start.AddSeconds(192), "Synthetic test evidence; no recorded interruptions", [])));
+        Assert.Equal(0, await ModelOpsProgram.RunAsync(["fx-replay", .. common, "--dataset", f.DatasetPath, "--from", Start.ToString("O"),
+            "--to", Start.AddSeconds(192).ToString("O"), "--coverage", coveragePath]));
         await using var verify = f.CreateDbContext();
         Assert.True((await verify.ReplayBacktestRecords.SingleAsync()).ClosedTradeCount > 0,
             string.Join("; ", (await verify.ResearchCandidateRecords.Where(x => x.Outcome == ResearchCandidateOutcome.Blocked).Select(x => x.ReasonsJson).ToArrayAsync()).Distinct()));

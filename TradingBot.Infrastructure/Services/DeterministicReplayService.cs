@@ -69,6 +69,7 @@ namespace TradingBot.Infrastructure.Services
         {
             if (!_settings.Enabled) throw new InvalidOperationException("Deterministic replay is disabled by configuration.");
             if (request == null) throw new ArgumentNullException(nameof(request));
+            if (request.ForexCoverage != null) throw new NotSupportedException("FX coverage evidence belongs to fx-replay, not stock replay.");
             var instrumentId = Required(request.InstrumentId, nameof(request.InstrumentId));
             if (_tradingSettings.GetConfiguredInstruments().Any(x => x.InstrumentId == instrumentId && x.InstrumentType == InstrumentType.Forex))
                 throw new NotSupportedException("Use RunForexResearchAsync (ModelOps fx-replay) for FX pattern/trade replay.");
@@ -445,7 +446,7 @@ namespace TradingBot.Infrastructure.Services
                 ReplayRunStatus.Cancelled => run.Status is ReplayRunStatus.Pending or ReplayRunStatus.Running or ReplayRunStatus.Paused,
                 _ => false
             };
-            if (run.StrategyVersion.StartsWith(ForexResearchContract.Labels, StringComparison.Ordinal))
+            if (run.StrategyVersion.StartsWith(ForexResearchContract.LabelFamily, StringComparison.Ordinal))
                 throw new InvalidOperationException("FX research runs are atomic offline operations; start a new fx-replay instead of changing their status.");
             if (!allowed) throw new InvalidOperationException($"Replay run in status {run.Status} cannot transition to {target}.");
 

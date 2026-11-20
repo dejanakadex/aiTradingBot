@@ -23,6 +23,7 @@ public sealed partial class DeterministicReplayService
             throw new InvalidOperationException("FX replay dependencies or replay permission are unavailable.");
         var from = ToUtc(request.FromUtc); var to = ToUtc(request.ToUtc);
         if (from >= to || to - from > TimeSpan.FromDays(7)) throw new ArgumentException("FX replay range must be positive and at most seven days.");
+        var coverageEvidence = ForexReplayCoveragePolicy.FreezeEvidence(request.ForexCoverage, request.InstrumentId, from, to);
         var contract = _forexContract.Get(request.InstrumentId, request.StrategyId);
         var p = contract.Profile;
         var instrument = _tradingSettings.GetConfiguredInstruments().Single(x => x.InstrumentId == p.InstrumentId);
@@ -31,7 +32,8 @@ public sealed partial class DeterministicReplayService
             .Where(x => x.ReceivedTimeUtc <= to).OrderBy(x => x.ReceivedTimeUtc).ThenBy(x => x.EventId, StringComparer.Ordinal).ToArray();
         if (records.Length > 200000) throw new InvalidDataException("FX research input exceeds 200,000 events; select a smaller range.");
         var quotes = ForexTradeSimulator.ReadQuotes(records, instrument.InstrumentId, instrument.Symbol, _shortAggregateSettings);
-        var inputHash = ComputeInputHash(records);
+        var inputHash = ForexResearchContract.Hash(ComputeInputHash(records) + "|" + ForexReplayCoveragePolicy.Version
+            + "|" + JsonSerializer.Serialize(coverageEvidence));
         var configHash = ForexResearchContract.Hash(contract.Label + contract.Feature + contract.Pattern);
         var latest = new LatestMarketDataService(Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings), Microsoft.Extensions.Options.Options.Create(_tradingSettings));
         var inputs = new ForexFeatureService(latest, _featureEngine, Microsoft.Extensions.Options.Options.Create(_tradingSettings), Microsoft.Extensions.Options.Options.Create(_shortAggregateSettings));
@@ -81,7 +83,8 @@ public sealed partial class DeterministicReplayService
             {
                 var at = ToUtc(candidate.EvaluatedAtUtc);
                 var id = candidate.SignalId ?? Guid.Empty;
-                var label = _forexSimulator.Simulate(id, candidate.Direction, at, quotes, atr, p, contract.Costs, p.StartingEquityUsd);
+                var label = _forexSimulator.Simulate(id, candidate.Direction, at, quotes, atr, p, contract.Costs, p.StartingEquityUsd,
+                    coverageEvidence: coverageEvidence);
                 candidate.LabelVersion = contract.Label;
                 db.CandidateLabelRecords.Add(new() { ResearchCandidateId = candidate.Id, HorizonSeconds = p.HoldingSeconds,
                     Status = label.Trade.Status == "Closed" ? CandidateLabelStatus.Complete : CandidateLabelStatus.InsufficientData,
@@ -97,9 +100,10 @@ public sealed partial class DeterministicReplayService
                     PatternType = candidate.PatternType, Direction = candidate.Direction, Symbol = candidate.Symbol, Timeframe = candidate.Timeframe,
                     DetectedAtUtc = at, Confidence = candidate.Confidence, MetadataJson = candidate.MetadataJson, CreatedAtUtc = _clock.UtcNow });
                 if (at < occupied) { trades.Add(label.Trade with { Status = "Skipped", ExitReason = "OverlappingPosition", FilledQuantity = 0, ExitedQuantity = 0,
-                    EntryTimeUtc = null, ExitTimeUtc = null, EntryPrice = null, ExitPrice = null, HorizonReturnBps = null, GrossPnl = null, NetPnl = null, Commission = null }); continue; }
+                    EntryTimeUtc = null, ExitTimeUtc = null, EntryPrice = null, ExitPrice = null, HorizonReturnBps = null, GrossPnl = null, NetPnl = null,
+                    Commission = null, CoverageIssue = null }); continue; }
                 if (at.Date != day) { day = at.Date; dailyLoss = 0; }
-                var trade = _forexSimulator.Simulate(id, candidate.Direction, at, quotes, atr, p, contract.Costs, equity, dailyLoss).Trade;
+                var trade = _forexSimulator.Simulate(id, candidate.Direction, at, quotes, atr, p, contract.Costs, equity, dailyLoss, coverageEvidence).Trade;
                 trades.Add(trade);
                 if (trade.FilledQuantity > 0) occupied = trade.Status == "Closed" ? trade.ExitTimeUtc!.Value : to;
                 if (trade.NetPnl.HasValue) { equity += trade.NetPnl.Value; dailyLoss += Math.Min(0, trade.NetPnl.Value); }
@@ -115,7 +119,7 @@ public sealed partial class DeterministicReplayService
                 ClosedTradeCount = trades.Count(x => x.Status == "Closed"), RealizedNetPnl = trades.Sum(x => x.NetPnl ?? 0m), CreatedAtUtc = _clock.UtcNow };
             db.ReplayBacktestRecords.Add(backtest); await db.SaveChangesAsync(cancellationToken);
             return new(backtest.Id, run.Id, inputHash, configHash, backtest.OutputSha256, trades.Count, backtest.FilledTradeCount,
-                backtest.ClosedTradeCount, backtest.RealizedNetPnl, backtest.CreatedAtUtc, trades);
+                backtest.ClosedTradeCount, backtest.RealizedNetPnl, backtest.CreatedAtUtc, trades) { ForexCoverage = coverageEvidence };
         }
         catch
         {

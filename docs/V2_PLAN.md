@@ -2,6 +2,8 @@
 
 Status: **odobreno za implementaciju jednu točku po jednu**. Zajednički radni branch je `trading-bot-v2`. Nakon svake točke kod, testovi, dokumentacija i CI moraju biti završeni prije nastavka.
 
+**N1, 20.11.2026.:** [valjanost kotacija i razlozi nepotpunih izlaza](N1_QUOTE_COVERAGE.md) implementirani su i lokalno provjereni (764/764). Četiri dnevna izlaza ostaju nepoznata; rezultat nije uljepšan. Sljedeći planirani zahvat je N2, višednevni research; Prije N2 potreban je prolaz CI-ja za N1 commit.
+
 **Pregled 20.11.2026.:** [dovršenost ranijeg plana i predloženi nastavak N1–N12](NEXT_STEPS_2026-11-20.md). Lokalno ponovno prolazi 741/741 testova; nema stvarnog paper E2E ni dokazane profitabilnosti. Noviji pregled ima prednost pred povijesnim operativnim checkpointima niže.
 
 Napredak 2026-09-30: programski su završene točke 1–18, uključujući portfolio risk, signal arbitration, trajni order/position lifecycle, finalni execution-grade scalping gate, mjerljivi shadow/paper rollout po instrumentu te walk-forward LightGBM model s lokalnom inferencijom u entry putu. To ne potvrđuje sve operativne kriterije ili stvarni odobreni EUR/USD model. Projekt koristi .NET 10 LTS, `global.json`, GitHub Actions i Dependabot. Službeni `CSharpAPI.dll` sada je obvezan, verzioniran u repozitoriju i uključen u build; raniji conditional fallback više nije aktualno stanje.

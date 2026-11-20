@@ -1,5 +1,7 @@
 # FX-10 — replay, izvršne labele i lokalni model
 
+**N1 dopuna 20.11.2026.:** [pravila quote pokrivenosti](N1_QUOTE_COVERAGE.md) dodaju zasebna vremena i razloge nepotpunosti te opcionalni zamrznuti zapis prekida (`fx-replay --coverage ABSOLUTE_FROZEN_JSON`). Nove labele koriste v2; stari rezultati ne prepisuju se i prije nove evaluacije trebaju ponovljeni replay s aktualnim ugovorom.
+
 Implementacija nadograđuje postojeći replay, SQLite research/evaluation/model registar i ML.NET workflow. Ne pokreće TWS niti šalje naloge tijekom offline obrade. SPY ostaje na postojećim stock ugovorima. Automatski FX paper put postoji iza dodatnog opt-ina; nije aktiviran u zajedničkoj konfiguraciji.
 
 Operativna priprema 19./20.11.2026.: dodani su read-only rules capture, `fx-prepare` i `fx-snapshot`, odvojeni scenariji kapitala 100 / virtualnih 50.000 USD te izolirane istraživačke baze. [Konfiguracija, izvori, naredbe i ograničenja](FX12_RESEARCH_PREPARATION.md). Nema model approvala niti dopuštenja naloga.
@@ -27,7 +29,7 @@ Model uči samo iz potpuno pokrivenih zatvorenih simulacija. Ne predviđa vjeroj
 
 ## Verzije, evaluacija i model
 
-`labels-fx-execution-v1+config-SHA256` obuhvaća execution profil, povijesna pravila, FX trošak, risk limite, identitet instrumenta i feature/pattern/signal verzije. Operativni `TradingEnabled` nije dio tog hasha. Spremaju se input/output hashevi replaya te ulaz, risk procjena i rezultat svake simulacije u label proofu. Neuspješan replay označen je `Faulted`; njegove djelomične rezultate evaluacija odbija.
+`labels-fx-execution-v2+config-SHA256` obuhvaća execution profil, povijesna pravila, FX trošak, risk limite, identitet instrumenta, feature/pattern/signal verzije i verziju quote coverage pravila. Operativni `TradingEnabled` nije dio tog hasha. Dataset input hash uključuje i normalizirani opcionalni zapis prekida; sam zapis vraća se u replay izvještaju. Spremaju se input/output hashevi replaya te ulaz, risk procjena i rezultat svake simulacije u label proofu. Neuspješan replay označen je `Faulted`; njegove djelomične rezultate evaluacija odbija. Izvorna v1 verzija ostaje povijesni dokaz, ne aktualni ugovor za trening.
 
 Postojeća vremenska evaluacija koristi purging preko konzervativnog kraja label prozora (entry timeout + holding + pokriće/latencija). Treniranje traži dovršen replay s nepromijenjenim output hashom te točne feature/pattern/label verzije, par, strategiju i horizont. Trenira se `numerical-model-fx-v1`: LightGBM net-win klasifikator i regresor izvršnog gross prinosa. Ulazi su pattern confidence/tip/smjer/timeframe, ATR/price i UTC sat; stock normalized liquidity je izostavljen, a volumen nije izmišljen.
 

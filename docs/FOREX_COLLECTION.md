@@ -1,5 +1,7 @@
 # Operativno EUR/USD prikupljanje
 
+**N1, 20.11.2026.:** [ponovljena analiza istih dnevnih podataka](N1_QUOTE_COVERAGE.md) sada razdvaja neopaženi razmak od eksplicitno zabilježenog prekida. Četiri nepotpuna izlaza ostaju nepoznata, a fillani rezultati nepromijenjeni. Nisu mijenjani kolektor, vremenske tolerancije ili stari dokazi. Sljedeći odjeljak ostaje izvorni dnevni checkpoint.
+
 ## Analiza dnevne sesije — 20.11.2026.
 
 Analiziran je cijeli dogovoreni raspon **10–12 sati Zagreb / 09–11 UTC**, kroz unaprijed određena četiri nepreklapajuća polusatna uzorka. Sve izvedene snimke imaju isti izvorni manifest SHA i provjerene file hashove. Ukupno **223.886 događaja / 111.943 potpuna bid/ask para**, bez nepotpunih parova ili prekoračenja future tolerancije; 308 događaja ima tolerirano negativno receive-minus-event odstupanje. Samo dva događaja, odnosno **jedan par**, starija su od dvije sekunde. [Strukturirani rezultat](evidence/fx12-day-session-analysis-2026-11-20.json).

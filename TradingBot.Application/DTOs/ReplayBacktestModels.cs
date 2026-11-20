@@ -27,7 +27,11 @@ public sealed record ReplayTradeResult(
     decimal? GrossPnl,
     decimal? Commission,
     decimal? NetPnl,
-    decimal? HorizonReturnBps);
+    decimal? HorizonReturnBps)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ForexReplayCoverageIssue? CoverageIssue { get; init; }
+}
 
 public sealed record ReplayBacktestSnapshot(
     Guid Id,
@@ -40,4 +44,8 @@ public sealed record ReplayBacktestSnapshot(
     int ClosedTradeCount,
     decimal RealizedNetPnl,
     DateTime CreatedAtUtc,
-    IReadOnlyList<ReplayTradeResult> Trades);
+    IReadOnlyList<ReplayTradeResult> Trades)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ForexReplayCoverageEvidence? ForexCoverage { get; init; }
+}

@@ -7,7 +7,10 @@ namespace TradingBot.Application.DTOs
         DateTime FromUtc,
         DateTime ToUtc,
         decimal SpeedMultiplier = 0m,
-        string StrategyId = "deterministic-patterns");
+        string StrategyId = "deterministic-patterns")
+    {
+        public ForexReplayCoverageEvidence? ForexCoverage { get; init; }
+    }
 
     public sealed record ReplaySpeedRequest(decimal SpeedMultiplier);
 

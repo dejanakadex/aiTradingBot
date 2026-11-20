@@ -6,7 +6,10 @@ using TradingBot.Infrastructure.Options;
 
 namespace TradingBot.Infrastructure.Services;
 
-public sealed record ForexReplayQuote(string Id, DateTime EventUtc, DateTime AvailableUtc, decimal Bid, decimal Ask);
+public sealed record ForexReplayQuote(string Id, DateTime EventUtc, DateTime AvailableUtc, decimal Bid, decimal Ask)
+{
+    public DateTime ReceivedUtc { get; init; } = AvailableUtc;
+}
 public sealed record ForexReplayAtr(DateTime AvailableUtc, decimal Atr);
 public sealed record ForexSimulationResult(ReplayTradeResult Trade, DateTime LabelWindowEndUtc,
     decimal? GrossReturnBps, decimal? CostBps, decimal? NetReturnBps, decimal? MfeBps, decimal? MaeBps,
@@ -38,7 +41,8 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
                 || bid.ReceivedTimeUtc != ask.ReceivedTimeUtc || ask.Price < bid.Price)
                 throw new InvalidDataException("Incomplete, mismatched or crossed FX quote pair.");
             return (Quote: new ForexReplayQuote(g.Key, bid.EventTimeUtc,
-                ForexQuoteTimePolicy.AvailableAt(bid.EventTimeUtc, bid.ReceivedTimeUtc), bid.Price!.Value, ask.Price!.Value),
+                ForexQuoteTimePolicy.AvailableAt(bid.EventTimeUtc, bid.ReceivedTimeUtc), bid.Price!.Value, ask.Price!.Value)
+                { ReceivedUtc = bid.ReceivedTimeUtc },
                 ReceivedUtc: bid.ReceivedTimeUtc);
         }).OrderBy(x => x.ReceivedUtc).ThenBy(x => x.Quote.Id, StringComparer.Ordinal).Select(x => x.Quote).ToArray();
         if (result.Zip(result.Skip(1)).Any(x => x.Second.EventUtc < x.First.EventUtc))
@@ -48,21 +52,28 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
 
     public ForexSimulationResult Simulate(Guid signalId, TradeDirection direction, DateTime decisionUtc,
         IReadOnlyList<ForexReplayQuote> quotes, IReadOnlyList<ForexReplayAtr> atrFrames,
-        ForexResearchProfile p, ForexRiskProfile costs, decimal equity, decimal dailyLoss = 0m)
+        ForexResearchProfile p, ForexRiskProfile costs, decimal equity, decimal dailyLoss = 0m,
+        ForexReplayCoverageEvidence? coverageEvidence = null)
     {
         var end = decisionUtc.AddSeconds(p.EntryTimeoutSeconds + p.HoldingSeconds + p.MaximumQuoteGapSeconds)
             .AddMilliseconds(p.LatencyMilliseconds * 2);
         var prior = quotes.LastOrDefault(x => x.AvailableUtc <= decisionUtc);
         var future = quotes.Where(x => x.AvailableUtc > decisionUtc && x.AvailableUtc <= end).ToArray();
-        var inputHash = ForexResearchContract.Hash(JsonSerializer.Serialize(new { signalId, direction, decisionUtc, p, costs, equity, dailyLoss,
+        var policy = new ForexReplayCoveragePolicy(p.MaximumQuoteGapSeconds, costs.MaximumSnapshotAgeSeconds, coverageEvidence);
+        ForexReplayCoverageIssue? coverageIssue = null;
+        var inputHash = ForexResearchContract.Hash(JsonSerializer.Serialize(new { policy = ForexReplayCoveragePolicy.Version, coverageEvidence,
+            signalId, direction, decisionUtc, p, costs, equity, dailyLoss,
             prior, future, atr = atrFrames.Where(x => x.AvailableUtc <= end).ToArray() }));
         string requestJson = "", assessmentJson = "";
         ForexSimulationResult Empty(string reason, decimal requested = 0) => new(
-            new(signalId, "Incomplete", reason, decisionUtc, null, null, requested, 0, 0, null, null, null, null, null, null),
+            new ReplayTradeResult(signalId, "Incomplete", reason, decisionUtc, null, null, requested, 0, 0, null, null, null, null, null, null)
+                { CoverageIssue = coverageIssue },
             end, null, null, null, null, null, inputHash, requestJson, assessmentJson);
         if (direction != TradeDirection.Long) return Empty("ShortExecutionUnsupported");
-        if (prior == null || decisionUtc - prior.EventUtc > TimeSpan.FromSeconds(costs.MaximumSnapshotAgeSeconds)
-            || !MarketDataSession.IsForexOpen(decisionUtc)) return Empty("NoFreshDecisionQuote");
+        coverageIssue = policy.AtDecision(prior, decisionUtc);
+        if (coverageIssue != null) return Empty("NoFreshDecisionQuote");
+        // A prior quote can price the decision while fresh, but only a new observed quote can simulate a fill.
+        if (prior == null) throw new InvalidOperationException("Coverage policy accepted a missing quote.");
         var rules = p.HistoricalRules.Where(x => x.ObservedUtc <= decisionUtc && x.Rules.VerifiedAtUtc <= decisionUtc)
             .OrderByDescending(x => x.ObservedUtc).FirstOrDefault();
         if (rules == null) return Empty("NoHistoricalRules");
@@ -88,10 +99,8 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
         decimal Commission(decimal units, decimal price) => Math.Max(costs.MinimumCommissionPerOrderUsd, units * price * costs.CommissionPerOrderBps / 10000m);
         foreach (var q in future)
         {
-            if (q.AvailableUtc - previous.AvailableUtc > TimeSpan.FromSeconds(p.MaximumQuoteGapSeconds)
-                || q.AvailableUtc - q.EventUtc > TimeSpan.FromSeconds(costs.MaximumSnapshotAgeSeconds)
-                || q.Id[..q.Id.LastIndexOf(':')] != previous.Id[..previous.Id.LastIndexOf(':')]
-                || !MarketDataSession.IsForexOpen(q.EventUtc)) { coverage = false; break; }
+            coverageIssue = policy.Between(previous, q);
+            if (coverageIssue != null) { coverage = false; break; }
             previous = q;
             if (stopReady <= q.AvailableUtc && pendingStop.HasValue) { stop = pendingStop.Value; pendingStop = null; stopReady = null; }
             var deadline = firstFill?.AddSeconds(p.HoldingSeconds);
@@ -109,7 +118,8 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
                 if (reason != "" && q.AvailableUtc >= exitReady && (reason != "Target" || q.Bid >= a.TargetPrice))
                 {
                     var units = Math.Min(capacity, filled - exited);
-                    if (units < rules.Rules.MinimumBaseUnits) { coverage = false; reason = "UnresolvedResidual"; break; }
+                    if (units < rules.Rules.MinimumBaseUnits)
+                    { coverage = false; reason = "UnresolvedResidual"; coverageIssue = policy.Issue(reason, q.AvailableUtc, q); break; }
                     var price = reason == "Target" ? a.TargetPrice : ForexRiskService.RoundPrice(q.Bid - costs.SlippagePerSidePips * costs.PipSize, false, rules.Rules.PriceBands);
                     exited += units; exitValue += units * price; fees += Commission(units, price); lastExit = q.AvailableUtc;
                     if (exited == filled) break;
@@ -144,17 +154,24 @@ public sealed class ForexTradeSimulator(ForexRiskService risk)
         if (horizon != null)
         {
             var covered = quotes.Where(x => x.AvailableUtc >= prior.AvailableUtc && x.AvailableUtc <= horizon.AvailableUtc).ToArray();
-            if (covered.Any(x => x.AvailableUtc - x.EventUtc > TimeSpan.FromSeconds(costs.MaximumSnapshotAgeSeconds))
-                || covered.Zip(covered.Skip(1)).Any(x => x.Second.AvailableUtc - x.First.AvailableUtc > TimeSpan.FromSeconds(p.MaximumQuoteGapSeconds)
-                    || x.First.Id[..x.First.Id.LastIndexOf(':')] != x.Second.Id[..x.Second.Id.LastIndexOf(':')])) horizon = null;
+            if (covered.Zip(covered.Skip(1)).Any(x => policy.Between(x.First, x.Second) != null)) horizon = null;
         }
         var gross = complete ? exitValue - entryValue : (decimal?)null;
         var buffer = entryValue * costs.SafetyBufferBps / 10000m;
         var net = gross - fees - buffer;
-        var result = new ReplayTradeResult(signalId, complete ? "Closed" : "Incomplete", coverage ? (reason == "" ? "NoFillOrOpenAtEnd" : reason) : "InsufficientCoverage: " + reason,
+        if (!complete && coverageIssue == null && (filled > exited || previous.AvailableUtc < expires))
+            coverageIssue = policy.AfterLastObservation(previous, filled > exited ? end : expires);
+        if (!complete && coverageIssue == null)
+            coverageIssue = policy.Issue(filled > exited ? "QuoteDatasetBoundaryWithOpenPosition"
+                : previous.AvailableUtc < expires ? "QuoteDatasetBoundaryBeforeEntryExpiry" : "NoFillWithinEntryWindow",
+                end, previous);
+        var result = new ReplayTradeResult(signalId, complete ? "Closed" : "Incomplete",
+            complete ? reason : coverageIssue!.Reason == "NoFillWithinEntryWindow" ? coverageIssue.Reason
+                : "InsufficientCoverage: " + coverageIssue.Reason,
             decisionUtc, firstFill, lastExit, a.BaseUnits, filled, exited, filled > 0 ? entryValue / filled : null,
             exited > 0 ? exitValue / exited : null, gross, fees, net,
-            horizon != null && filled > 0 ? (horizon.Bid - entryValue / filled) / (entryValue / filled) * 10000m : null);
+            horizon != null && filled > 0 ? (horizon.Bid - entryValue / filled) / (entryValue / filled) * 10000m : null)
+            { CoverageIssue = coverageIssue };
         return new(result, end, complete ? gross / entryValue * 10000m : null, complete ? (fees + buffer) / entryValue * 10000m : null,
             complete ? net / entryValue * 10000m : null, complete ? mfe ?? 0m : null, complete ? mae ?? 0m : null,
             inputHash, requestJson, assessmentJson);
