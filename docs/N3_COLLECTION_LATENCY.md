@@ -1,6 +1,6 @@
 # N3 — dijagnostika i pouzdanost prikupljanja
 
-20.11.2026. **N3 je u tijeku, nije operativno zatvoren.** Implementirana su fazna mjerenja i ispravljen je potvrđen problem flush roka. Stvarni feed otkriva zaseban zastoj u spremanju quality stanja u SQLite; njegov dublji uzrok i trajno uklanjanje tek treba potvrditi. FX-12, 25/30/31 ostaju otvoreni, bez naloga ili odobrenja modela.
+23.11.2026. **N3 je u tijeku, nije operativno zatvoren.** Implementirana su fazna mjerenja, ispravljen flush rok i smanjen manifest. Petkov ETL potvrđuje čekanje storage dovršetka, a nova dnevna sesija ponovno bilježi SQLite spremanje do 1,915 s. Specifičan okidač i trajno uklanjanje ostaju nepotvrđeni. FX-12, 25/30/31 ostaju otvoreni, bez naloga ili odobrenja modela.
 
 ## Što je promijenjeno
 
@@ -146,3 +146,34 @@ Provjere: **782/782 testova**, uključujući stari manifest → idempotentni ret
 Kolektor 23344 uredno je zaustavljen u **22:38:23 UTC (23:38:23 Zagreb)** i zamijenjen verzijom s kompaktnim zapisom, PID 19572. Hash deployanog Infrastructure DLL-a odgovara testiranom buildu, health vraća 200, broker je spojen i pretplate aktivne izvan sesije. ReadOnly API, onemogućeni trading, FX paper execution i automatski signali ostaju potvrđeni. Nije ručno prepisan operativni manifest; novi format primjenjuje se na sljedeći normalni zapis. Planirani restart nije dokaz neprekinute prihvatne sesije.
 
 [Strukturirani dokaz](evidence/n3-manifest-io-2026-11-20.json), lokalni artefakti `TestResults/n3-storage-deep-20261120`. **N3 ostaje otvoren:** ovo uklanja izmjereno nepotrebno zapisivanje, ali ne potvrđuje uklanjanje dugih NVMe/WAL čekanja. Sljedeći korak je aktivna dnevna sesija s izvornim Balanced planom, bez WPR-a/builda/backtesta, usporedba QualitySave/ReaderLifetime/commit/queue repova i integriteta prikupljanja. Ako zastoj ostane, povezati novi događaj sa storage snimkom; ne mijenjati trajnost ni vremenske pragove kako bi test izgledao uspješno. N4 nije započet.
+
+## Dnevna provjera nakon kompaktnog manifesta — 23.11.2026.
+
+Kolektor PID **2440**, commit `1e0f7e2`, pokrenut je oko **09:17 Zagreb**. Sat je tada zaostajao oko **550–558 ms**, više od FX future tolerancije 250 ms. To je uzrokovalo ponavljane quality odbijenice i ponovne tick pretplate. Običan resync i restart servisa nisu uklonili opaženo odstupanje. Korisnikova jednokratna korekcija sata oko **09:30:22**, s automatskim vraćanjem `MaxAllowedPhaseOffset=1`, smanjila ga je na oko 0,1 ms. Windows je u 09:30:39 ponovno prijavio uspješnu sinkronizaciju bez greške. Posljednja ponovna pretplata je 09:30:33; kumulativni broj reconnectova 33 kasnije se nije povećao. Početni interval nije prihvatni uzorak i ostaje u logovima. Pri analizi oko 11 sati tri NTP uzorka pokazuju **37–40 ms**; to nije kontinuirano mjerenje niti usporedba s brokerovim satom.
+
+Zamrznuta je kopija podataka za **08:32–09:58 UTC (09:32–10:58 Zagreb)**, bez restarta kolektora. Time su isključene korekcija sata, početni reconnecti i prva puna minuta nakon oporavka. Provjera **1.908 Parquet datoteka / 173.794 reda** prolazi sve hashove. U točnom rasponu nalazi se **173.608 quote događaja / 86.804 potpuna para**, jedna callback sesija, bez nepotpunih parova, future/stale kotacija ili resetiranja audita. Rubne datoteke sadrže nešto događaja izvan raspona i audit ih filtrira.
+
+- 5s: **1.031/1.031** finalnih barova, **1.006** frameova s najmanje 26 barova i spremnim cjenovnim featureima.
+- 15s: **343/343** finalnih barova, **318** takvih frameova.
+- SQLite u intervalu: **0 coverage gapova, 0 dropova, 0 quality incidenata**. Operativnih naloga, izvršenja, tradeova, rezervacija i modela i dalje je nula.
+
+Log daje **85 minutnih tick prozora / 172.280 događaja**; njihove granice nisu iste kao točan audit raspon. Nema processing/storage grešaka, source-age >2 s ni negativnih queue clock delta. **17/85** prozora ipak ima pipeline maksimum iznad 250 ms.
+
+| Mjera | Petak 20.11., 105 min | Ponedjeljak 23.11., 86 min | Prihvatni prag |
+| --- | ---: | ---: | ---: |
+| Najviši minutni pipeline p99, ms | 11,56 | 11,56 | ≤50 |
+| Pipeline maksimum, ms | 1.883,22 | **1.915,50** | ≤250 |
+| QualitySave maksimum, ms | 1.882,60 | **1.914,67** | unutar pipelinea |
+| Monotoni queue maksimum, ms | 1.897,14 | **1.942,36** | ≤500 |
+| Flush maksimum, ms | 1.263,66 | 358,02 | ≤2.000 |
+| Enqueue-to-write maksimum, ms | 6.272,27 | 5.446,65 | ≤7.500 |
+
+Najviši minutni queue p99 također ne prolazi: **1.806,64 ms**, prag 100 ms. Najveći CPU je 0,521% cijelog računala. Najsporiji pipeline počinje u **09:26:39.789 UTC**; pripadajući UPDATE `MarketDataStreamStateRecords` ima ReaderLifetime **1.912,104 ms**, gotovo cijelo QualitySave trajanje. U rasponu postoji 19 ReaderLifetime, 9 Commit, 8 Execute i 4 Begin sporih SQL upozorenja; to nisu nužno neovisni zastoji i brojevi se ne zbrajaju kao broj jedinstvenih incidenata.
+
+**Zaključak:** kompaktni manifest nije uklonio duga SQLite čekanja. Kraći flush u ovom uzorku nije dokaz uzročnog poboljšanja jer se razlikuju trajanje sesije, količina/ritam kotacija i inventar. Nova sesija ima isti SQL timing obrazac kao raniji storage problem; nema novog ETL-a kojim bi se svaki današnji outlier zasebno pripisao NVMe-u. **N3 ne prolazi prihvatne pragove.** Offline agregati jesu potpuni, ali ovo nije live feature/signal paritet, novi trading replay ili potvrda profitabilnosti.
+
+### Sljedeći kontrolirani pokus uz stvarne kotacije
+
+Računalo je na mrežnom napajanju, aktivan je izvorni Balanced plan (primarna NVMe AC tolerancija 15 ms). Postojeći provjereni `scripts/test-nvme-power.ps1` spreman je za **20 minuta**, uz isti PID i aktivni feed. Korisnik ga mora pokrenuti u administratorskom PowerShellu. Nakon automatskog povratka izvornog plana ostaviti još 20 minuta aktivnog prikupljanja. Usporediti potpune minute prije/tijekom/poslije, izostaviti rubne minute i zabilježiti promjenu quote ratea, sve repove latencije i integritet. Tijekom testa ne pokretati WPR, build, audit ili replay. Ni povoljan dvadesetominutni rezultat sam ne zamjenjuje prihvatnu sesiju od barem 60 minuta. Petkov izolirani SQLite test bez feeda ostaje koristan prethodni dokaz, ali nije ovaj pokus. **Pokus još nije pokrenut.**
+
+Ova dopuna mijenja samo dokumentaciju/dokaze. Kolektor ostaje aktivan s istom verzijom i zabranom naloga, bez promjena SQLite trajnosti ili quality pragova. Dva testa izvještaja prolaze; audit je izvršen iz već provjerenog buildu s 782 testa. Ne navoditi novi lokalni full-suite run: kod nije promijenjen. [Strukturirani rezultat](evidence/n3-day-session-2026-11-23.json); lokalni log, snapshot, audit i hashovi su u `TestResults/n3-day-20261123`.

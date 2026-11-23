@@ -1,0 +1,215 @@
+{
+  "date": "2026-11-23",
+  "status": "Stable real-feed data verified; latency acceptance failed; N3 remains open",
+  "codeCommit": "1e0f7e257f2de45d5e6c46088359249fb467f7ed",
+  "collectorPid": 2440,
+  "rangeUtc": {
+    "from": "2026-11-23T08:32:00Z",
+    "to": "2026-11-23T09:58:00Z"
+  },
+  "excludedStartup": "Startup from 08:17 UTC and repeated Future rejections until the clock correction at 08:30 UTC. First full minute after reconnect excluded; no known subsequent reconnect through the report range.",
+  "clock": {
+    "initialOffsetMs": 558,
+    "correctionUtc": "2026-11-23T08:30:22Z",
+    "windowsSyncRecoveredUtc": "2026-11-23T08:30:39Z",
+    "originalMaxAllowedPhaseOffsetRestoredSeconds": 1,
+    "postCorrectionSamplesMs": [
+      0.1044,
+      -0.1216,
+      -0.1133
+    ],
+    "atAnalysisSamplesMs": [
+      39.8787,
+      37.1999,
+      37.0903
+    ],
+    "note": "Relative to time.windows.com; DNS address changed between checks. Not a continuous clock trace or broker-clock offset measurement."
+  },
+  "power": {
+    "scheme": "Balanced",
+    "acOnline": true,
+    "primaryNvmeAcToleranceMs": 15,
+    "temporaryPlanAppliedThisSession": false
+  },
+  "logReport": {
+    "version": "n3-report-v1",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T08:32:00+00:00",
+    "toUtc": "2026-11-23T09:58:00+00:00",
+    "scope": "Offline log report; window quantiles are approximate upper bounds, not global percentiles. Does not approve N3 or trading.",
+    "tickWindows": 85,
+    "events": 172280,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 0,
+    "worstWindowPipelineP99UpperMs": 11.56268519450066,
+    "maxPipelineMs": 1915.5022,
+    "worstWindowQueueP99UpperMs": 1806.6374773038408,
+    "maxQueueMonotonicMs": 1942.3605,
+    "maxQualityReadMs": 43.2553,
+    "maxQualitySaveMs": 1914.6655,
+    "storageWindows": 82,
+    "maxFlushMs": 358.0159,
+    "maxEnqueueToDurableMs": 5446.6459,
+    "storageFailures": 0,
+    "maxProcessCpuPercent": 0.520782992125159,
+    "maxWorkingSetBytes": 382128128,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": false,
+    "minimum60TickWindowsPresent": true,
+    "processIds": [
+      2440
+    ],
+    "remainingChecks": [
+      "Gap/drop/reconnect evidence from collection status and SQLite",
+      "Explain outliers and compare equivalent market/load sessions",
+      "Source timestamp resolution and Windows clock synchronization",
+      "Feature/signal parity and repeat after restart"
+    ]
+  },
+  "database": {
+    "slowPipelineMinutes": 17,
+    "coverageGapRecords": 0,
+    "droppedEvents": 0,
+    "qualityIncidentsByStatus": [],
+    "operationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    }
+  },
+  "quoteAudit": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T08:32:00Z",
+    "toUtc": "2026-11-23T09:58:00Z",
+    "aggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+    "quoteEvents": 173608,
+    "completeCallbackPairs": 86804,
+    "incompleteCallbackPairs": 0,
+    "callbackSessions": 1,
+    "firstEventUtc": "2026-11-23T08:32:00Z",
+    "lastEventUtc": "2026-11-23T09:57:59Z",
+    "minimumReceiveMinusEventMilliseconds": 1.2086,
+    "medianReceiveMinusEventMilliseconds": 809.202,
+    "p95ReceiveMinusEventMilliseconds": 1394.0858,
+    "futureQuoteEvents": 0,
+    "staleQuoteEvents": 0,
+    "futureToleranceMilliseconds": 250,
+    "beyondFutureToleranceQuoteEvents": 0
+  },
+  "intervals": [
+    {
+      "intervalSeconds": 5,
+      "expectedFinalWindows": 1031,
+      "windowsWithoutQuotes": 0,
+      "observedWindowsWithoutFinalBar": 0,
+      "missingBarsWithFutureQuotes": 0,
+      "missingBarsWithStaleQuotes": 0,
+      "finalBars": 1031,
+      "maximumConsecutiveFeatureBars": 512,
+      "framesWithAtLeast26Bars": 1006,
+      "priceFeatureReadyFrames": 1006,
+      "longestEmptyRun": 0
+    },
+    {
+      "intervalSeconds": 15,
+      "expectedFinalWindows": 343,
+      "windowsWithoutQuotes": 0,
+      "observedWindowsWithoutFinalBar": 0,
+      "missingBarsWithFutureQuotes": 0,
+      "missingBarsWithStaleQuotes": 0,
+      "finalBars": 343,
+      "maximumConsecutiveFeatureBars": 343,
+      "framesWithAtLeast26Bars": 318,
+      "priceFeatureReadyFrames": 318,
+      "longestEmptyRun": 0
+    }
+  ],
+  "verification": {
+    "isValid": true,
+    "fileCount": 1908,
+    "rowCount": 173794,
+    "manifestSha256": "9935C27FC5ED1C4EAE211C654BEBAFA7527D435678EBCCE00EFECC8D4186AD8C",
+    "errors": []
+  },
+  "worstPipelineEvent": {
+    "EventId": "IBKR:FXQ:e2757520d16f4ae0aff36498f736a2a6:190816:bid",
+    "EventUtc": "2026-11-23T09:26:39Z",
+    "ReceivedUtc": "2026-11-23T09:26:39.7893828Z",
+    "DequeuedUtc": "2026-11-23T09:26:39.7894302Z",
+    "SourceAgeMs": 789.3828,
+    "QueueWallMs": 0.0474,
+    "QueueMonotonicMs": 0.0463,
+    "PipelineMs": 1915.5022,
+    "Phases": {
+      "Quality": 1915.4198,
+      "QualityGate": 0.0007,
+      "QualityRead": 0.6547,
+      "QualityAssess": 0.0111,
+      "QualitySave": 1914.6655,
+      "DatasetEnqueue": 0.0341,
+      "Aggregates": 0.0225
+    }
+  },
+  "correspondingSql": [
+    "command AsOfUtc=2026-11-23T09:26:41.7025522Z Milliseconds=1912.1043 Operation=UPDATE Table=MarketDataStreamStateRecords Context=94d4a5ce-9c85-403c-b3e5-3faa0dd8e333 Source=Reader Phase=ReaderLifetime"
+  ],
+  "comparisonToFriday": {
+    "maxPipelineMs": {
+      "friday": 1883.2243,
+      "monday": 1915.5022
+    },
+    "maxQualitySaveMs": {
+      "friday": 1882.5985,
+      "monday": 1914.6655
+    },
+    "maxQueueMonotonicMs": {
+      "friday": 1897.1435,
+      "monday": 1942.3605
+    },
+    "maxFlushMs": {
+      "friday": 1263.6565,
+      "monday": 358.0159
+    },
+    "maxEnqueueToDurableMs": {
+      "friday": 6272.2713,
+      "monday": 5446.6459
+    },
+    "worstWindowPipelineP99UpperMs": {
+      "friday": 11.56268519450066,
+      "monday": 11.56268519450066
+    }
+  },
+  "limitations": [
+    "Different session lengths, activity and inventory: before/after maxima do not establish causation.",
+    "Quote audit is offline reconstruction, not live feature/signal parity or a full trading replay.",
+    "Log counts group reporting windows; exact quote-range counts have different boundaries.",
+    "Earlier ETL confirmed storage completion waits; this session has no new ETL and only reproduces the SQL timing signature.",
+    "No newly approved model or paper order; N4 not started."
+  ],
+  "nextExperiment": {
+    "script": "scripts/test-nvme-power.ps1",
+    "minutes": 20,
+    "baseline": "current stable live-feed Balanced session",
+    "during": "same collector PID, active quotes, AC power; only primary/secondary NVMe AC tolerances zero",
+    "after": "automatic restoration of original plan, retain another 20 minutes of active quotes",
+    "measurement": "Exclude first/last partial minute of each phase and deliberate analysis I/O; compare every threshold, incidents, quote rate and tails. Diagnostic comparison does not replace 60-minute acceptance.",
+    "requires": "User administrator PowerShell; not started"
+  },
+  "localArtifacts": {
+    "collection.log": "35E3EDEDD19476132B9352612DBA95665E86FD4B642CDC96D3E85F6E7A1B291A",
+    "latency.json": "32A33BAD36EB37156A76DC6A6892C0248C7344E7804571DAC1CCDFD9BB486053",
+    "audit.json": "FEBBC18084EF541DB824FD9693BD2A5D5DB1203A282CF59730ED3D4E61449D04",
+    "database-summary.json": "5BFF9E5940560D076401B28DF0EBD3EDC140494154C5932AB30C75CE95A7C92C",
+    "snapshot/snapshot-provenance.json": "E5FC21ADB38A41D133D2BA11838E1EBC044AB2ED3981796895DF0EFCB8CA0F3D"
+  }
+}
