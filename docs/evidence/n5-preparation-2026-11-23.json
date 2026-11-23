@@ -1,0 +1,263 @@
+{
+  "date": "2026-11-23",
+  "baseCommit": "4df357603dccc60ea63cb1f22cadddaf005e0973",
+  "status": "N5 preparation implemented and tested; representative future dataset acceptance still open",
+  "canSendOrders": false,
+  "tests": {
+    "passed": 816,
+    "failed": 0,
+    "skipped": 0
+  },
+  "ibkrPublishAndDependencyGuardsPassed": true,
+  "snapshot": {
+    "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-19T22:58:10Z",
+    "toUtc": "2026-11-23T13:40:00Z",
+    "files": 13280,
+    "manifestRows": 2053027,
+    "sourceManifestSha256": "77BA41A40998E8AEB644D6180414B3C5F1A6193226BE3839515F9E91DEDEC755",
+    "snapshotManifestSha256": "7A65D2D40C26AABA8E271A36F5CE6E2FD7B6D68B72C747AB3BC75D255E0E1FE7",
+    "canSendOrders": false
+  },
+  "recordedCoverageInterruptions": 82,
+  "reviews": {
+    "day20": {
+      "configSha256": "275824F7B07BB371167C511B6D7F22BC253AE29C9940DA19253B4D27502EF84B",
+      "planSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+      "review": {
+        "version": "fx-dataset-review-v1",
+        "canSendOrders": false,
+        "n5Complete": false,
+        "fromUtc": "2026-11-20T09:00:00Z",
+        "toUtc": "2026-11-20T21:55:00Z",
+        "manifestSha256": "7A65D2D40C26AABA8E271A36F5CE6E2FD7B6D68B72C747AB3BC75D255E0E1FE7",
+        "canonicalSha256": "e045904e00787b95f32820960ab5c49a8505e22d3d8734776922a92e99a6d2e0",
+        "eventCount": 1434750,
+        "duplicateEvents": 0,
+        "days": [
+          {
+            "dayUtc": "2026-11-20T00:00:00Z",
+            "pairs": 717375,
+            "stalePairs": 133,
+            "rulesUnavailablePairs": 0,
+            "gapsOverMaximum": 449,
+            "maximumGapSeconds": 32.1034406,
+            "spreadSumPips": 98220.7,
+            "maximumSpreadPips": 0.7,
+            "meanSpreadPips": 0.1369168147760934,
+            "spreadBuckets": [
+              717352,
+              23,
+              0,
+              0,
+              0
+            ],
+            "firstQuoteUtc": "2026-11-20T09:00:00.4933146Z",
+            "lastQuoteUtc": "2026-11-20T21:54:59.5952659Z",
+            "observedMinutes": 775,
+            "meanObservedMinuteRangePips": 1.6228387096774193
+          }
+        ],
+        "plan": {
+          "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+          "strategyId": "eurusd-patterns",
+          "reservedUtc": "2026-11-23T14:05:42.7236065Z",
+          "trainingFromUtc": "2026-11-24T08:00:00Z",
+          "validationFromUtc": "2026-11-26T08:00:00Z",
+          "holdoutFromUtc": "2026-11-27T08:00:00Z",
+          "holdoutToUtc": "2026-11-28T08:00:00Z",
+          "boundaryBufferSeconds": 120
+        },
+        "spreadBucketUpperBoundsPips": [
+          0.5,
+          1,
+          2,
+          5,
+          null
+        ],
+        "limitations": [
+          "Integrity and quote quality only; no labels, strategy returns, training or holdout prices read.",
+          "Observed minutes and quote-weighted spread are not continuous session coverage or feature-ready bars.",
+          "Minute high-low is an observed range proxy, not an unbiased volatility estimate.",
+          "Gaps include closed sessions and planned interruptions; they are not automatically broker data loss.",
+          "Rules availability counts check observation/expiry only, not all execution risk or account conditions.",
+          "Review does not certify N5: multiple representative sessions, rules, exclusions and untouched final data still require acceptance.",
+          "Plan label membership must be applied to actual completed labels in subsequent research; other CLI commands do not enforce this reservation."
+        ]
+      }
+    },
+    "stable23": {
+      "configSha256": "275824F7B07BB371167C511B6D7F22BC253AE29C9940DA19253B4D27502EF84B",
+      "planSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+      "review": {
+        "version": "fx-dataset-review-v1",
+        "canSendOrders": false,
+        "n5Complete": false,
+        "fromUtc": "2026-11-23T11:45:15Z",
+        "toUtc": "2026-11-23T13:40:00Z",
+        "manifestSha256": "7A65D2D40C26AABA8E271A36F5CE6E2FD7B6D68B72C747AB3BC75D255E0E1FE7",
+        "canonicalSha256": "ccea8a9d4dde8a4a8f87d79b9b3e3077bdb74ef7d4dbdb1d8b8d28100a9b3a76",
+        "eventCount": 268406,
+        "duplicateEvents": 0,
+        "days": [
+          {
+            "dayUtc": "2026-11-23T00:00:00Z",
+            "pairs": 134203,
+            "stalePairs": 0,
+            "rulesUnavailablePairs": 134203,
+            "gapsOverMaximum": 17,
+            "maximumGapSeconds": 5.6744025,
+            "spreadSumPips": 20037.8,
+            "maximumSpreadPips": 0.6,
+            "meanSpreadPips": 0.14930962795168512,
+            "spreadBuckets": [
+              134198,
+              5,
+              0,
+              0,
+              0
+            ],
+            "firstQuoteUtc": "2026-11-23T11:45:15.817974Z",
+            "lastQuoteUtc": "2026-11-23T13:39:59.6781851Z",
+            "observedMinutes": 115,
+            "meanObservedMinuteRangePips": 2.0943478260869566
+          }
+        ],
+        "plan": {
+          "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+          "strategyId": "eurusd-patterns",
+          "reservedUtc": "2026-11-23T14:05:42.7236065Z",
+          "trainingFromUtc": "2026-11-24T08:00:00Z",
+          "validationFromUtc": "2026-11-26T08:00:00Z",
+          "holdoutFromUtc": "2026-11-27T08:00:00Z",
+          "holdoutToUtc": "2026-11-28T08:00:00Z",
+          "boundaryBufferSeconds": 120
+        },
+        "spreadBucketUpperBoundsPips": [
+          0.5,
+          1,
+          2,
+          5,
+          null
+        ],
+        "limitations": [
+          "Integrity and quote quality only; no labels, strategy returns, training or holdout prices read.",
+          "Observed minutes and quote-weighted spread are not continuous session coverage or feature-ready bars.",
+          "Minute high-low is an observed range proxy, not an unbiased volatility estimate.",
+          "Gaps include closed sessions and planned interruptions; they are not automatically broker data loss.",
+          "Rules availability counts check observation/expiry only, not all execution risk or account conditions.",
+          "Review does not certify N5: multiple representative sessions, rules, exclusions and untouched final data still require acceptance.",
+          "Plan label membership must be applied to actual completed labels in subsequent research; other CLI commands do not enforce this reservation."
+        ]
+      }
+    }
+  },
+  "excludedDevelopmentRange": {
+    "fromUtc": "2026-11-23T08:00:00Z",
+    "toUtc": "2026-11-23T11:45:15Z",
+    "reason": "Conservative diagnostic morning exclusion, selected on integrity/clock evidence, not strategy returns; full source retained.",
+    "incompletePairs": 33,
+    "firstIncompleteReceivedUtc": "2026-11-23T08:17:59.6836452Z",
+    "lastIncompleteReceivedUtc": "2026-11-23T08:30:17.6264365Z",
+    "futureWarningsInSamePeriod": 33,
+    "causeLimit": "Timing and counts coincide; exact per-event mechanism of a missing side is not established by this audit."
+  },
+  "operationalCounts": {
+    "Trades": 0,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "reservedPlan": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "strategyId": "eurusd-patterns",
+    "reservedUtc": "2026-11-23T14:05:42.7236065Z",
+    "trainingFromUtc": "2026-11-24T08:00:00Z",
+    "validationFromUtc": "2026-11-26T08:00:00Z",
+    "holdoutFromUtc": "2026-11-27T08:00:00Z",
+    "holdoutToUtc": "2026-11-28T08:00:00Z",
+    "boundaryBufferSeconds": 120
+  },
+  "rulesEvidence": "n5-rules-2026-11-23.json",
+  "artifacts": [
+    {
+      "localPath": "TestResults/n5-20261123/quotes-november/snapshot-provenance.json",
+      "sha256": "1A36FFB3D28C793C80FB4CDD6520EE998920542173D17145A27956CC3CA1A542"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/coverage.json",
+      "sha256": "A46E97AAECB9483096FB9A0DBF96C34F21A061CF02DBDC4660692F26662FFC2F"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/recorded-gaps.json",
+      "sha256": "68E702B8730369F9AE936526AEF3399735C6ED55CC8796BE8F5BB2C1995843F0"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/research-100.json",
+      "sha256": "275824F7B07BB371167C511B6D7F22BC253AE29C9940DA19253B4D27502EF84B"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/review-day-20.json",
+      "sha256": "3021F3FD31B3D2E3B2947086315B57EE7CC33D55190507E4188C6BBE84B13A97"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/review-stable-23.json",
+      "sha256": "E8206761F5E8D64D3B4776A3DC925E8D826F3794E9C022EE0EF852571655EADF"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/review-morning-23.log",
+      "sha256": "6B986B3B42E9D12169A3DCC2112CFDE88B0114CE5CFD1E3F4384C9FDCA80E094"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/morning-future.log",
+      "sha256": "BCCEC1EAA434A06AA2DC0CC9893FCBFC8543B72710F653DD23FFF76957F2D30C"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/n5-release-accepted.trx",
+      "sha256": "F78A0EF14C9FB1871A2A4DC682014CB55DC61E97135C0C07D36A263A65A16E04"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/ibkr.log",
+      "sha256": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E"
+    },
+    {
+      "localPath": "TestResults/n5-20261123/operational-counts.json",
+      "sha256": "F242DC3DFC870B31C2DCCB80A99201CE0EA18D32ED777CC9CA8E32520598A3F4"
+    }
+  ],
+  "remaining": [
+    "Future representative sessions and separate acceptance report; no holdout outcomes read.",
+    "Refresh genuinely reviewed broker rules before 24h expiry; no retrospective extension.",
+    "Integrate frozen partition plan and actual label end membership with selected replay/evaluation before N6/N7.",
+    "N5, FX-12 and full 25/30/31 remain open; no profit or paper-fill claims."
+  ],
+  "collectorAtFinish": {
+    "capturedUtc": "2026-11-23T14:20:04.8516003Z",
+    "processId": 14584,
+    "readOnly": true,
+    "tradingDisabled": true,
+    "tick": [
+      {
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastEventTimeUtc": "2026-11-23T14:20:04Z",
+        "reconnectCount": 0,
+        "consecutiveFailures": 0
+      }
+    ],
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 2,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 214.1641,
+      "persistedStreamUpdates": 3988,
+      "lastFlushUtc": "2026-11-23T14:20:04.1281787Z",
+      "lastFlushMilliseconds": 10.8345,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 1899.5725,
+      "maximumObservedPendingMilliseconds": 2772.3371
+    }
+  }
+}

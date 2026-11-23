@@ -73,6 +73,13 @@ internal sealed class ForexReplayIndex : IDisposable
             transaction.Commit();
         }
         if (EventCount == 0) throw new InvalidDataException("No FX paired quote data.");
+        using (var incomplete = _connection.CreateCommand())
+        {
+            incomplete.CommandText = "SELECT COUNT(*),MIN(Received),MAX(Received) FROM (SELECT PairId,MIN(Received) Received FROM Events GROUP BY PairId HAVING COUNT(*)<>2)";
+            using var reader = incomplete.ExecuteReader(); reader.Read();
+            if (reader.GetInt64(0) > 0)
+                throw new InvalidDataException($"Incomplete FX quote pairs: {reader.GetInt64(0)}; first received {new DateTime(reader.GetInt64(1), DateTimeKind.Utc):O}, last received {new DateTime(reader.GetInt64(2), DateTimeKind.Utc):O}. Preserve the source and review coverage; do not infer missing sides.");
+        }
         using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
         {
             using var command = _connection.CreateCommand(); command.CommandText = "SELECT Json FROM Events ORDER BY Received,Id";

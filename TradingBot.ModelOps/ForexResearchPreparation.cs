@@ -116,7 +116,7 @@ internal static class ForexResearchPreparation
                 "100 USD standard-lot scenario is expected to reject sizes/costs; no invented odd-lot fill model.",
                 "The optional larger simulated portfolio is a technical scenario, not a funding recommendation or proof of viability with 100 USD.",
                 "Evaluation uses 2 training days, 1 validation day and 1 untouched holdout day; original minimum sample counts remain unchanged.",
-                "Minute history does not provide bid/ask execution coverage. Replay remains bounded to 7 days / 200,000 events." }
+                "Minute history does not provide bid/ask execution coverage. FX trade replay uses bounded streaming; separate feature/collection audits retain their own limits." }
         });
     }
 }

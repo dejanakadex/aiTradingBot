@@ -30,6 +30,37 @@ internal static class ModelOpsProgram
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
             if (command == "fx-collection-audit") return await AuditForexCollectionAsync(options);
+            if (command == "fx-dataset-review")
+            {
+                var output = Required(options, "output");
+                var dataset = Required(options, "dataset");
+                if (!Path.IsPathFullyQualified(output) || File.Exists(output) || Directory.Exists(output)
+                    || !Path.IsPathFullyQualified(dataset) || !Directory.Exists(dataset))
+                    throw new ArgumentException("Existing absolute dataset and new absolute output required.");
+                var configRaw = await File.ReadAllBytesAsync(Required(options, "config"));
+                var planRaw = await File.ReadAllBytesAsync(Required(options, "plan"));
+                var plan = JsonSerializer.Deserialize<ForexDatasetPlan>(planRaw, new JsonSerializerOptions(JsonOptions)
+                    { UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow })
+                    ?? throw new ArgumentException("Dataset plan required.");
+                var config = new ConfigurationBuilder().AddJsonStream(new MemoryStream(configRaw)).Build();
+                var profile = config.GetSection("ForexResearch").Get<ForexResearchSettings>()!.Profiles.Single(x => x.InstrumentId == plan.InstrumentId && x.StrategyId == plan.StrategyId);
+                var costs = config.GetSection("ForexRisk").Get<ForexRiskSettings>()!.Profiles.Single(x => x.InstrumentId == plan.InstrumentId && x.StrategyId == plan.StrategyId);
+                var reviewAggregates = config.GetSection("ShortAggregates").Get<ShortAggregateSettings>() ?? new();
+                var reviewEvaluation = config.GetSection("ResearchEvaluation").Get<ResearchEvaluationSettings>() ?? new();
+                reviewEvaluation.ConfidenceThresholds = config.GetSection("ResearchEvaluation:ConfidenceThresholds").Get<decimal[]>() ?? reviewEvaluation.ConfidenceThresholds;
+                reviewEvaluation.CostStressMultipliers = config.GetSection("ResearchEvaluation:CostStressMultipliers").Get<decimal[]>() ?? reviewEvaluation.CostStressMultipliers;
+                var store = new ParquetMarketDatasetStore(Options.Create(new DatasetStorageSettings { RootPath = dataset }),
+                    new SystemClock(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ParquetMarketDatasetStore>.Instance);
+                var review = await ForexDatasetReview.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
+                    reviewAggregates, profile, costs, plan, reviewEvaluation,
+                    ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to")));
+                var report = new { configSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(configRaw)),
+                    planSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(planRaw)), review };
+                await using var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                await JsonSerializer.SerializeAsync(file, report, JsonOptions);
+                Print(report);
+                return 0;
+            }
             if (command == "fx-snapshot")
             {
                 Print(await ForexDatasetSnapshot.ExportAsync(Required(options, "dataset"), Required(options, "output-dir"),
@@ -323,6 +354,7 @@ internal static class ModelOpsProgram
         fx-replay-status (last 20 FX attempts; recovery rebuilds identical frozen input in a new attempt, preserving the incomplete attempt)
         fx-prepare --config COLLECTION_JSON [--rules RULES_REPORT] --equity-usd DECIMAL --output NEW_ABSOLUTE_CONFIG
         fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
+        fx-dataset-review --dataset FROZEN_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON
         fx-contract --instrument-id ID --strategy-id ID
         fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
         fx-collection-audit --config ABSOLUTE_JSON_PATH --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --from UTC --to UTC [--output NEW_ABSOLUTE_REPORT_PATH]
