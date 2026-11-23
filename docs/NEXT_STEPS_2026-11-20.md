@@ -1,5 +1,7 @@
 # Pregled dovršenosti i redoslijed nastavka
 
+**N3 prihvat, 23.11.2026.:** [Dnevna sesija i paritet](N3_COLLECTION_LATENCY.md#prihvatna-sesija-i-paritet--23112026) potvrđuju završetak N3 za AnalysisOnly EUR/USD prikupljanje: 69 minutnih prozora, pipeline max 45,77 ms, queue max 40,73 ms, bez gapova/dropova/grešaka; 73.047 potpunih parova i 836/836 5s barova. Paritet stvarnih kotacija i kontroliranog prihvaćenog signala provjeren je; **803/803 testa** prolaze. Pozadinski SQL i dalje može trajati oko 2 s, pa paper izvršavanje nije time potvrđeno. N4 je sljedeći odobravani korak; FX-12 i 25/30/31 ostaju otvoreni. Nema naloga ni model approvala.
+
 **N3 quality checkpoint, 23.11.2026.:** [Periodično spremanje izvedenog stanja](N3_COLLECTION_LATENCY.md#periodično-spremanje-quality-stanja--23112026) implementirano je i uključeno samo u AnalysisOnly EUR/USD kolektoru (1 s / maksimalno pending 5 s). Svaka kotacija i dalje se provjerava; incidenti se spremaju odmah, a neuspjeh ili zaostajanje blokira tok. Paper/live zadržava per-event spremanje. **802/802 testa** i IBKR guards prolaze; nova verzija je pokrenuta uz zabrane naloga. Potrebna je nova ≥60-minutna prihvatna sesija; **N3, FX-12 i 25/30/31 ostaju otvoreni**, N4 nije započet.
 
 **N3 NVMe test uz aktivni feed, 23.11.2026.:** [dvadesetominutni test i povratna faza](N3_COLLECTION_LATENCY.md#nvme-usporedba-uz-aktivni-feed--23112026) završeni su uz isti PID i bez prekida. Pipeline maksimum je 986 ms uz NVMe AC 0/0, a 909 ms nakon vraćanja Balanced plana; **obje faze ne prolaze N3**. Potvrđena su 28.394 potpuna para i svih 479 očekivanih 5s barova, bez gapova/dropova. Izvorne postavke su vraćene, nema naloga. Slijedi pregled blokirajućeg spremanja quality stanja; trajna promjena napajanja nije opravdana ovim rezultatom.
@@ -67,7 +69,7 @@ Odabrati ograničeno streaming procesiranje s nastavkom stanja ili verzionirani 
 
 ### N3 — Izmjeriti i ukloniti preostale zastoje prikupljanja
 
-Status: **u tijeku**. Mjerenja i potvrđeni flush ispravak implementirani su; [N3 protokol i dokazi](N3_COLLECTION_LATENCY.md). Preostali SQL save outlieri i operativna prihvatna sesija još ne prolaze kriterij završetka.
+Status: **završeno za AnalysisOnly EUR/USD prikupljanje**, 23.11.2026. [Prihvatna sesija i paritet](N3_COLLECTION_LATENCY.md#prihvatna-sesija-i-paritet--23112026) prolaze kriterije N3. Fizički SQL zastoji ostaju opaženi u pozadini; paper/live per-event put i puni signal/model/order paritet provjeravaju se u N4 i prije brokerskog testa, bez tvrdnje da je SSD popravljen.
 
 Dodati trajanja pojedinih faza obrade: queue, quality provjera/baza, pohrana i agregati. Mjeriti raspodjelu p50/p95/p99 i maksimum te ih povezati s TWS prekidima i opterećenjem procesa. Popravljati potvrđeni uzrok. Provjeriti reconnect, restart, sinkronizaciju sata i nadzor diska/logova; zadržati granice kvalitete i postojeće podatke.
 

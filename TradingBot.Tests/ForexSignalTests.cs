@@ -20,6 +20,61 @@ public sealed class ForexSignalTests
     private static readonly DateTime Start = new(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public async Task QualityCheckpointsPreserveAcceptedSignalAndDurableCooldownAcrossTriggerRestart()
+    {
+        using var a = new Fixture(); using var b = new Fixture();
+        using var strict = new MarketDataQualityService(a, Options.Create(a.Trading), a,
+            NullLogger<MarketDataQualityService>.Instance, Options.Create(a.Aggregates));
+        using var buffered = new MarketDataQualityService(b, Options.Create(b.Trading), b,
+            NullLogger<MarketDataQualityService>.Instance, Options.Create(b.Aggregates),
+            Options.Create(new MarketDataCollectionSettings { QualityStateCheckpointMilliseconds = 1000 }), new FixedQualityTime());
+        Assert.True(buffered.GetPersistenceStatus().CheckpointsEnabled);
+        async Task Feed(int first, int count, DateTime now)
+        {
+            var quotes = new List<CanonicalMarketDataEvent>();
+            a.Feed(first, count, advance: false, apply: quotes.Add);
+            foreach (var quote in quotes)
+            {
+                a.Now = b.Now = quote.ReceivedTimeUtc;
+                var left = await strict.EvaluateAsync(quote); var right = await buffered.EvaluateAsync(quote);
+                Assert.Equal(left, right); Assert.True(left.IsHealthy);
+                a.Latest.Apply(quote); b.Latest.Apply(quote);
+            }
+            a.Now = b.Now = now; a.Latest.AdvanceTo(now); b.Latest.AdvanceTo(now);
+            await buffered.FlushCheckpointsAsync();
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(a.Inputs().Compute("FX-EURUSD", 5, now)),
+                System.Text.Json.JsonSerializer.Serialize(b.Inputs().Compute("FX-EURUSD", 5, now)));
+        }
+        await Feed(0, 28, Start.AddSeconds(142)); a.Approve(); b.Approve();
+        var ta = a.Trigger(); var tb = b.Trigger();
+        var sa = Assert.Single(await ta.ProcessAsync("FX-EURUSD", a.Now));
+        var sb = Assert.Single(await tb.ProcessAsync("FX-EURUSD", b.Now));
+        Assert.Equal(sa.PatternKey, sb.PatternKey); Assert.Equal(sa.Context.SignalId, sb.Context.SignalId);
+        Assert.Equal(sa.Confidence, sb.Confidence);
+        // Restart trigger services: durable processed watermark/cooldown must remain identical.
+        ta = a.Trigger(); tb = b.Trigger();
+        Assert.Empty(await ta.ProcessAsync("FX-EURUSD", a.Now)); Assert.Empty(await tb.ProcessAsync("FX-EURUSD", b.Now));
+        await Feed(28, 1, Start.AddSeconds(147));
+        Assert.Empty(await ta.ProcessAsync("FX-EURUSD", a.Now)); Assert.Empty(await tb.ProcessAsync("FX-EURUSD", b.Now));
+        using var da = a.CreateDbContext(); using var db = b.CreateDbContext();
+        var ra = da.ResearchCandidateRecords.OrderBy(x => x.CandidateKey).ToArray();
+        var rb = db.ResearchCandidateRecords.OrderBy(x => x.CandidateKey).ToArray();
+        Assert.Equal(290, ra.Length); Assert.Equal(ra.Length, rb.Length);
+        Assert.Contains(ra, x => x.ReasonsJson.Contains("cooldown"));
+        for (var i = 0; i < ra.Length; i++)
+        {
+            // Correlation IDs are random traces; compare durable signal identity, complete decision and inputs.
+            Assert.Equal(ra[i].CandidateKey, rb[i].CandidateKey); Assert.Equal(ra[i].SignalId, rb[i].SignalId);
+            Assert.Equal(ra[i].Outcome, rb[i].Outcome); Assert.Equal(ra[i].DecisionStage, rb[i].DecisionStage);
+            Assert.Equal(ra[i].ReasonsJson, rb[i].ReasonsJson); Assert.Equal(ra[i].MetadataJson, rb[i].MetadataJson);
+            Assert.Equal(ra[i].HardConditionsJson, rb[i].HardConditionsJson); Assert.Equal(ra[i].ScoreComponentsJson, rb[i].ScoreComponentsJson);
+        }
+        Assert.Empty(da.OrderRecords); Assert.Empty(db.OrderRecords);
+    }
+
+    private sealed class FixedQualityTime : TimeProvider { public override long GetTimestamp() => 0; }
+
+    [Fact]
     public async Task IdleCyclesSkipDatabaseButNewBarsAndRestartsKeepDurableCooldown()
     {
         using var fixture = new Fixture(); fixture.Feed(); fixture.Approve();
@@ -269,7 +324,8 @@ public sealed class ForexSignalTests
             profile.ApprovedPatternVersion = Patterns.Profiles[index].Version;
             profile.ApprovedFeatureVersion = Inputs().Compute(profile.Selection.InstrumentId, profile.Selection.IntervalSeconds, Now)!.FeatureVersion;
         }
-        public void Feed(int first = 0, int count = 28, string instrument = "FX-EURUSD", bool advance = true)
+        public void Feed(int first = 0, int count = 28, string instrument = "FX-EURUSD", bool advance = true,
+            Action<CanonicalMarketDataEvent>? apply = null)
         {
             for (int i = first; i < first + count; i++)
             {
@@ -277,7 +333,7 @@ public sealed class ForexSignalTests
                 decimal[] prices = i >= 27 ? [1.10023m, 1.10026m, 1.10000m, 1.10025m] : [close + 0.00001m, close + 0.00002m, close - 0.00001m, close];
                 for (int j = 0; j < prices.Length; j++)
                     foreach (var kind in instrument == "SPY" ? new[] { MarketDataEventKind.Trade } : [MarketDataEventKind.Bid, MarketDataEventKind.Ask])
-                        Latest.Apply(new CanonicalMarketDataEvent
+                        (apply ?? Latest.Apply)(new CanonicalMarketDataEvent
                         {
                             EventId = $"IBKR:FXQ:fx7:{instrument}-{i}-{j}:{kind.ToString().ToLowerInvariant()}", InstrumentId = instrument,
                             Symbol = instrument == "SPY" ? "SPY" : instrument.Replace("FX-", ""), Kind = kind,

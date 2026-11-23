@@ -1,0 +1,292 @@
+{
+  "schema": "n3-checkpoint-session-v1",
+  "date": "2026-11-23",
+  "runtimeCommit": "5cf50b85d4d435b16664c23283f36135162b8b97",
+  "decision": "N3 collection acceptance complete for AnalysisOnly EUR/USD. Not SSD repair, live signal scheduling parity, paper order readiness or profitability evidence.",
+  "quoteRange": {
+    "fromUtc": "2026-11-23T11:45:15Z",
+    "toUtc": "2026-11-23T12:55:00Z"
+  },
+  "latencyReportRange": {
+    "fromUtc": "2026-11-23T11:46:00+00:00",
+    "toUtc": "2026-11-23T12:55:00+00:00",
+    "note": "Minute report end timestamp selection; intervals differ from exact quote audit bounds."
+  },
+  "latency": {
+    "tickWindows": 69,
+    "events": 144960,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 0,
+    "worstWindowPipelineP99UpperMs": 0.14420993610649957,
+    "maxPipelineMs": 45.7699,
+    "worstWindowQueueP99UpperMs": 39.7788,
+    "maxQueueMonotonicMs": 40.7272,
+    "maxQualityReadMs": null,
+    "maxQualitySaveMs": null,
+    "storageWindows": 66,
+    "maxFlushMs": 653.3832,
+    "maxEnqueueToDurableMs": 5655.5523,
+    "storageFailures": 0,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": true,
+    "minimum60TickWindowsPresent": true,
+    "processIds": [
+      14608
+    ]
+  },
+  "qualityCheckpoints": {
+    "sampleCount": 69,
+    "maximumFlushMs": 1996.134,
+    "maximumPendingMs": 2709.7688,
+    "maxFailedStreams": 0,
+    "allAcceptingEvents": true,
+    "first": {
+      "atUtc": "2026-11-23T11:46:12.6474067Z",
+      "CheckpointsEnabled": true,
+      "CachedStreams": 2,
+      "PendingStreams": 0,
+      "FailedStreams": 0,
+      "OldestPendingMilliseconds": 0,
+      "PersistedStreamUpdates": 294,
+      "LastFlushUtc": "2026-11-23T11:46:12.6473959Z",
+      "LastFlushMilliseconds": 10.8592,
+      "AcceptingEvents": true,
+      "MaximumFlushMilliseconds": 983.6876,
+      "MaximumObservedPendingMilliseconds": 1609.139
+    },
+    "last": {
+      "atUtc": "2026-11-23T12:54:56.3955751Z",
+      "CheckpointsEnabled": true,
+      "CachedStreams": 2,
+      "PendingStreams": 0,
+      "FailedStreams": 0,
+      "OldestPendingMilliseconds": 0,
+      "PersistedStreamUpdates": 7691,
+      "LastFlushUtc": "2026-11-23T12:54:56.3955693Z",
+      "LastFlushMilliseconds": 2.8127,
+      "AcceptingEvents": true,
+      "MaximumFlushMilliseconds": 1996.134,
+      "MaximumObservedPendingMilliseconds": 2709.7688
+    },
+    "slowSqlCount": 16,
+    "slowSql": [
+      "transaction AsOfUtc=2026-11-23T11:46:11.6237625Z Milliseconds=979.4609 Phase=Commit Context=693acfb2-01c9-4d3b-ac32-ea05064defc7",
+      "command AsOfUtc=2026-11-23T11:53:40.7539674Z Milliseconds=679.1438 Operation=INSERT Table=InstrumentRolloutEvaluationRecords Context=e05f45e5-6506-43f7-8b57-a9bd11159afd Source=Reader Phase=ReaderLifetime",
+      "transaction AsOfUtc=2026-11-23T11:53:40.7854282Z Milliseconds=312.4348 Phase=Begin Context=97a950a2-bdf6-4237-95e9-d0052d600653",
+      "transaction AsOfUtc=2026-11-23T12:08:19.0893334Z Milliseconds=645.5254 Phase=Commit Context=6e90099f-6dc6-4e1a-845c-3898f1f8c156",
+      "transaction AsOfUtc=2026-11-23T12:08:25.1277576Z Milliseconds=1993.7138 Phase=Commit Context=ef2840f8-aa9c-4d14-b488-489916b4421d",
+      "transaction AsOfUtc=2026-11-23T12:08:28.4349895Z Milliseconds=257.9752 Phase=Commit Context=e4fbc119-ea5e-412f-80f4-1f62a9a011b0",
+      "transaction AsOfUtc=2026-11-23T12:15:37.0554417Z Milliseconds=446.1731 Phase=Commit Context=4df5ecf6-0bb3-4337-8852-9e20a4f57d79",
+      "transaction AsOfUtc=2026-11-23T12:22:52.5060928Z Milliseconds=651.9443 Phase=Commit Context=26366843-b0cb-4005-aa19-529426b21b02",
+      "transaction AsOfUtc=2026-11-23T12:30:01.8366741Z Milliseconds=576.1878 Phase=Commit Context=761e5c4d-1bfc-4784-a9e7-bd4be9012e70",
+      "transaction AsOfUtc=2026-11-23T12:37:09.8417222Z Milliseconds=1001.0941 Phase=Commit Context=e76d1aeb-1628-4f4d-9c5c-4a0078bd45a0",
+      "transaction AsOfUtc=2026-11-23T12:37:15.8167881Z Milliseconds=1898.1625 Phase=Commit Context=9cb93753-08a1-49a9-8abc-72c06b7430e7",
+      "transaction AsOfUtc=2026-11-23T12:37:19.2928287Z Milliseconds=433.4089 Phase=Commit Context=fec3ea7f-969c-4c56-a04e-5302b11ee3a0",
+      "transaction AsOfUtc=2026-11-23T12:44:17.7816292Z Milliseconds=558.0821 Phase=Commit Context=cdeea7a3-59ba-4bb7-a263-df0807b847f7",
+      "transaction AsOfUtc=2026-11-23T12:44:17.8423318Z Milliseconds=459.8574 Phase=Begin Context=9ec8323a-b798-4a96-95fa-b16fd2971927",
+      "transaction AsOfUtc=2026-11-23T12:50:48.1267004Z Milliseconds=774.4753 Phase=Commit Context=310906b8-2662-4e43-8f0c-f1f8c496b6f0",
+      "command AsOfUtc=2026-11-23T12:50:48.1390014Z Milliseconds=753.8708 Operation=SELECT Table=ResearchCandidateRecords Context=183561c9-4ac4-4d4d-93ce-d536a8f332f6 Source=LinqQuery Phase=Execute"
+    ],
+    "resourcesFirst": {
+      "ProcessId": 14608,
+      "CpuPercentOfMachine": 0.2861739685866996,
+      "WorkingSetBytes": 305307648,
+      "AllocatedBytesDelta": 233040584,
+      "GcCollectionsDelta": [
+        6,
+        3,
+        2
+      ],
+      "ThreadPoolPending": 0,
+      "DiskFreeBytes": 55852036096,
+      "LogBytes": 1588908345,
+      "DiskLow": false,
+      "LogsLarge": false
+    },
+    "resourcesLast": {
+      "ProcessId": 14608,
+      "CpuPercentOfMachine": 0.2857937984483363,
+      "WorkingSetBytes": 338776064,
+      "AllocatedBytesDelta": 336149544,
+      "GcCollectionsDelta": [
+        7,
+        3,
+        2
+      ],
+      "ThreadPoolPending": 0,
+      "DiskFreeBytes": 55772659712,
+      "LogBytes": 1589529908,
+      "DiskLow": false,
+      "LogsLarge": false
+    }
+  },
+  "datasetVerification": {
+    "isValid": true,
+    "fileCount": 1536,
+    "rowCount": 146260,
+    "manifestSha256": "82DFB1D8FDB9DC8AFE743FB18B30A1231175071A975114A001D0B0E3D20CDDC8",
+    "errors": []
+  },
+  "quoteAudit": {
+    "quoteEvents": 146094,
+    "completeCallbackPairs": 73047,
+    "incompleteCallbackPairs": 0,
+    "callbackSessions": 1,
+    "futureQuoteEvents": 84,
+    "staleQuoteEvents": 0,
+    "minimumReceiveMinusEventMilliseconds": -30.0252,
+    "futureToleranceMilliseconds": 250,
+    "beyondFutureToleranceQuoteEvents": 0
+  },
+  "aggregates": [
+    {
+      "intervalSeconds": 5,
+      "expectedFinalWindows": 836,
+      "finalBars": 836,
+      "framesWithAtLeast26Bars": 811,
+      "priceFeatureReadyFrames": 811
+    },
+    {
+      "intervalSeconds": 15,
+      "expectedFinalWindows": 278,
+      "finalBars": 278,
+      "framesWithAtLeast26Bars": 253,
+      "priceFeatureReadyFrames": 253
+    }
+  ],
+  "database": {
+    "fromUtc": "2026-11-23 11:45:15Z",
+    "toUtc": "2026-11-23 12:55:00Z",
+    "capturedUtc": "2026-11-23T12:57:15.533117+00:00",
+    "gaps": 0,
+    "droppedEvents": 0,
+    "qualityIncidents": [],
+    "totalOperationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    }
+  },
+  "observedStatus": {
+    "capturedUtc": "2026-11-23T12:56:39.9216056Z",
+    "processExists": true,
+    "startedUtc": "2026-11-23T11:43:07.353494Z",
+    "readOnly": true,
+    "tradingDisabled": true,
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 2,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 319.2303,
+      "persistedStreamUpdates": 7881,
+      "lastFlushUtc": "2026-11-23T12:56:39.1834454Z",
+      "lastFlushMilliseconds": 2.7919,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 1996.134,
+      "maximumObservedPendingMilliseconds": 2709.7688
+    },
+    "tick": [
+      {
+        "streamKey": "FX-CASH-EUR-USD-IDEALPRO|TICK|ALL",
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "symbol": "EURUSD",
+        "timeframe": "TICK",
+        "status": 3,
+        "statusReason": "Market-data heartbeat received.",
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastHeartbeatUtc": "2026-11-23T12:56:39.4516183Z",
+        "lastEventTimeUtc": "2026-11-23T12:56:39Z",
+        "receiveLagMilliseconds": 451,
+        "heartbeatTimeoutSeconds": 60,
+        "consecutiveFailures": 0,
+        "reconnectCount": 0,
+        "gapFillCount": 0,
+        "lastGapFillStartUtc": null,
+        "lastGapFillEndUtc": null,
+        "lastGapFillBars": 0,
+        "lastError": "",
+        "updatedAtUtc": "2026-11-23T12:56:39.4516183Z"
+      }
+    ]
+  },
+  "offlineParity": {
+    "passed": true,
+    "canSendOrders": false,
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T11:45:15Z",
+    "toUtc": "2026-11-23T12:55:00Z",
+    "ManifestSha256": "82DFB1D8FDB9DC8AFE743FB18B30A1231175071A975114A001D0B0E3D20CDDC8",
+    "configSha256": "D62A5FCF1F4B31B4FCD211B56DDC5700D11095A3358E4DAAB385FDACB7FB34A3",
+    "events": 146094,
+    "healthy": 146094,
+    "frames": {
+      "5": 836,
+      "15": 278
+    },
+    "warmedFeatureFrames": 1064,
+    "decisionBatches": 836,
+    "patternEvaluations": 8360,
+    "patternCandidates": 232,
+    "selectedSignals": 0,
+    "featureSha256": "39E20E12C1D33CB6E0AF505C51109D21D77A5C2FB758A571912B5D26C7D43517",
+    "strictDecisionSha256": "97E7B4038EFADCB0DC6409D001BD36B8085158AD6BFAA39E3DB80A3318950BFC",
+    "checkpointDecisionSha256": "97E7B4038EFADCB0DC6409D001BD36B8085158AD6BFAA39E3DB80A3318950BFC",
+    "limitations": [
+      "Receive-ordered offline comparison, not live timer scheduling parity.",
+      "Only random PipelineContext.CorrelationId is excluded; deterministic signal identity and all decision fields are compared.",
+      "Current unapproved research profile: accepted signal/cooldown, model and order paths not validated.",
+      "In-memory SQLite; storage timing/failure coverage comes from separate tests and live metrics."
+    ]
+  },
+  "validation": {
+    "releaseTestsPassed": 803,
+    "releaseTestsFailed": 0,
+    "acceptedSignalAndDurableCooldownParityPassed": true,
+    "requiredIbkrPublishAndNegativeGuardsPassed": true,
+    "diagnosticBuildPassed": true,
+    "ci": "See commit check; local results do not assert remote completion."
+  },
+  "clock": {
+    "windowsSynchronized": true,
+    "samplesMs": [
+      52.4372,
+      53.4997,
+      52.2173
+    ],
+    "continuousMeasurement": false
+  },
+  "powerPlan": "Original Balanced unchanged; no WPR during acceptance.",
+  "workloadNotes": "Short prior audit/log reads and commit preparation occurred in early minutes. This larger snapshot audit, parity and regression run began after the frozen acceptance interval.",
+  "artifactSha256": {
+    "collector.log": "20316BE55C9B2A6A5C4779A59EF6B0EC1251861D13D440E4CE7BAE8FB4107799",
+    "latency.json": "E3CF49FC9BDA48C8D03EDFEC3D541332CC3799A3327C8F41E86B516C14E99AC3",
+    "audit.json": "0D99468584D3FC279E75D57D0EA8CEB1501A68A3A46A7D145B942BF46B34F2DF",
+    "status.json": "10A3587192DB28686B578621982F8684B4C531998E7799F44E57B8B9EA2E846A",
+    "database-smoke.json": "8CA5214F73D64340A31938CA41332A3762CB4DACB54E200CDC58421F8396E5AA",
+    "checkpoint-summary.json": "8C0ADF89643EB20BC2E2DE5843B73931886DAFC77A4A5171D899EEC3262DDF1C",
+    "parity-final.json": "92BF24BF78097C047B5F69070F111C395DFA24A570283D8542041E5134489771",
+    "n3-session-final.trx": "C3D4DF23C39E2C8A506EB6F45E0AAC47A96E72DD4917E19E905384BE2104AA95",
+    "ibkr.log": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E",
+    "clock-status.txt": "66CCE9B9B3CB8CE0FBAC59CD0C23716AD4267321EE3A2470859D4927A1BC4EE7",
+    "clock-offset.txt": "41B63194BE9FA367C917594EE037EAE87280F4AC3DE98020F2B21060F2E6F7BF"
+  },
+  "limitations": [
+    "Background checkpoint still reached 1996.134 ms; underlying storage completion waits remain.",
+    "Paper/live retains per-event persistence; assess its latency before real orders.",
+    "Real-data parity is receive-clock offline reconstruction with unapproved research decisions; synthetic accepted-signal test is separate.",
+    "Full timer/model/order parity and actual IBKR paper cycle remain N4/FX-12/25/30/31 work.",
+    "No operational approvals or orders and no collector restart in this step."
+  ]
+}

@@ -1,6 +1,6 @@
 # N3 — dijagnostika i pouzdanost prikupljanja
 
-23.11.2026. **N3 je u tijeku, nije operativno zatvoren.** Implementirana su fazna mjerenja, ispravljen flush rok, smanjen manifest i periodično spremanje izvedenog quality stanja samo u AnalysisOnly kolektoru. Petkov ETL potvrđuje čekanje storage dovršetka; njegova fizička podloga nije uklonjena ovom promjenom. Nova puna prihvatna sesija i latencija paper izvršavanja ostaju otvoreni. FX-12, 25/30/31 ostaju otvoreni, bez naloga ili odobrenja modela.
+23.11.2026. **N3 prihvat prikupljanja EUR/USD u AnalysisOnly načinu je završen.** Nova sesija od 69 aktivnih minutnih prozora prolazi zadane pragove, uz hash-provjerene podatke i potvrdu pariteta stare/nove quality putanje. Fizičko SQLite/NVMe čekanje i latencija paper izvršavanja nisu proglašeni riješenima. FX-12 i 25/30/31 ostaju otvoreni; N4 je sljedeći korak, nije započet.
 
 ## Što je promijenjeno
 
@@ -233,3 +233,32 @@ Pozadinski quality flush u istoj sesiji stvarno doseže **983,688 ms**, pending 
 Zamrznut zaseban quote raspon **12:45:15–12:49:15 Zagreb** ima 86 hash-provjerenih datoteka / 4.424 manifest retka, od čega 4.362 quote događaja / **2.181 potpuni par** unutar granica. Potvrđeno je svih **47/47** finalnih 5s barova i **22** zagrijana framea (15s: 15/15 barova, prekratko za warmup). Nema stale/future/nepotpunih parova, coverage gapova, dropova ili quality incidenata. Nalozi, izvršenja, tradeovi, rezervacije i modeli u operativnoj bazi ostaju nula. Granice minutnih latency prozora nisu identične granicama quote audita, pa broj događaja nije uspoređen kao da je isti uzorak. Naknadni NTP uzorci odstupaju 47,6–48,6 ms; Balanced plan ostaje aktivan.
 
 **N3 ostaje otvoren.** Potrebna je nova reprezentativna sesija od najmanje 60 minuta nakon startup zagrijavanja, s istim pipeline/queue/storage pragovima i provjerom gapova/dropova. Fizičko SQLite/NVMe čekanje nije proglašeno riješenim; smanjen je broj zapisa i blokiranje zdrave collection putanje. Latencija paper izvršavanja, potpuni feature/signal paritet, FX-12 i 25/30/31 ostaju zasebno otvoreni. N4 nije započet; nema naloga ni model approvala.
+
+## Prihvatna sesija i paritet — 23.11.2026.
+
+**N3 je završen u opsegu prikupljanja EUR/USD za istraživanje (AnalysisOnly).** Dnevna sesija nakon popravka prolazi unaprijed postavljene pragove, a nepromijenjeni rezultati obrade potvrđeni su na stvarnim kotacijama i kontroliranom prihvaćenom signalu. Ovo nije tvrdnja da je fizički SSD problem uklonjen niti odobrenje paper/live izvršavanja. Paper/live zadržava per-event trajnost i njegovu latenciju treba zasebno provjeriti u N4/prije naloga. FX-12 i 25/30/31 ostaju otvoreni. N4 nije započet.
+
+Isti kolektor **PID 14608**, pokrenut 12:43:07 Zagreb, ostao je aktivan bez restarta/reconnecta. Prihvatni quote raspon je **12:45:15–13:55:00 Zagreb** (69 min 45 s), nakon startup zagrijavanja. Analizirana su **69** tick i storage minutna izvještaja završena 12:46–13:55; njihove granice nisu identične quote auditu. Prvih nekoliko minuta uključuje raniji kratki audit/čitanje logova i pripremu commita, bez ponovnog builda kolektora; naknadni veliki audit, parity i testovi pokrenuti su nakon kraja ovog raspona. Nije pokrenut WPR niti mijenjan Balanced plan.
+
+| Mjera | Opaženo | Zadani prag |
+| --- | ---: | ---: |
+| Događaji u latency prozorima | 144.960 | ≥60 aktivnih minutnih prozora |
+| Najviši minutni pipeline p99 | 0,1442 ms | ≤50 ms |
+| Pipeline maksimum | 45,7699 ms | ≤250 ms |
+| Najviši minutni monotoni queue p99 | 39,7788 ms | ≤100 ms |
+| Monotoni queue maksimum | 40,7272 ms | ≤500 ms |
+| Dataset flush maksimum | 653,3832 ms | ≤2.000 ms |
+| Enqueue-to-write maksimum | 5.655,5523 ms | ≤7.500 ms |
+| Processing/storage greške, dropovi | 0 | 0 |
+
+Nema source-age >2 s niti negativnih queue clock delta u log prozorima. Najsporija obrada u 13:33:01,900 Zagreb ima 45,7086 ms u `QualityAssess`, bez inline quality čitanja/spremanja. Ne pripisujemo taj ispodpragovni zastoj određenom GC/OS uzroku bez snimke. Pozadinski checkpoint doseže **1.996,134 ms**, a opažena pending starost **2.709,769 ms**, ispod 5 s. Svih 69 checkpoint statusa prihvaća događaje i nema failed streamova. Commit od **1.993,714 ms u 13:08:25,128 Zagreb** pokriva gotovo cijeli najveći checkpoint zastoj. Postoje i sporiji rollout INSERT/research SELECT pozivi: ovo je dokaz odvajanja zdrave quote putanje od izvedenog quality spremanja, ne uklanjanja svih SQL čekanja. Nema razloga mijenjati trajnost baze ili postavke napajanja.
+
+Zamrznuto i hash-provjereno **1.536 datoteka / 146.260 manifest redaka** sadrži **146.094 quote događaja / 73.047 potpunih parova** unutar granica, jednu callback sesiju i nula nepotpunih/stale parova. Svih **836/836** finalnih 5s barova i **278/278** 15s barova postoji; **811** odnosno **253** framea imaju zagrijane cjenovne featuree. Nema praznih/potisnutih prozora, coverage gapova, dropova ili quality incidenata. Postoje 84 pojedinačne kotacije s brokerovim vremenom do **30,0252 ms** ispred primitka, unutar nepromijenjene 250ms tolerancije; nisu obrisane ni prepravljene. Naknadni Windows status je sinkroniziran, NTP uzorci pokazuju **52,2–53,5 ms** odstupanja. To nije kontinuirano mjerenje brokerova sata.
+
+Na istom snapshotu novi izolirani alat `scripts/QualityParity` uspoređuje per-event i checkpoint servis kroz zasebne SQLite baze u memoriji. Svih 146.094 assessmenta mora biti jednako i odgovarati snimljenom quality statusu. Uspoređuju se agregati, svaki novi feature frame na vremenu dostupnosti bara, puni pattern/signal output, identitet signala i konačno durable quality stanje. Jedino se nasumični trace `CorrelationId` izuzima; deterministic `SignalId`, cijene, verzije, uvjeti, scoreovi i svi razlozi odluka ostaju uspoređeni. Potpuni sekvencijski hash odluka mora biti jednak. Usporedba daje 836 5s i 278 15s feature frameova (1.064 zagrijana), 836 signalnih batchova, 8.360 pattern evaluacija i 232 pattern kandidata, uz identičan hash odluka. Operativna konfiguracija i njezina prazna approval polja ostaju nepromijenjeni, pa se očekuje nula prihvaćenih signala; dokaz ne koristi umjetno odobrenje stvarne strategije.
+
+Zasebni regresijski test `QualityCheckpointsPreserveAcceptedSignalAndDurableCooldownAcrossTriggerRestart` koristi kontrolirani pattern i dvije izolirane baze na disku: oba quality puta daju isti prihvaćeni signal, iste featuree i 290 trajnih odluka, a nakon restarta signalnog servisa jednako blokiraju duplikat i novi signal unutar cooldowna. Nema naloga. Time se provjera ne svodi na usporedbu dvaju praznih lista signala. Model inferencija i stvarni order/fill lifecycle nisu dio ovog dokaza.
+
+Dokazi i hashovi: [prihvatna sesija](evidence/n3-checkpoint-session-2026-11-23.json). Lokalni artefakti: `TestResults/n3-checkpoint-session-20261123`. **803/803 Release testa**, IBKR publish/missing/changed-DLL guards i build offline dijagnostike prolaze. CI dodatno gradi dijagnostički alat. Ovaj korak dodaje provjeru, test i dokumentaciju; produkcijski kod/konfiguracija, kolektor, baza i odobrenja nisu mijenjani. Nalozi, izvršenja, tradeovi, rezervacije i modeli ostaju nula.
+
+Preostalo za sljedeće točke: stvarno vremensko ponašanje timer/model signalnog toka, trajnost i latencija izvršavanja pod SQL zastojem, puni brokerski paper ciklus te višednevna strategijska evaluacija. Ovaj prolaz ne dokazuje profitabilnost. Ponoviti collection mjerenje ako se profil/opterećenje promijeni ili se pojave novi prekidi.

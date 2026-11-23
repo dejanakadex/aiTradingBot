@@ -66,6 +66,9 @@ jobs:
       - name: Verify collection diagnostics report
         run: python3 -m unittest discover -s scripts/tests -p test_collection_latency.py
 
+      - name: Build offline quality parity diagnostic
+        run: dotnet build scripts/QualityParity/QualityParity.csproj --configuration Release
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6
