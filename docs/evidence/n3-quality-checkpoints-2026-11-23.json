@@ -1,0 +1,262 @@
+{
+  "schema": "n3-quality-checkpoints-v1",
+  "date": "2026-11-23",
+  "baseCommit": "44a602d8a2a8692618f7cbe577df1f910f36a096",
+  "scope": "AnalysisOnly collection only. Short smoke, not N3 acceptance, paper execution, or profitability evidence. No orders.",
+  "implementation": {
+    "intervalMs": 1000,
+    "maximumPendingMs": 5000,
+    "defaultIntervalMs": 0,
+    "paperAndLiveRetainPerEventPersistence": true,
+    "healthyQualityAssessmentPerEvent": true,
+    "incidentsAndSequencesRemainSynchronous": true,
+    "restartCoverageUsesOldestDurableSide": true
+  },
+  "validation": {
+    "releaseTestsPassed": 802,
+    "releaseTestsFailed": 0,
+    "pythonDiagnosticsTestsPassed": 2,
+    "requiredIbkrPublishAndNegativeGuardsPassed": true,
+    "ci": "See commit check on trading-bot-v2; local evidence does not assert CI completion."
+  },
+  "deployment": {
+    "capturedUtc": "2026-11-23T11:43:27.8867003Z",
+    "startedUtc": "2026-11-23T11:43:07.353494Z",
+    "processId": 14608,
+    "readOnly": true,
+    "tradingDisabled": true,
+    "forexExecutionDisabled": true,
+    "automaticSignalsDisabled": true,
+    "testedInfrastructureHash": "B67033CA6759FE114C7C4996CF3AA33B29D9495B0B04925766DC535992C4FC53",
+    "deployedInfrastructureHash": "B67033CA6759FE114C7C4996CF3AA33B29D9495B0B04925766DC535992C4FC53",
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 2,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 148.9834,
+      "persistedStreamUpdates": 28,
+      "lastFlushUtc": "2026-11-23T11:43:27.3307395Z",
+      "lastFlushMilliseconds": 11.2358,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 51.5166,
+      "maximumObservedPendingMilliseconds": 812.3814
+    },
+    "tickStatus": [
+      {
+        "streamKey": "FX-CASH-EUR-USD-IDEALPRO|TICK|ALL",
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "symbol": "EURUSD",
+        "timeframe": "TICK",
+        "status": 3,
+        "statusReason": "Market-data heartbeat received.",
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastHeartbeatUtc": "2026-11-23T11:43:27.7036991Z",
+        "lastEventTimeUtc": "2026-11-23T11:43:27Z",
+        "receiveLagMilliseconds": 703,
+        "heartbeatTimeoutSeconds": 60,
+        "consecutiveFailures": 0,
+        "reconnectCount": 0,
+        "gapFillCount": 0,
+        "lastGapFillStartUtc": null,
+        "lastGapFillEndUtc": null,
+        "lastGapFillBars": 0,
+        "lastError": "",
+        "updatedAtUtc": "2026-11-23T11:43:27.7036991Z"
+      }
+    ]
+  },
+  "quoteRangeUtc": {
+    "from": "2026-11-23T11:45:15Z",
+    "to": "2026-11-23T11:49:15Z"
+  },
+  "latencyReportRangeUtc": {
+    "from": "2026-11-23T11:46:00+00:00",
+    "to": "2026-11-23T11:50:00+00:00",
+    "note": "Bounds select minute report end timestamps; first window starts about one minute earlier. Quote audit uses its own exact bounds."
+  },
+  "latency": {
+    "tickWindows": 4,
+    "events": 4318,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 0,
+    "worstWindowPipelineP99UpperMs": 0.1310999419149996,
+    "maxPipelineMs": 0.5734,
+    "worstWindowQueueP99UpperMs": 1.4204293198443194,
+    "maxQueueMonotonicMs": 4.4531,
+    "maxQualityReadMs": null,
+    "maxQualitySaveMs": null,
+    "storageWindows": 4,
+    "maxFlushMs": 252.333,
+    "maxEnqueueToDurableMs": 5266.9315,
+    "storageFailures": 0,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": true,
+    "minimum60TickWindowsPresent": false,
+    "processIds": [
+      14608
+    ]
+  },
+  "qualityMinuteSamples": [
+    {
+      "atUtc": "2026-11-23T11:45:11.8065571Z",
+      "metrics": {
+        "CheckpointsEnabled": true,
+        "CachedStreams": 2,
+        "PendingStreams": 0,
+        "FailedStreams": 0,
+        "OldestPendingMilliseconds": 0,
+        "PersistedStreamUpdates": 194,
+        "LastFlushUtc": "2026-11-23T11:45:11.8065417Z",
+        "LastFlushMilliseconds": 3.2746,
+        "AcceptingEvents": true,
+        "MaximumFlushMilliseconds": 51.5166,
+        "MaximumObservedPendingMilliseconds": 891.4795
+      }
+    },
+    {
+      "atUtc": "2026-11-23T11:46:12.6474067Z",
+      "metrics": {
+        "CheckpointsEnabled": true,
+        "CachedStreams": 2,
+        "PendingStreams": 0,
+        "FailedStreams": 0,
+        "OldestPendingMilliseconds": 0,
+        "PersistedStreamUpdates": 294,
+        "LastFlushUtc": "2026-11-23T11:46:12.6473959Z",
+        "LastFlushMilliseconds": 10.8592,
+        "AcceptingEvents": true,
+        "MaximumFlushMilliseconds": 983.6876,
+        "MaximumObservedPendingMilliseconds": 1609.139
+      }
+    },
+    {
+      "atUtc": "2026-11-23T11:47:13.5311995Z",
+      "metrics": {
+        "CheckpointsEnabled": true,
+        "CachedStreams": 2,
+        "PendingStreams": 0,
+        "FailedStreams": 0,
+        "OldestPendingMilliseconds": 0,
+        "PersistedStreamUpdates": 394,
+        "LastFlushUtc": "2026-11-23T11:47:12.5290327Z",
+        "LastFlushMilliseconds": 2.4437,
+        "AcceptingEvents": true,
+        "MaximumFlushMilliseconds": 983.6876,
+        "MaximumObservedPendingMilliseconds": 1609.139
+      }
+    },
+    {
+      "atUtc": "2026-11-23T11:48:14.5109292Z",
+      "metrics": {
+        "CheckpointsEnabled": true,
+        "CachedStreams": 2,
+        "PendingStreams": 0,
+        "FailedStreams": 0,
+        "OldestPendingMilliseconds": 0,
+        "PersistedStreamUpdates": 500,
+        "LastFlushUtc": "2026-11-23T11:48:13.4964997Z",
+        "LastFlushMilliseconds": 10.5538,
+        "AcceptingEvents": true,
+        "MaximumFlushMilliseconds": 983.6876,
+        "MaximumObservedPendingMilliseconds": 1609.139
+      }
+    },
+    {
+      "atUtc": "2026-11-23T11:49:15.3338627Z",
+      "metrics": {
+        "CheckpointsEnabled": true,
+        "CachedStreams": 2,
+        "PendingStreams": 0,
+        "FailedStreams": 0,
+        "OldestPendingMilliseconds": 0,
+        "PersistedStreamUpdates": 594,
+        "LastFlushUtc": "2026-11-23T11:49:15.3338526Z",
+        "LastFlushMilliseconds": 9.9849,
+        "AcceptingEvents": true,
+        "MaximumFlushMilliseconds": 983.6876,
+        "MaximumObservedPendingMilliseconds": 1609.139
+      }
+    }
+  ],
+  "datasetVerification": {
+    "isValid": true,
+    "fileCount": 86,
+    "rowCount": 4424,
+    "manifestSha256": "8D7136A5087FD52038953791C1DE47748FB142102728453FBC8AB24F132D5D39",
+    "errors": []
+  },
+  "quotes": {
+    "quoteEvents": 4362,
+    "completeCallbackPairs": 2181,
+    "incompleteCallbackPairs": 0,
+    "callbackSessions": 1,
+    "futureQuoteEvents": 0,
+    "staleQuoteEvents": 0
+  },
+  "aggregates": [
+    {
+      "intervalSeconds": 5,
+      "expectedFinalWindows": 47,
+      "finalBars": 47,
+      "maximumConsecutiveFeatureBars": 47,
+      "framesWithAtLeast26Bars": 22,
+      "priceFeatureReadyFrames": 22
+    },
+    {
+      "intervalSeconds": 15,
+      "expectedFinalWindows": 15,
+      "finalBars": 15,
+      "maximumConsecutiveFeatureBars": 15,
+      "framesWithAtLeast26Bars": 0,
+      "priceFeatureReadyFrames": 0
+    }
+  ],
+  "database": {
+    "fromUtc": "2026-11-23 11:45:15Z",
+    "toUtc": "2026-11-23 11:49:15Z",
+    "capturedUtc": "2026-11-23T11:53:24.592195+00:00",
+    "gaps": 0,
+    "droppedEvents": 0,
+    "qualityIncidents": [],
+    "totalOperationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    }
+  },
+  "clockOffsetSamplesMs": [
+    48.0588,
+    47.6347,
+    48.557
+  ],
+  "powerPlan": "Original Balanced; unchanged.",
+  "artifactSha256": {
+    "n3-checkpoints-final.trx": "EECE09DEBD56997D4D0D71936823959002A57283B738113F52E5411F104FA9DE",
+    "ibkr-final.log": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E",
+    "latency-smoke.json": "029F41A77BBDD9617EB7587284EEAB861EAC184D0549F08BF2B67FF6EF2E1406",
+    "audit.json": "A78707B01A86F8E2E09139FD2ABEBB182BDB17080A5352E227D55ECFA81094DD",
+    "snapshot.log": "3C8FD46F744C1A3FA88B1E849063676D814387288DD6D72AD51E81347D4E6C36",
+    "database-smoke.json": "6B07EA6552CD93C44BD1996D3E0C35109340970D032CAAD6DCDC8B8B8D8E87CE",
+    "startup-final.json": "3A3EB57C96541EB0D5C23CF1D4ED2100B1970E4ACF2E709B983EA08C8F706766",
+    "collector-smoke.log": "8689FDDA82315429DDFA69EE15B3C1341A6E7D91D99A21AEDDEA852A753E4426"
+  },
+  "limitations": [
+    "Only four latency windows, not the required sixty.",
+    "Background quality flush still reached 983.6876 ms; underlying storage cause not fixed.",
+    "Raw quote buffer durability is unchanged; derived state can lose uncheckpointed tail on abrupt exit.",
+    "No live signal/model/order parity or paper order confirmation.",
+    "N3, FX-12 and 25/30/31 remain open; N4 not started."
+  ]
+}

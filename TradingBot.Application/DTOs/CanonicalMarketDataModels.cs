@@ -2,6 +2,11 @@ using TradingBot.Domain.Enums;
 
 namespace TradingBot.Application.DTOs
 {
+    public sealed record QualityPersistenceSnapshot(bool CheckpointsEnabled, int CachedStreams, int PendingStreams,
+        int FailedStreams, double OldestPendingMilliseconds, long PersistedStreamUpdates,
+        DateTime? LastFlushUtc, double LastFlushMilliseconds, bool AcceptingEvents,
+        double MaximumFlushMilliseconds, double MaximumObservedPendingMilliseconds);
+
     public sealed record CanonicalMarketDataEvent
     {
         public string EventId { get; init; } = string.Empty;

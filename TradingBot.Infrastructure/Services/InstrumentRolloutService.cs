@@ -23,6 +23,7 @@ namespace TradingBot.Infrastructure.Services
         private readonly string _featureVersion;
         private readonly string _evaluationVersion;
         private readonly ForexRolloutService? _forex;
+        private readonly IMarketDataQualityService? _quality;
 
         public InstrumentRolloutService(
             IDbContextFactory<TradingBotDbContext> dbFactory,
@@ -34,9 +35,11 @@ namespace TradingBot.Infrastructure.Services
             IOptions<CandidateLabelingSettings>? labelSettings = null,
             IOptions<CanonicalFeatureSettings>? featureSettings = null,
             IOptions<ResearchEvaluationSettings>? evaluationSettings = null,
-            ForexRolloutService? forex = null)
+            ForexRolloutService? forex = null,
+            IMarketDataQualityService? quality = null)
         {
             _dbFactory = dbFactory;
+            _quality = quality;
             _registry = registry;
             _engineStatus = engineStatus;
             _settings = settings.Value;
@@ -94,6 +97,8 @@ namespace TradingBot.Infrastructure.Services
 
             var reasons = new List<string>();
             var critical = new List<string>();
+            if (_quality != null && (await _quality.GetStreamsAsync(cancellationToken)).Any(x => x.InstrumentId == instrument.InstrumentId && !x.IsHealthy))
+                critical.Add("Current market-data quality or checkpoint persistence is unhealthy.");
             var jobs = await db.HistoricalBackfillJobRecords.AsNoTracking()
                 .Where(x => x.InstrumentId == instrument.InstrumentId).ToListAsync(cancellationToken).ConfigureAwait(false);
             var historyComplete = instrument.MarketDataTimeframes.Count > 0;

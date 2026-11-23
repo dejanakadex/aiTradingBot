@@ -308,6 +308,7 @@ try
         Results.Ok(await rollout.ApproveLiveAsync(instrumentId, request, cancellationToken)));
     app.MapGet("/api/market-data/streams", async (IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetStreamsAsync(cancellationToken)));
+    app.MapGet("/api/market-data/quality-persistence", (IMarketDataQualityService quality) => Results.Ok(quality.GetPersistenceStatus()));
     app.MapGet("/api/market-data/incidents", async (int? count, IMarketDataQualityService quality, CancellationToken cancellationToken) =>
         Results.Ok(await quality.GetRecentIncidentsAsync(count ?? 100, cancellationToken)));
     app.MapGet("/api/market-data/latest", (ILatestMarketDataService latest) => Results.Ok(latest.GetAll()));

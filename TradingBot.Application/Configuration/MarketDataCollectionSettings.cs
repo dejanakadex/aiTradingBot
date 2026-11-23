@@ -13,6 +13,9 @@ namespace TradingBot.Application.Configuration
         public int MaximumGapFillLookbackMinutes { get; set; } = 1440;
         public int TickHeartbeatTimeoutSeconds { get; set; } = 60;
         public int TickQueueCapacity { get; set; } = 8192;
+        // Opt-in derived-state checkpoints for AnalysisOnly collection. Trading retains per-event persistence.
+        public int QualityStateCheckpointMilliseconds { get; set; } = 0;
+        public int QualityStateMaximumLagMilliseconds { get; set; } = 5000;
 
         public IReadOnlyList<string> GetValidationErrors()
         {
@@ -25,6 +28,11 @@ namespace TradingBot.Application.Configuration
             if (MaximumGapFillLookbackMinutes <= 0) errors.Add("MarketDataCollection:MaximumGapFillLookbackMinutes must be greater than zero.");
             if (TickHeartbeatTimeoutSeconds <= 0) errors.Add("MarketDataCollection:TickHeartbeatTimeoutSeconds must be greater than zero.");
             if (TickQueueCapacity < 128) errors.Add("MarketDataCollection:TickQueueCapacity must be at least 128.");
+            if (QualityStateCheckpointMilliseconds != 0 && QualityStateCheckpointMilliseconds is < 100 or > 5000)
+                errors.Add("MarketDataCollection:QualityStateCheckpointMilliseconds must be zero or between 100 and 5000.");
+            if (QualityStateMaximumLagMilliseconds is < 1000 or > 60000
+                || QualityStateMaximumLagMilliseconds <= QualityStateCheckpointMilliseconds)
+                errors.Add("MarketDataCollection:QualityStateMaximumLagMilliseconds must exceed the checkpoint interval and be between 1000 and 60000.");
             return errors;
         }
     }

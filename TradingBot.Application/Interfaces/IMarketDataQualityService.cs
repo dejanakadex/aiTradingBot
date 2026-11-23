@@ -4,6 +4,7 @@ namespace TradingBot.Application.Interfaces
 {
     public interface IMarketDataQualityService
     {
+        QualityPersistenceSnapshot GetPersistenceStatus();
         Task<MarketDataQualityAssessment> EvaluateAsync(
             CanonicalMarketDataEvent marketEvent,
             bool allowStaleHistoricalData = false,

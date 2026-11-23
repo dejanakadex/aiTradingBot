@@ -15,7 +15,8 @@ public sealed class ForexRolloutService(IDbContextFactory<TradingBotDbContext> f
     IInstrumentRegistryService registry, ForexResearchContract contracts, ForexFeatureService features,
     ILatestMarketDataService latest, ITradingEngineStatusService engine,
     IOptions<InstrumentRolloutSettings> settings, IOptions<ResearchEvaluationSettings> evaluationSettings,
-    IOptions<ShadowPerformanceSettings> performance, IOptions<ForexSignalSettings> signals, IClock clock)
+    IOptions<ShadowPerformanceSettings> performance, IOptions<ForexSignalSettings> signals, IClock clock,
+    IMarketDataQualityService? quality = null)
 {
     public async Task<InstrumentRolloutEvaluation> EvaluateAsync(InstrumentRegistrySnapshot instrument, bool apply, CancellationToken ct)
     {
@@ -25,6 +26,8 @@ public sealed class ForexRolloutService(IDbContextFactory<TradingBotDbContext> f
         var shadowFrom = instrument.StatusChangedAtUtc > from ? instrument.StatusChangedAtUtc : from;
         var reasons = new List<string>();
         var critical = new List<string>();
+        if (quality != null && (await quality.GetStreamsAsync(ct)).Any(x => x.InstrumentId == instrument.InstrumentId && !x.IsHealthy))
+            critical.Add("Current market-data quality or checkpoint persistence is unhealthy.");
         await using var db = await factory.CreateDbContextAsync(ct);
         var jobs = await db.HistoricalBackfillJobRecords.AsNoTracking().Where(x => x.InstrumentId == instrument.InstrumentId).ToListAsync(ct);
         bool historyComplete = instrument.MarketDataTimeframes.Count > 0, historyReady = historyComplete;

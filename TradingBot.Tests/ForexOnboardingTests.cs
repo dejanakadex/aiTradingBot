@@ -18,6 +18,30 @@ namespace TradingBot.Tests;
 public sealed class ForexOnboardingTests
 {
     [Fact]
+    public async Task FxRolloutSeesCheckpointFailureEvenWhenDatabaseStillSaysHealthy()
+    {
+        using var f = new ForexResearchFixture();
+        var registry = new InstrumentRegistryService(f, Options.Create(f.Trading), f);
+        await registry.SynchronizeConfiguredAsync();
+        using var quality = new MarketDataQualityService(f, Options.Create(f.Trading), f,
+            NullLogger<MarketDataQualityService>.Instance, collection: Options.Create(new MarketDataCollectionSettings
+            { QualityStateCheckpointMilliseconds = 1000 }));
+        var quote = new CanonicalMarketDataEvent { EventId = "IBKR:FXQ:checkpoint:1:bid", InstrumentId = "EURUSD", Symbol = "EURUSD",
+            Kind = MarketDataEventKind.Bid, EventTimeUtc = f.UtcNow, ReceivedTimeUtc = f.UtcNow, Price = 1.1m, Source = ForexQuoteAggregator.QuoteSource };
+        await quality.EvaluateAsync(quote);
+        await quality.EvaluateAsync(quote with { EventId = "IBKR:FXQ:checkpoint:2:bid" });
+        using (var db = f.CreateDbContext()) { db.MarketDataStreamStateRecords.Single().Version = 100; db.SaveChanges(); }
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => quality.FlushCheckpointsAsync());
+        var latest = new LatestMarketDataService(Options.Create(f.Aggregates), Options.Create(f.Trading));
+        var fx = new ForexRolloutService(f, registry, f.Contract(), new(latest, f.Features, Options.Create(f.Trading), Options.Create(f.Aggregates)),
+            latest, new TradingEngineStatusService(), Options.Create(new InstrumentRolloutSettings()), Options.Create(new ResearchEvaluationSettings()),
+            Options.Create(new ShadowPerformanceSettings()), Options.Create(f.Signals), f, quality);
+        var result = await fx.EvaluateAsync((await registry.GetAsync("EURUSD"))!, false, CancellationToken.None);
+        Assert.Contains("Current market-data quality or checkpoint persistence is unhealthy.", result.Reasons);
+        using var check = f.CreateDbContext(); Assert.True(check.MarketDataStreamStateRecords.Single().IsHealthy);
+    }
+
+    [Fact]
     public async Task FreshOperationalStartupAndRestartPreserveMixedRegistryAndPlanBackfillWithTradingOff()
     {
         using var f = new ForexResearchFixture();

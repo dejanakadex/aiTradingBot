@@ -77,7 +77,8 @@ namespace TradingBot.Infrastructure
             services.AddSingleton<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();
             services.AddTransient<IOpenAiSmokeTestService, OpenAiSmokeTestService>();
             services.AddSingleton<IMarketDataValidator, MarketDataValidator>();
-            services.AddSingleton<IMarketDataQualityService, MarketDataQualityService>();
+            services.AddSingleton<MarketDataQualityService>();
+            services.AddSingleton<IMarketDataQualityService>(sp => sp.GetRequiredService<MarketDataQualityService>());
             services.AddSingleton<ILatestMarketDataService, LatestMarketDataService>();
             services.AddTransient<ForexFeatureService>();
             services.AddTransient<ForexPatternResearchService>();
@@ -98,6 +99,8 @@ namespace TradingBot.Infrastructure
 
             services.AddHostedService<InstrumentRegistryHostedService>();
             services.AddHostedService<InstrumentRolloutHostedService>();
+            // Stop in reverse order: producers, dataset drain, then final derived-state checkpoint.
+            services.AddHostedService(sp => sp.GetRequiredService<MarketDataQualityService>());
             services.AddHostedService(sp => sp.GetRequiredService<MarketDatasetWriterHostedService>());
             services.AddHostedService<HistoricalBackfillHostedService>();
             services.AddHostedService<DeterministicReplayHostedService>();

@@ -60,11 +60,7 @@ public sealed class TickMarketDataHostedService : BackgroundService
     {
         if (!_settings.Enabled || _ticks == null) return;
         var instruments = _trading.GetEnabledInstruments();
-        var checkpoints = (await _quality.GetStreamsAsync(stoppingToken).ConfigureAwait(false))
-            .Where(x => x.Kind is MarketDataEventKind.Bid or MarketDataEventKind.Ask or MarketDataEventKind.Trade)
-            .Where(x => x.Source.StartsWith("IBKR.TickByTick", StringComparison.Ordinal) && x.LastReceivedTimeUtc.HasValue)
-            .GroupBy(x => x.InstrumentId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.Max(y => y.LastReceivedTimeUtc)!.Value, StringComparer.OrdinalIgnoreCase);
+        var checkpoints = RestartCheckpoints(await _quality.GetStreamsAsync(stoppingToken).ConfigureAwait(false));
 
         foreach (var instrument in instruments)
         {
@@ -87,6 +83,13 @@ public sealed class TickMarketDataHostedService : BackgroundService
             }
         }
     }
+
+    internal static Dictionary<string, DateTime> RestartCheckpoints(IEnumerable<MarketDataStreamSnapshot> streams) => streams
+        .Where(x => x.Kind is MarketDataEventKind.Bid or MarketDataEventKind.Ask or MarketDataEventKind.Trade)
+        .Where(x => x.Source.StartsWith("IBKR.TickByTick", StringComparison.Ordinal) && x.LastReceivedTimeUtc.HasValue)
+        .GroupBy(x => x.InstrumentId, StringComparer.OrdinalIgnoreCase)
+        // A later bid checkpoint cannot prove that the earlier ask/trade tail was persisted.
+        .ToDictionary(x => x.Key, x => x.Min(y => y.LastReceivedTimeUtc)!.Value, StringComparer.OrdinalIgnoreCase);
 
     private async Task RunAsync(ConfiguredInstrument instrument, DateTime checkpointUtc, CancellationToken token)
     {

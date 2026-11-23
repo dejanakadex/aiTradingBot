@@ -10,6 +10,38 @@ namespace TradingBot.Tests;
 
 public sealed class ForexClockSkewTests
 {
+    [Fact]
+    public async Task CheckpointedForexQuotesPreserveQualityAndAggregateParity()
+    {
+        using var bufferedDb = new ForexResearchFixture(); using var strictDb = new ForexResearchFixture();
+        var trading = ForexCollectionTests.Settings();
+        using var buffered = new MarketDataQualityService(bufferedDb, Options.Create(trading), bufferedDb,
+            NullLogger<MarketDataQualityService>.Instance, Options.Create(Policy),
+            Options.Create(new MarketDataCollectionSettings { QualityStateCheckpointMilliseconds = 1000 }), new FixedCheckpointTime());
+        using var strict = new MarketDataQualityService(strictDb, Options.Create(trading), strictDb,
+            NullLogger<MarketDataQualityService>.Instance, Options.Create(Policy));
+        var a = new LatestMarketDataService(Options.Create(Policy), Options.Create(trading));
+        var b = new LatestMarketDataService(Options.Create(Policy), Options.Create(trading));
+        for (var i = 1; i <= 160; i++)
+            foreach (var quote in Pair(Start.AddSeconds(i), Start.AddSeconds(i).AddMilliseconds(20)))
+            {
+                var x = await buffered.EvaluateAsync(quote); var y = await strict.EvaluateAsync(quote);
+                Assert.Equal(y, x); Assert.True(x.IsHealthy);
+                a.Apply(quote); b.Apply(quote);
+            }
+        var end = Start.AddSeconds(161); a.AdvanceTo(end); b.AdvanceTo(end);
+        var expected = b.GetCompletedForexAggregates("FX-EURUSD", 5, end);
+        Assert.True(expected.Count >= 26);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected),
+            System.Text.Json.JsonSerializer.Serialize(a.GetCompletedForexAggregates("FX-EURUSD", 5, end)));
+        await buffered.StopAsync(CancellationToken.None);
+    }
+
+    private sealed class FixedCheckpointTime : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
+
     private static readonly DateTime Start = new(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc);
     private static readonly ShortAggregateSettings Policy = new() { ForexFutureToleranceMilliseconds = 250 };
 

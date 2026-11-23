@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
 using TradingBot.Application.Interfaces;
@@ -10,7 +11,7 @@ using TradingBot.Persistence;
 
 namespace TradingBot.Infrastructure.Services
 {
-    public sealed class MarketDataQualityService : IMarketDataQualityService
+    public sealed partial class MarketDataQualityService : BackgroundService, IMarketDataQualityService
     {
         private static readonly TimeSpan FutureTolerance = TimeSpan.FromSeconds(5);
         private readonly IDbContextFactory<TradingBotDbContext> _dbFactory;
@@ -25,13 +26,16 @@ namespace TradingBot.Infrastructure.Services
             IOptions<TradingSettings> settings,
             IClock clock,
             ILogger<MarketDataQualityService> logger,
-            IOptions<ShortAggregateSettings>? aggregates = null)
+            IOptions<ShortAggregateSettings>? aggregates = null,
+            IOptions<MarketDataCollectionSettings>? collection = null,
+            TimeProvider? timeProvider = null)
         {
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _aggregates = aggregates?.Value ?? new ShortAggregateSettings();
+            InitializeCheckpoints(collection?.Value ?? new MarketDataCollectionSettings(), timeProvider ?? TimeProvider.System);
         }
 
         public async Task<MarketDataQualityAssessment> EvaluateAsync(
@@ -40,6 +44,8 @@ namespace TradingBot.Infrastructure.Services
             CancellationToken cancellationToken = default)
         {
             if (marketEvent == null) throw new ArgumentNullException(nameof(marketEvent));
+            if (UsesCheckpointState(marketEvent))
+                return await EvaluateCheckpointedAsync(marketEvent, allowStaleHistoricalData, cancellationToken).ConfigureAwait(false);
 
             var streamKey = marketEvent.StreamKey;
             var gate = _streamLocks.GetOrAdd(streamKey, _ => new SemaphoreSlim(1, 1));
@@ -115,7 +121,9 @@ namespace TradingBot.Infrastructure.Services
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            return records.Select(ToSnapshot).ToArray();
+            var snapshots = records.Select(ToSnapshot).ToDictionary(x => x.StreamKey, StringComparer.OrdinalIgnoreCase);
+            foreach (var snapshot in CachedSnapshots()) snapshots[snapshot.StreamKey] = snapshot;
+            return snapshots.Values.OrderBy(x => x.Symbol).ThenBy(x => x.Kind).ThenBy(x => x.Timeframe).ToArray();
         }
 
         public async Task<IReadOnlyList<MarketDataQualityIncidentSnapshot>> GetRecentIncidentsAsync(
