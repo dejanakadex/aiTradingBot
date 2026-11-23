@@ -174,6 +174,38 @@ Najviši minutni queue p99 također ne prolazi: **1.806,64 ms**, prag 100 ms. Na
 
 ### Sljedeći kontrolirani pokus uz stvarne kotacije
 
-Računalo je na mrežnom napajanju, aktivan je izvorni Balanced plan (primarna NVMe AC tolerancija 15 ms). Postojeći provjereni `scripts/test-nvme-power.ps1` spreman je za **20 minuta**, uz isti PID i aktivni feed. Korisnik ga mora pokrenuti u administratorskom PowerShellu. Nakon automatskog povratka izvornog plana ostaviti još 20 minuta aktivnog prikupljanja. Usporediti potpune minute prije/tijekom/poslije, izostaviti rubne minute i zabilježiti promjenu quote ratea, sve repove latencije i integritet. Tijekom testa ne pokretati WPR, build, audit ili replay. Ni povoljan dvadesetominutni rezultat sam ne zamjenjuje prihvatnu sesiju od barem 60 minuta. Petkov izolirani SQLite test bez feeda ostaje koristan prethodni dokaz, ali nije ovaj pokus. **Pokus još nije pokrenut.**
+Računalo je na mrežnom napajanju, aktivan je izvorni Balanced plan (primarna NVMe AC tolerancija 15 ms). Postojeći provjereni `scripts/test-nvme-power.ps1` spreman je za **20 minuta**, uz isti PID i aktivni feed. Korisnik ga mora pokrenuti u administratorskom PowerShellu. Nakon automatskog povratka izvornog plana ostaviti još 20 minuta aktivnog prikupljanja. Usporediti potpune minute prije/tijekom/poslije, izostaviti rubne minute i zabilježiti promjenu quote ratea, sve repove latencije i integritet. Tijekom testa ne pokretati WPR, build, audit ili replay. Ni povoljan dvadesetominutni rezultat sam ne zamjenjuje prihvatnu sesiju od barem 60 minuta. Petkov izolirani SQLite test bez feeda ostaje koristan prethodni dokaz, ali nije ovaj pokus. **Naknadno dovršeno istog dana; rezultat je u sljedećem odjeljku.**
 
 Ova dopuna mijenja samo dokumentaciju/dokaze. Kolektor ostaje aktivan s istom verzijom i zabranom naloga, bez promjena SQLite trajnosti ili quality pragova. Dva testa izvještaja prolaze; audit je izvršen iz već provjerenog buildu s 782 testa. Ne navoditi novi lokalni full-suite run: kod nije promijenjen. [Strukturirani rezultat](evidence/n3-day-session-2026-11-23.json); lokalni log, snapshot, audit i hashovi su u `TestResults/n3-day-20261123`.
+
+## NVMe usporedba uz aktivni feed — 23.11.2026.
+
+Korisnik je pokrenuo postojeću reverzibilnu skriptu na 20 minuta. Test traje **10:23:29.649–10:43:30.452 UTC (11:23:29–11:43:30 Zagreb)**. Potvrđene su AC NVMe tolerancije **0/0 ms**, uz nepromijenjene DC 50/100 ms. Skripta je automatski vratila izvorni Balanced plan i AC **15/100 ms**, uklonila svoju privremenu kopiju i završila bez greške. Kolektor **PID 2440** nije restartan. Povratno prikupljanje trajalo je barem do **11:03:30 UTC (12:03:30 Zagreb)**.
+
+Lagane provjere jednom u minuti potvrđuju mrežno napajanje, aktivnu pretplatu i nepromijenjen broj reconnectova 33. Tijekom mjerenja nisu pokretani lokalni build, audit, replay ili WPR; dva puta pročitana je mala završna sekcija postojećeg loga. Statusne HTTP provjere stvaraju uobičajene log zapise i nisu potpuno bez utjecaja na opterećenje. Nema novog ETL-a niti dokaza da svaki konkretni zastoj pripada istom nižem storage mehanizmu kao petkom.
+
+Iz svake dvadesetominutne faze isključena je prva i zadnja minuta. Zatim su uzeti samo **cijeli reporting prozori** čiji početak (`AsOfUtc − ElapsedSeconds`) i kraj ulaze u preostali raspon: **17 tick prozora i 16 storage prozora po fazi**. Tick trajanje dolazi iz log zaglavlja, storage trajanje iz JSON metrike. Ista stroža selekcija na ranijem jutarnjem uzorku daje 84 prozora / 16 sporih minuta, naspram ranijih 85/17 po samom vremenu izvještaja; izvorni raniji izvještaj nije prepisan. Kvantili ostaju maksimumi minutnih gornjih granica, ne globalni percentili.
+
+| Mjera | Raniji Balanced (A0) | NVMe AC 0/0 (B) | Vraćeni Balanced (A2) |
+| --- | ---: | ---: | ---: |
+| Potpuni tick prozori | 84 | 17 | 17 |
+| Quote događaji u tim prozorima | 168.933 | 23.094 | 25.414 |
+| Događaji/s | 33,30 | 22,47 | 24,70 |
+| Pipeline maksimum, ms | 1.915,50 | **985,98** | **908,59** |
+| QualitySave maksimum, ms | 1.914,67 | **985,19** | **907,53** |
+| Monotoni queue maksimum, ms | 1.942,36 | **1.046,63** | **919,53** |
+| Najviši minutni pipeline p99, ms | 11,56 | 3,68 | 12,72 |
+| Najviši minutni queue p99, ms | 1.806,64 | **1.019,80** | **919,53** |
+| Pipeline minute >250 ms | 16 | **2** | **3** |
+| Flush maksimum, ms | 358,02 | 224,28 | 1.097,10 |
+| Enqueue-to-write maksimum, ms | 5.446,65 | 5.330,93 | 6.216,67 |
+
+**Obje faze ne prolaze N3:** pipeline maksimum, queue maksimum i queue p99 prelaze unaprijed definirane pragove. Najsporiji B događaj započinje u **10:35:06.112 UTC** i gotovo cijelih 986 ms provodi u QualitySave. Najsporiji A2 događaj počinje u **10:52:17.583 UTC**, uz 907,53 ms QualitySave. Nema processing/storage grešaka, source-age >2 s ni negativnih queue delta u odabranim prozorima. Četiri spora SQL upozorenja u svakoj eksperimentalnoj fazi nisu četiri nužno neovisna storage incidenta.
+
+Naknadno zamrznut cijeli 40-minutni raspon ima **876 provjerenih datoteka / 56.946 redaka**, od čega se **56.788 quote događaja / 28.394 potpuna para** nalazi unutar zadanih granica. Potvrđeno je svih **479 očekivanih 5s barova**, s **454** framea spremna za cjenovne featuree; 15s ima **159/159** barova i **134** takva framea. SQLite nema coverage gapova, dropova ili quality incidenata u rasponu. Nalozi, izvršenja, tradeovi, rezervacije i modeli ostaju nula. Završni NTP uzorci odstupaju 35–43 ms. Ovo je audit spremljenih podataka, ne potvrda live signalnog vremena ili paper izvršenja.
+
+**Zaključak:** postavljanje tih dviju NVMe tolerancija na 0 nije uklonilo zastoje. Manji maksimum u odnosu na jutro nije dovoljan za pripisivanje poboljšanja postavkama: i povratna faza ima manji maksimum, tržišni tok je slabiji, a uzorci su kratki i sekvencijalni. Nisu ispitani svi PCIe/driver/firmware mehanizmi, pa rezultat ne isključuje svaku hipotezu napajanja. **Nema osnove za trajnu promjenu plana. N3 ostaje otvoren.**
+
+Sljedeći programski korak je pregled i priprema ciljane promjene blokirajućeg spremanja izvedenog quality stanja: sada svaki događaj čeka `SaveChangesAsync` prije nastavka pipelinea. Prije implementacije treba eksplicitno odrediti redoslijed, ponašanje nakon restarta, ograničenje reda, greške i trenutačnu blokadu neispravnih podataka. Trajnost naloga/pozicija, sirove kotacije i incidenti ostaju zaštićeni; ne uvoditi neograničeno pozadinsko spremanje niti popuštati pragove da bi test prošao. To nije već implementiran popravak i ne uklanja zasebnu otvorenu istragu drivera/firmwarea.
+
+[Strukturirani rezultat i hashovi](evidence/n3-live-nvme-comparison-2026-11-23.json); lokalni artefakti `TestResults/n3-live-power-20261123`. Ova dopuna mijenja samo dokaze/status, bez novog deploya ili naloga. Kolektor ostaje na izvornom planu. N4 nije započet.

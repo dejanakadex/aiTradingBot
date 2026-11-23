@@ -1,0 +1,324 @@
+{
+  "date": "2026-11-23",
+  "status": "Live-feed power comparison completed; both phases fail N3 latency thresholds; original settings restored",
+  "codeCommit": "1e0f7e257f2de45d5e6c46088359249fb467f7ed",
+  "collectorPid": 2440,
+  "powerTest": {
+    "OriginalPlan": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "TestPlan": "84dfc487-7479-407f-934a-9aaebed57a87",
+    "Minutes": 20,
+    "StartedUtc": "2026-11-23T10:23:29.6490332Z",
+    "EndedUtc": "2026-11-23T10:43:30.4524495Z",
+    "OriginalRestored": true,
+    "TestPlanDeleted": true,
+    "Error": null,
+    "CleanupError": null
+  },
+  "method": "Only complete reporting windows whose start/end fall inside phase bounds; first/last minute excluded from each 20-minute experimental phase. Per-minute p99 upper bounds are not global percentiles. Earlier A0 baseline is longer and occurs in different market conditions.",
+  "phaseResults": {
+    "A0-earlier-balanced": {
+      "fromUtc": "2026-11-23T08:32:00+00:00",
+      "toUtc": "2026-11-23T09:58:00+00:00",
+      "tickWindows": 84,
+      "storageWindows": 81,
+      "allLatencyWindowsHaveElapsed": true,
+      "events": 168933,
+      "observedTickWindowSeconds": 5072.464457,
+      "eventsPerSecond": 33.30392976275516,
+      "processIds": [
+        2440
+      ],
+      "failedProcessing": 0,
+      "sourceAgeOverTwoSeconds": 0,
+      "negativeQueueClockDeltas": 0,
+      "storageFailures": 0,
+      "slowPipelineWindows": 16,
+      "maxPipelineMs": 1915.5022,
+      "maxQualitySaveMs": 1914.6655,
+      "maxQueueMonotonicMs": 1942.3605,
+      "worstWindowPipelineP99UpperMs": 11.56268519450066,
+      "worstWindowQueueP99UpperMs": 1806.6374773038408,
+      "maxFlushMs": 358.0159,
+      "maxEnqueueToDurableMs": 5446.6459,
+      "maxCpuPercent": 0.520782992125159,
+      "slowSqlWarnings": 40,
+      "slowSqlPhases": {
+        "ReaderLifetime": 19,
+        "Begin": 4,
+        "Commit": 9,
+        "Execute": 8
+      },
+      "thresholdsMet": false,
+      "worstPipelineEvent": {
+        "EventId": "IBKR:FXQ:e2757520d16f4ae0aff36498f736a2a6:190816:bid",
+        "EventUtc": "2026-11-23T09:26:39Z",
+        "ReceivedUtc": "2026-11-23T09:26:39.7893828Z",
+        "DequeuedUtc": "2026-11-23T09:26:39.7894302Z",
+        "SourceAgeMs": 789.3828,
+        "QueueWallMs": 0.0474,
+        "QueueMonotonicMs": 0.0463,
+        "PipelineMs": 1915.5022,
+        "Phases": {
+          "Quality": 1915.4198,
+          "QualityGate": 0.0007,
+          "QualityRead": 0.6547,
+          "QualityAssess": 0.0111,
+          "QualitySave": 1914.6655,
+          "DatasetEnqueue": 0.0341,
+          "Aggregates": 0.0225
+        }
+      },
+      "slowSql": []
+    },
+    "B-nvme-zero": {
+      "fromUtc": "2026-11-23T10:24:29.649033+00:00",
+      "toUtc": "2026-11-23T10:42:30.452449+00:00",
+      "tickWindows": 17,
+      "storageWindows": 16,
+      "allLatencyWindowsHaveElapsed": true,
+      "events": 23094,
+      "observedTickWindowSeconds": 1027.948223,
+      "eventsPerSecond": 22.46611208938293,
+      "processIds": [
+        2440
+      ],
+      "failedProcessing": 0,
+      "sourceAgeOverTwoSeconds": 0,
+      "negativeQueueClockDeltas": 0,
+      "storageFailures": 0,
+      "slowPipelineWindows": 2,
+      "maxPipelineMs": 985.9813,
+      "maxQualitySaveMs": 985.1923,
+      "maxQueueMonotonicMs": 1046.6307,
+      "worstWindowPipelineP99UpperMs": 3.6842278384511777,
+      "worstWindowQueueP99UpperMs": 1019.7997569961407,
+      "maxFlushMs": 224.2812,
+      "maxEnqueueToDurableMs": 5330.9348,
+      "maxCpuPercent": 0.4366061471350687,
+      "slowSqlWarnings": 4,
+      "slowSqlPhases": {
+        "ReaderLifetime": 2,
+        "Execute": 1,
+        "Commit": 1
+      },
+      "thresholdsMet": false,
+      "worstPipelineEvent": {
+        "EventId": "IBKR:FXQ:e2757520d16f4ae0aff36498f736a2a6:350608:bid",
+        "EventUtc": "2026-11-23T10:35:05Z",
+        "ReceivedUtc": "2026-11-23T10:35:06.1117945Z",
+        "DequeuedUtc": "2026-11-23T10:35:06.1118964Z",
+        "SourceAgeMs": 1111.7945,
+        "QueueWallMs": 0.1019,
+        "QueueMonotonicMs": 0.1001,
+        "PipelineMs": 985.9813,
+        "Phases": {
+          "Quality": 985.9131,
+          "QualityGate": 0.0008,
+          "QualityRead": 0.6121,
+          "QualityAssess": 0.0095,
+          "QualitySave": 985.1923,
+          "DatasetEnqueue": 0.0224,
+          "Aggregates": 0.0086
+        }
+      },
+      "slowSql": [
+        {
+          "at": "2026-11-23T10:29:05.785027+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:29:05.7850272Z Milliseconds=864.796 Operation=UPDATE Table=MarketDataStreamStateRecords Context=3aa4a823-2244-4204-8d95-6b488b3edfe8 Source=Reader Phase=ReaderLifetime"
+        },
+        {
+          "at": "2026-11-23T10:29:05.886360+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:29:05.8863607Z Milliseconds=309.8524 Operation=UPDATE Table=MarketDataStreamStateRecords Context=6447792c-8cd4-4bb0-a101-ca9d919ade02 Source=SaveChanges Phase=Execute"
+        },
+        {
+          "at": "2026-11-23T10:35:07.097174+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:35:07.0971745Z Milliseconds=984.3282 Operation=UPDATE Table=MarketDataStreamStateRecords Context=14736bd0-cb89-4c09-919d-14375f87d1d1 Source=Reader Phase=ReaderLifetime"
+        },
+        {
+          "at": "2026-11-23T10:40:33.299104+00:00",
+          "text": "transaction AsOfUtc=2026-11-23T10:40:33.2991044Z Milliseconds=612.0171 Phase=Commit Context=c293279c-b549-4112-bce7-b88039d74598"
+        }
+      ]
+    },
+    "A2-restored-balanced": {
+      "fromUtc": "2026-11-23T10:44:30.452449+00:00",
+      "toUtc": "2026-11-23T11:02:30.452449+00:00",
+      "tickWindows": 17,
+      "storageWindows": 16,
+      "allLatencyWindowsHaveElapsed": true,
+      "events": 25414,
+      "observedTickWindowSeconds": 1028.714221,
+      "eventsPerSecond": 24.704625911844957,
+      "processIds": [
+        2440
+      ],
+      "failedProcessing": 0,
+      "sourceAgeOverTwoSeconds": 0,
+      "negativeQueueClockDeltas": 0,
+      "storageFailures": 0,
+      "slowPipelineWindows": 3,
+      "maxPipelineMs": 908.5938,
+      "maxQualitySaveMs": 907.5263,
+      "maxQueueMonotonicMs": 919.5337,
+      "worstWindowPipelineP99UpperMs": 12.718953713950725,
+      "worstWindowQueueP99UpperMs": 919.5337,
+      "maxFlushMs": 1097.0982,
+      "maxEnqueueToDurableMs": 6216.6683,
+      "maxCpuPercent": 0.48612290319962587,
+      "slowSqlWarnings": 4,
+      "slowSqlPhases": {
+        "ReaderLifetime": 3,
+        "Begin": 1
+      },
+      "thresholdsMet": false,
+      "worstPipelineEvent": {
+        "EventId": "IBKR:FXQ:e2757520d16f4ae0aff36498f736a2a6:387379:bid",
+        "EventUtc": "2026-11-23T10:52:16Z",
+        "ReceivedUtc": "2026-11-23T10:52:17.5830531Z",
+        "DequeuedUtc": "2026-11-23T10:52:17.5831276Z",
+        "SourceAgeMs": 1583.0531,
+        "QueueWallMs": 0.0745,
+        "QueueMonotonicMs": 0.0708,
+        "PipelineMs": 908.5938,
+        "Phases": {
+          "Quality": 908.4923,
+          "QualityGate": 0.0009,
+          "QualityRead": 0.813,
+          "QualityAssess": 0.0186,
+          "QualitySave": 907.5263,
+          "DatasetEnqueue": 0.0364,
+          "Aggregates": 0.013
+        }
+      },
+      "slowSql": [
+        {
+          "at": "2026-11-23T10:46:17.037045+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:46:17.0370459Z Milliseconds=867.6077 Operation=UPDATE Table=MarketDataStreamStateRecords Context=6558908e-8747-4a3f-ba8e-40c02b06426c Source=Reader Phase=ReaderLifetime"
+        },
+        {
+          "at": "2026-11-23T10:52:18.488326+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:52:18.4883266Z Milliseconds=903.8767 Operation=UPDATE Table=MarketDataStreamStateRecords Context=3f3ba4ac-f04e-457d-b1b9-2d354a51ab2b Source=Reader Phase=ReaderLifetime"
+        },
+        {
+          "at": "2026-11-23T10:52:18.631400+00:00",
+          "text": "transaction AsOfUtc=2026-11-23T10:52:18.6314001Z Milliseconds=941.425 Phase=Begin Context=acdb1e54-5302-4ee0-a95b-4f2ebf61f82d"
+        },
+        {
+          "at": "2026-11-23T10:57:34.741300+00:00",
+          "text": "command AsOfUtc=2026-11-23T10:57:34.7413001Z Milliseconds=890.4812 Operation=UPDATE Table=MarketDataStreamStateRecords Context=45984432-3892-4d3a-bb68-19b193bc17db Source=Reader Phase=ReaderLifetime"
+        }
+      ]
+    }
+  },
+  "monitoring": {
+    "pollCount": 39,
+    "firstUtc": "2026-11-23T10:25:58.4556297Z",
+    "lastUtc": "2026-11-23T11:04:00.7096680Z",
+    "allOnAc": true,
+    "allSubscribed": true,
+    "unchangedReconnectCount": 33,
+    "plans": {
+      "84dfc487-7479-407f-934a-9aaebed57a87": 18,
+      "381b4222-f694-41f0-9685-ff5bb260df2e": 21
+    },
+    "observer": "Read-only power/feed polling once per minute; two bounded reads of the latest log metrics. No local builds, snapshots, replay or WPR started during the measured phases. Observer requests produce normal HTTP logs and may slightly influence workload."
+  },
+  "restoredTolerances": {
+    "primaryAcMs": 15,
+    "secondaryAcMs": 100,
+    "primaryDcMs": 50,
+    "secondaryDcMs": 100
+  },
+  "clockAtEnd": {
+    "reference": "time.windows.com",
+    "samplesMs": [
+      35.4898,
+      43.1846,
+      43.4996
+    ]
+  },
+  "verification": {
+    "isValid": true,
+    "fileCount": 876,
+    "rowCount": 56946,
+    "manifestSha256": "574B4818D1C803BD7B295E746E25531906213C647FE4365E4870009674A0DCBF",
+    "errors": []
+  },
+  "quoteAudit": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T10:23:29.6490332Z",
+    "toUtc": "2026-11-23T11:03:30.4524495Z",
+    "aggregateVersion": "fx-midpoint-bars-v1+a928c3647812252ca1aac8e01773c94961fb85627a1b5c47f4789801540eed76",
+    "quoteEvents": 56788,
+    "completeCallbackPairs": 28394,
+    "incompleteCallbackPairs": 0,
+    "callbackSessions": 1,
+    "firstEventUtc": "2026-11-23T10:23:30Z",
+    "lastEventUtc": "2026-11-23T11:03:29Z",
+    "minimumReceiveMinusEventMilliseconds": -4.8103,
+    "medianReceiveMinusEventMilliseconds": 821.5397,
+    "p95ReceiveMinusEventMilliseconds": 1405.3958,
+    "futureQuoteEvents": 2,
+    "staleQuoteEvents": 0,
+    "futureToleranceMilliseconds": 250,
+    "beyondFutureToleranceQuoteEvents": 0,
+    "intervals": [
+      {
+        "intervalSeconds": 5,
+        "expectedFinalWindows": 479,
+        "windowsWithoutQuotes": 0,
+        "observedWindowsWithoutFinalBar": 0,
+        "missingBarsWithFutureQuotes": 0,
+        "missingBarsWithStaleQuotes": 0,
+        "finalBars": 479,
+        "maximumConsecutiveFeatureBars": 479,
+        "framesWithAtLeast26Bars": 454,
+        "priceFeatureReadyFrames": 454,
+        "longestEmptyRun": 0
+      },
+      {
+        "intervalSeconds": 15,
+        "expectedFinalWindows": 159,
+        "windowsWithoutQuotes": 0,
+        "observedWindowsWithoutFinalBar": 0,
+        "missingBarsWithFutureQuotes": 0,
+        "missingBarsWithStaleQuotes": 0,
+        "finalBars": 159,
+        "maximumConsecutiveFeatureBars": 159,
+        "framesWithAtLeast26Bars": 134,
+        "priceFeatureReadyFrames": 134,
+        "longestEmptyRun": 0
+      }
+    ]
+  },
+  "database": {
+    "gaps": 0,
+    "drops": 0,
+    "incidents": [],
+    "operationalCounts": {
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "Trades": 0,
+      "PortfolioRiskReservationRecords": 0,
+      "NumericalModelRecords": 0
+    }
+  },
+  "conclusion": "NVMe AC tolerance 0/0 did not eliminate stalls. Smaller maxima than the earlier morning session are not evidence of a causal improvement: the restored phase also improved and quote rates/session lengths differ. No permanent power-policy change is justified by this sample.",
+  "limitations": [
+    "Only 17 complete tick windows per experimental phase, not 60-minute acceptance.",
+    "Sequential B/A2 without repeated randomized alternation; variable market and background workload.",
+    "No new ETL: SQL timing is consistent with earlier storage waits, but each current stall is not separately attributed to a hardware or driver mechanism.",
+    "This tests two NVMe policy fields, not all PCIe/driver/firmware power mechanisms.",
+    "Stored quote completeness and offline feature readiness do not prove live decision/order timing."
+  ],
+  "nextStep": "Review per-event durable quality-state writes and prepare a bounded persistence design with explicit ordering, restart, error, backpressure and immediate-unhealthy-gate semantics before implementation. Keep raw quotes, incidents and operational order/position durability intact; no threshold relaxation or unbounded fire-and-forget writes. Firmware/driver attribution remains an independent unresolved investigation.",
+  "artifacts": {
+    "collection.log": "DE6DD20922145815C86B1781EE3DC5E75D7441592D2E54B6134FEEC8AAB04320",
+    "compare.py": "3DB929340E0F5E1A38DFBB03650BCF5C011B310194D89CCACCF1A04F23E65174",
+    "comparison.json": "DC970FDB9EC5E81A5229780DF48FDEB7E5E16D26A8543463FBDBDA58659D6AFF",
+    "monitor.jsonl": "56D80AA7DB0BF0AE65FF752727823717EC221124A40FE597C66F16BA3E8739A0",
+    "audit.json": "F14446790151BFF4021A4DD8F6ACF205D0A4337A28CA18F0BC7A3C8D8EA17341",
+    "database-summary.json": "8EAEC44904F41E2C72CA3973E7E463AF64156A2C5ED30357F44D9C4AE1441A31",
+    "snapshot/snapshot-provenance.json": "ACBFAD03AA1D7B0E475489C1F86CCF31F729B8E85BF67E2F86ECDF1288B02A0B"
+  }
+}
