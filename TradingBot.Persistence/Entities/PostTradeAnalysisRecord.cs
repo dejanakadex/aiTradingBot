@@ -6,6 +6,14 @@ namespace TradingBot.Persistence
     {
         public int Id { get; set; }
         public int? SourceTradeId { get; set; }
+        public int? ExitManagementId { get; set; }
+        public string InstrumentId { get; set; } = string.Empty;
+        public string StrategyId { get; set; } = string.Empty;
+        public Guid? SignalId { get; set; }
+        public string InputHash { get; set; } = string.Empty;
+        public string EntryContextJson { get; set; } = string.Empty;
+        public bool? FeesComplete { get; set; }
+        public DateTime? UpdatedUtc { get; set; }
         public string Symbol { get; set; } = string.Empty;
         public string Pattern { get; set; } = string.Empty;
         public DateTime OpenedUtc { get; set; }

@@ -43,6 +43,7 @@ public sealed class ForexModelDecisionTests
         if (scenario == "exit") exit.Mode = ExitStrategyMode.AtrTrailing;
         if (scenario == "cost") model.Gross = .01m;
         if (scenario == "missingForecast") model.Gross = null;
+        if (scenario == "valid") f.UtcNow = f.UtcNow.AddSeconds(1);
         var service = new ForexModelDecisionService(contract, model, latest, Options.Create(f.Trading), Options.Create(exit), Options.Create(new ForexExecutionSettings()), f);
         if (scenario != "valid") { await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateProposalAsync(candidate)); return; }
         var proposal = await service.CreateProposalAsync(candidate);
@@ -52,6 +53,10 @@ public sealed class ForexModelDecisionTests
         Assert.Contains(ForexResearchContract.Model, proposal.Context.StrategyVersion);
         Assert.Equal(0, model.Last!.NormalizedLiquidity); Assert.Equal(.002m, model.Last.NormalizedVolatility);
         Assert.Equal(contract.Get("EURUSD", "patterns").Label, model.Last.ExecutionLabelVersion);
+        Assert.Equal(candidate.DetectedAtUtc, model.Last.ObservedAtUtc);
+        Assert.Equal(f.UtcNow, proposal.Snapshot.CreatedAtUtc);
+        Assert.Equal(model.Last, System.Text.Json.JsonSerializer.Deserialize<NumericalModelPredictionRequest>(proposal.Pattern.Metadata["modelInputJson"]));
+        Assert.Equal(.7m, model.Last.PatternConfidence); Assert.Equal(.9m, proposal.AiAnalysis.Confidence);
         Assert.False(f.Trading.Instruments[0].TradingEnabled);
     }
 }

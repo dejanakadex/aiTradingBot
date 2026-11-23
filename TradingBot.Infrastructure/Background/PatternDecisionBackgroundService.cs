@@ -262,7 +262,11 @@ namespace TradingBot.Infrastructure.Background
                     pattern.Symbol,
                     pattern.PatternType.ToString());
 
-                var snapshot = await snapshotService.BuildSnapshotAsync(pattern.Symbol, cancellationToken: cancellationToken).ConfigureAwait(false);
+                var decisionAsOf = pattern.Metadata.TryGetValue("decisionAtUtc", out var suppliedTime)
+                    && DateTime.TryParse(suppliedTime, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var recordedTime) && recordedTime.Kind == DateTimeKind.Utc
+                    ? recordedTime : pattern.DetectedAtUtc;
+                var snapshot = await snapshotService.BuildSnapshotAsOfAsync(pattern.Symbol, decisionAsOf, cancellationToken).ConfigureAwait(false);
 
                 _pipelineStatusService?.Mark(
                     TradingPipelineStage.PatternAnalysis,

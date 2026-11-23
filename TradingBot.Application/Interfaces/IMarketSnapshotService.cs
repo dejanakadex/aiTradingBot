@@ -6,6 +6,7 @@ namespace TradingBot.Application.Interfaces
 {
     public interface IMarketSnapshotService
     {
+        Task<MarketSnapshot> BuildSnapshotAsOfAsync(string symbol, DateTime asOfUtc, CancellationToken cancellationToken = default);
         Task<MarketSnapshot> BuildSnapshotAsync(
             string symbol,
             decimal? currentPrice = null,

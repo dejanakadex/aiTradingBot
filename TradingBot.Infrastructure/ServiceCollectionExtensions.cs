@@ -38,6 +38,7 @@ namespace TradingBot.Infrastructure
             services.AddTransient<ITradeDashboardService, TradeDashboardService>();
             services.AddTransient<IPatternAnalysisDashboardService, PatternAnalysisDashboardService>();
             services.AddTransient<IPostTradeAnalysisService, PostTradeAnalysisService>();
+            services.AddSingleton<CompletedTradeAnalysisService>();
             services.AddTransient<ITradingControlService, TradingControlService>();
             services.AddSingleton<ITradePipelineChannel, TradePipelineChannel>();
             services.AddTransient<IBrokerStateReconciliationService, BrokerStateReconciliationService>();
@@ -109,6 +110,7 @@ namespace TradingBot.Infrastructure
             services.AddHostedService<RuntimeBrokerReconciliationHostedService>();
             services.AddHostedService<ProtectiveStopInvariantHostedService>();
             services.AddHostedService<ExitManagementHostedService>();
+            services.AddHostedService<CompletedTradeAnalysisHostedService>();
             services.AddHostedService<MarketDataSubscriptionHostedService>();
             services.AddHostedService<TickMarketDataHostedService>();
             services.AddHostedService<ForexSignalHostedService>();

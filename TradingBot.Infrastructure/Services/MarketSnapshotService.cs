@@ -33,17 +33,29 @@ namespace TradingBot.Infrastructure.Services
             _latestMarketData = latestMarketData;
         }
 
-        public async Task<MarketSnapshot> BuildSnapshotAsync(
+        public Task<MarketSnapshot> BuildSnapshotAsOfAsync(string symbol, DateTime asOfUtc, CancellationToken cancellationToken = default)
+        {
+            if (asOfUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("UTC as-of required.", nameof(asOfUtc));
+            return BuildAsync(symbol, null, null, asOfUtc, cancellationToken);
+        }
+
+        public Task<MarketSnapshot> BuildSnapshotAsync(
             string symbol,
             decimal? currentPrice = null,
             decimal? spread = null,
             CancellationToken cancellationToken = default)
+            => BuildAsync(symbol, currentPrice, spread, null, cancellationToken);
+
+        private async Task<MarketSnapshot> BuildAsync(string symbol, decimal? currentPrice, decimal? spread, DateTime? asOfUtc, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(symbol)) throw new ArgumentException("symbol required", nameof(symbol));
 
             var normalizedSymbol = symbol.Trim();
             var latest = _latestMarketData?.Get(normalizedSymbol);
-            var requestedAsOfUtc = currentPrice.HasValue || spread.HasValue ? DateTime.UtcNow : latest?.AsOfUtc;
+            var requestedAsOfUtc = asOfUtc ?? (currentPrice.HasValue || spread.HasValue ? DateTime.UtcNow : latest?.AsOfUtc) ?? DateTime.UtcNow;
+            // A current quote cannot be substituted for unavailable historical quotes.
+            if (latest != null && (latest.AsOfUtc > requestedAsOfUtc || latest.BidTimeUtc > requestedAsOfUtc
+                || latest.AskTimeUtc > requestedAsOfUtc || latest.LastTradeTimeUtc > requestedAsOfUtc)) latest = null;
             var oneMinute = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.OneMinute, "Entry timing", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
             var fiveMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FiveMinutes, "Trading setup / pullback context", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
             var fifteenMinutes = await BuildTimeframeSnapshotAsync(normalizedSymbol, Timeframe.FifteenMinutes, "Broader market direction", requestedAsOfUtc, currentPrice, spread, latest, cancellationToken).ConfigureAwait(false);
@@ -52,9 +64,7 @@ namespace TradingBot.Infrastructure.Services
             return new MarketSnapshot
             {
                 Symbol = normalizedSymbol,
-                CreatedAtUtc = currentPrice.HasValue || spread.HasValue
-                    ? DateTime.UtcNow
-                    : latest?.AsOfUtc ?? DateTime.UtcNow,
+                CreatedAtUtc = requestedAsOfUtc,
                 CurrentPrice = currentPrice ?? latest?.LastTrade ?? midpoint ?? oneMinute.RecentCandles.LastOrDefault()?.Close,
                 Spread = spread ?? latest?.Spread,
                 OneMinute = oneMinute,
@@ -73,7 +83,7 @@ namespace TradingBot.Infrastructure.Services
             TradingBot.Application.DTOs.LatestMarketDataSnapshot? latest,
             CancellationToken cancellationToken)
         {
-            var candles = await _candleHistory.GetLastNCandlesAsync(symbol, timeframe, GetCandleCount(timeframe), cancellationToken).ConfigureAwait(false);
+            var candles = await _candleHistory.GetCandlesAsOfAsync(symbol, timeframe, GetCandleCount(timeframe), requestedAsOfUtc!.Value, cancellationToken).ConfigureAwait(false);
             if (candles.Count == 0)
             {
                 return MarketTimeframeSnapshot.Empty(timeframe, interpretation);

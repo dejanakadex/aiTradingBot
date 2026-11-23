@@ -1,5 +1,9 @@
 # Detaljni pregled projekta
 
+**N4, 23.11.2026.: završeno implementacijom i simulacijom.** [Signal → execution → automatski post-trade](N4_TRADE_LIFECYCLE.md) sada daje jedan rezultat po zatvorenom tradeu, ponderirane fillove i ažuriranje kasnih provizija bez duplikata. Sačuvan je izvorni feature/model/risk kontekst; stock history/snapshot dobio je strogu `asOf` granicu. **810/810 Release testova**, IBKR publish/guards i offline feature/decision parity prolaze. Migracija i read-only kolektor provjereni su nakon restarta u 14:45 Zagreb, bez naloga. N5 je sljedeća planirana točka. Stvarni paper ciklus, model shadow, FX-12 i puni 25/30/31 ostaju otvoreni. [Strukturirani dokaz](evidence/n4-trade-lifecycle-2026-11-23.json). Stariji checkpointi niže su povijesni.
+
+N4 dopuna ima prednost pred starom tvrdnjom da nema automatskog produkcijskog post-trade pozivatelja: registrirani pozadinski worker sada rekonstruira zatvorene lifecycleove. Pregled R09/R13/R14 i ograničenja kalibracije dokumentirani su u N4; povijesni nalazi ostaju radi sljedivosti.
+
 **N2, 20.11.2026.:** [kontinuirani streaming research i dokazi](N2_STREAMING_RESEARCH.md) implementirani su i offline provjereni: 773/773 testa, isti rezultat pri različitim blokovima i oporavku u novi pokušaj. Stvarni dvosatni replay ima 223.922 događaja bez resetiranja portfelja; provjeren je i prelazak ponoći. Aktualne FX labele su v3. Reprezentativni višednevni podaci/evaluacija ostaju N5/N7; N3 je sljedeća planirana točka. FX-12 i puni opseg 25/30/31 ostaju otvoreni. Nema approvala ili naloga.
 
 Datum: 2026-09-21. Pregledana osnova: [`9f80683`](https://github.com/dejanakadex/aiTradingBot/tree/9f806833713d4b77f70275570e60dce2f8160aac).

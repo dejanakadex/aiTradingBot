@@ -126,6 +126,7 @@ public sealed class ForexSignalTriggerService
             var metadata = new Dictionary<string, string>
             {
                 ["signalVersion"] = profile.Version, ["patternProfileVersion"] = detector.Version, ["shadowOnly"] = "true",
+                ["featureSnapshotJson"] = JsonSerializer.Serialize(features),
                 ["signalProfile"] = JsonSerializer.Serialize(profile), ["decisionAtUtc"] = now.ToString("O", CultureInfo.InvariantCulture),
                 ["pairedQuoteTimeUtc"] = bar.LastQuoteTimeUtc.ToString("O", CultureInfo.InvariantCulture),
                 ["pairedSpreadBps"] = spreadBps.ToString("G29", CultureInfo.InvariantCulture),

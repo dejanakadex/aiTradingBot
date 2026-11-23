@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
@@ -40,9 +41,10 @@ public sealed class ForexModelDecisionService(ForexResearchContract contracts, I
         var notional = mid * c.Profile.MaximumBaseUnits;
         var estimatedCosts = 2 * Math.Max(c.Costs.MinimumCommissionPerOrderUsd / notional * 10000m, c.Costs.CommissionPerOrderBps)
             + c.Costs.SafetyBufferBps;
-        var prediction = await models.PredictAsync(new(candidate.InstrumentId, candidate.StrategyId, c.Feature, candidate.Confidence,
+        var modelInput = new NumericalModelPredictionRequest(candidate.InstrumentId, candidate.StrategyId, c.Feature, candidate.Confidence,
             (int)candidate.PatternType, (int)candidate.Direction, (int)candidate.Timeframe, 0, atr, estimatedCosts, decision)
-            { PatternVersion = c.Pattern, ExecutionLabelVersion = c.Label }, ct);
+            { PatternVersion = c.Pattern, ExecutionLabelVersion = c.Label };
+        var prediction = await models.PredictAsync(modelInput, ct);
         if (!prediction.Eligible || prediction.ExpectedGrossReturnBps is not > 0 || prediction.ExpectedGrossReturnBps <= estimatedCosts
             || prediction.HorizonSeconds != c.Profile.HoldingSeconds)
             throw new InvalidOperationException("Approved FX model did not pass the forecast/cost/horizon gate.");
@@ -54,6 +56,8 @@ public sealed class ForexModelDecisionService(ForexResearchContract contracts, I
             original.MarketDataVersion, original.FeatureVersion, original.PatternVersion, original.StrategyVersion + "|" + modelIdentity + "|" + c.Label);
         var metadata = candidate.Metadata.ToDictionary(x => x.Key, x => x.Value);
         metadata["numericalModel"] = modelIdentity; metadata["executionLabelVersion"] = c.Label;
+        metadata["modelInputJson"] = JsonSerializer.Serialize(modelInput);
+        metadata["executionQuoteJson"] = JsonSerializer.Serialize(new { quote.Bid, quote.Ask, quote.BidTimeUtc, quote.AskTimeUtc, requestedAtUtc = now });
         metadata["modelGrossReturnBps"] = prediction.ExpectedGrossReturnBps.Value.ToString(CultureInfo.InvariantCulture);
         metadata["modelResidualCostsBps"] = estimatedCosts.ToString(CultureInfo.InvariantCulture);
         var approvedPattern = new PatternCandidate(candidate.PatternType, candidate.Symbol, candidate.Timeframe, candidate.DetectedAtUtc,

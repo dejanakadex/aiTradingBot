@@ -1,5 +1,7 @@
 # Pregled dovršenosti i redoslijed nastavka
 
+**N4, 23.11.2026.: završeno implementacijom i simulacijom.** [Signal → execution → automatski post-trade](N4_TRADE_LIFECYCLE.md) sada daje jedan rezultat po zatvorenom tradeu, ponderirane fillove i ažuriranje kasnih provizija bez duplikata. Sačuvan je izvorni feature/model/risk kontekst; stock history/snapshot dobio je strogu `asOf` granicu. **810/810 Release testova**, IBKR publish/guards i offline feature/decision parity prolaze. Migracija i read-only kolektor provjereni su nakon restarta u 14:45 Zagreb, bez naloga. N5 je sljedeća planirana točka. Stvarni paper ciklus, model shadow, FX-12 i puni 25/30/31 ostaju otvoreni. [Strukturirani dokaz](evidence/n4-trade-lifecycle-2026-11-23.json). Stariji checkpointi niže su povijesni.
+
 **N3 prihvat, 23.11.2026.:** [Dnevna sesija i paritet](N3_COLLECTION_LATENCY.md#prihvatna-sesija-i-paritet--23112026) potvrđuju završetak N3 za AnalysisOnly EUR/USD prikupljanje: 69 minutnih prozora, pipeline max 45,77 ms, queue max 40,73 ms, bez gapova/dropova/grešaka; 73.047 potpunih parova i 836/836 5s barova. Paritet stvarnih kotacija i kontroliranog prihvaćenog signala provjeren je; **803/803 testa** prolaze. Pozadinski SQL i dalje može trajati oko 2 s, pa paper izvršavanje nije time potvrđeno. N4 je sljedeći odobravani korak; FX-12 i 25/30/31 ostaju otvoreni. Nema naloga ni model approvala.
 
 **N3 quality checkpoint, 23.11.2026.:** [Periodično spremanje izvedenog stanja](N3_COLLECTION_LATENCY.md#periodično-spremanje-quality-stanja--23112026) implementirano je i uključeno samo u AnalysisOnly EUR/USD kolektoru (1 s / maksimalno pending 5 s). Svaka kotacija i dalje se provjerava; incidenti se spremaju odmah, a neuspjeh ili zaostajanje blokira tok. Paper/live zadržava per-event spremanje. **802/802 testa** i IBKR guards prolaze; nova verzija je pokrenuta uz zabrane naloga. Potrebna je nova ≥60-minutna prihvatna sesija; **N3, FX-12 i 25/30/31 ostaju otvoreni**, N4 nije započet.
@@ -76,6 +78,8 @@ Dodati trajanja pojedinih faza obrade: queue, quality provjera/baza, pohrana i a
 **Završetak:** ponovljiva dnevna sesija s unaprijed zadanim operativnim pragovima, objašnjenim outlierima i dokazom da promjena ne mijenja featuree/signale. Prikupljanje može teći dok radimo N1/N2, uz zasebne verzije i metapodatke.
 
 ### N4 — Zatvoriti praznine između signala, simulacije i stvarnog tradea
+
+**Status 23.11.: kriterij implementacije i fake-broker provjere završen; [dokazi i granice](N4_TRADE_LIFECYCLE.md). Stvarni brokerski kriteriji ostaju zasebni.**
 
 Za EUR/USD povezati zatvoreni trade s točno jednim automatskim post-trade zapisom; kasna provizija mora ažurirati rezultat bez dupliciranja. Provjeriti isti feature i `asOf` kontekst u live/replay putu, risk i izlaze, uključujući djelomične fillove, zaštitu, restart i reconciliation. Sačuvati stock regresije; preostale R09/R13/R14 nalaze provjeravati u aktualnom kodu, ne prenositi stare tvrdnje kao činjenice.
 

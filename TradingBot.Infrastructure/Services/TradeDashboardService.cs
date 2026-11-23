@@ -28,6 +28,8 @@ namespace TradingBot.Infrastructure.Services
                 .Take(Math.Clamp(take, 1, 1000))
                 .Select(t => new
                 {
+                    t.Id,
+                    t.ClosedUtc,
                     t.OpenedUtc,
                     t.Symbol,
                     t.EntryPrice,
@@ -38,13 +40,19 @@ namespace TradingBot.Infrastructure.Services
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            var tradeIds = rows.Select(x => x.Id).ToArray();
+            var completed = await db.PostTradeAnalysisRecords.AsNoTracking()
+                .Where(x => x.ExitManagementId != null && x.SourceTradeId != null && tradeIds.Contains(x.SourceTradeId.Value))
+                .ToDictionaryAsync(x => x.SourceTradeId!.Value, cancellationToken);
+
             return rows.Select(t =>
             {
-                var matches = instruments.Where(x => x.Symbol == t.Symbol).ToArray();
+                completed.TryGetValue(t.Id, out var analysis);
+                var matches = instruments.Where(x => analysis == null ? x.Symbol == t.Symbol : x.InstrumentId == analysis.InstrumentId).ToArray();
                 var instrument = matches.Length == 1 ? matches[0] : null;
                 var basis = instrument == null ? null : InstrumentIdentity.GetBaseCurrency(instrument.SecurityType, instrument.Symbol, instrument.Currency);
-                var gross = t.ExitPrice.HasValue ? (t.ExitPrice.Value - t.EntryPrice) * t.Size : 0m;
-                var fees = ExtractDecimal(t.Notes, "fees") ?? ExtractDecimal(t.Notes, "commission") ?? 0m;
+                var gross = analysis?.GrossProfitLoss ?? (t.ExitPrice.HasValue ? (t.ExitPrice.Value - t.EntryPrice) * t.Size : 0m);
+                var fees = analysis?.CommissionsFees ?? ExtractDecimal(t.Notes, "fees") ?? ExtractDecimal(t.Notes, "commission") ?? 0m;
                 var net = gross - fees;
                 return new TradeDashboardRow
                 {
@@ -53,15 +61,17 @@ namespace TradingBot.Infrastructure.Services
                     QuantityUnit = instrument == null ? "unknown" : basis ?? "shares",
                     PriceUnit = instrument == null ? "unknown" : basis == null ? instrument.Currency : $"{instrument.Currency}/{basis}",
                     ProfitCurrency = instrument?.Currency ?? "unknown",
-                    Pattern = ExtractString(t.Notes, "pattern") ?? "Unknown",
+                    Pattern = analysis?.Pattern ?? ExtractString(t.Notes, "pattern") ?? "Unknown",
                     AiConfidence = ExtractDecimal(t.Notes, "aiConfidence"),
-                    Entry = t.EntryPrice,
-                    Exit = t.ExitPrice,
-                    Quantity = t.Size,
+                    Entry = analysis?.EntryPrice ?? t.EntryPrice,
+                    Exit = analysis?.ExitPrice ?? t.ExitPrice,
+                    Quantity = analysis?.Quantity ?? t.Size,
                     GrossProfitLoss = gross,
                     Fees = fees,
                     NetProfitLoss = net,
-                    TradeResult = !t.ExitPrice.HasValue ? "Open" : net > 0m ? "Win" : net < 0m ? "Loss" : "Flat"
+                    TradeResult = analysis != null ? analysis.FeesComplete == true ? analysis.TradeResult : "Provisional fees"
+                        : t.ClosedUtc != null && t.Size == 0 ? "Awaiting analysis"
+                        : !t.ExitPrice.HasValue ? "Open" : net > 0m ? "Win" : net < 0m ? "Loss" : "Flat"
                 };
             }).ToList();
         }

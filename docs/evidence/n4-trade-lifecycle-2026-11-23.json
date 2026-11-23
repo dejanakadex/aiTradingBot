@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-23",
+  "baseCommit": "c03ac2899c0f8aa11dc219cd28e12ab7ab397ed9",
+  "scope": "N4 implementation and deterministic fake-broker verification; no real paper execution",
+  "tests": {
+    "configuration": "Release",
+    "passed": 810,
+    "failed": 0,
+    "skipped": 0
+  },
+  "ibkrPublishAndMissingChangedDllGuardsPassed": true,
+  "offlineParity": {
+    "passed": true,
+    "canSendOrders": false,
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T11:45:15Z",
+    "toUtc": "2026-11-23T11:49:15Z",
+    "ManifestSha256": "8D7136A5087FD52038953791C1DE47748FB142102728453FBC8AB24F132D5D39",
+    "configSha256": "D62A5FCF1F4B31B4FCD211B56DDC5700D11095A3358E4DAAB385FDACB7FB34A3",
+    "events": 4362,
+    "healthy": 4362,
+    "frames": {
+      "5": 47,
+      "15": 15
+    },
+    "warmedFeatureFrames": 22,
+    "decisionBatches": 47,
+    "patternEvaluations": 470,
+    "patternCandidates": 3,
+    "selectedSignals": 0,
+    "featureSha256": "28EA153D201872733A1694C90E441BC51369D981F34F5500817031F149FAD874",
+    "strictDecisionSha256": "A436A3DF688A4BB711D954FF7514E47E32DA7CCD65ED56A1C0DE36699F5CC9C3",
+    "checkpointDecisionSha256": "A436A3DF688A4BB711D954FF7514E47E32DA7CCD65ED56A1C0DE36699F5CC9C3",
+    "limitations": [
+      "Receive-ordered offline comparison, not live timer scheduling parity.",
+      "Only random PipelineContext.CorrelationId is excluded; deterministic signal identity and all decision fields are compared.",
+      "Current unapproved research profile: accepted signal/cooldown, model and order paths not validated.",
+      "In-memory SQLite; storage timing/failure coverage comes from separate tests and live metrics."
+    ]
+  },
+  "deployment": {
+    "capturedUtc": "2026-11-23T13:45:49.1572517Z",
+    "processId": 14584,
+    "startedUtc": "2026-11-23T13:45:09.587186Z",
+    "readOnly": true,
+    "tradingDisabled": true,
+    "forexExecutionDisabled": true,
+    "automaticSignalsDisabled": true,
+    "infrastructureHash": "455735DE3AF5E096073032CC253C02E10D07FDAF4FC5160F36B9D41BE2856AC7",
+    "deployedInfrastructureHash": "455735DE3AF5E096073032CC253C02E10D07FDAF4FC5160F36B9D41BE2856AC7",
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 2,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 374.6317,
+      "persistedStreamUpdates": 56,
+      "lastFlushUtc": "2026-11-23T13:45:48.7776097Z",
+      "lastFlushMilliseconds": 11.11,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 1600.4177,
+      "maximumObservedPendingMilliseconds": 2507.1777
+    },
+    "tick": [
+      {
+        "streamKey": "FX-CASH-EUR-USD-IDEALPRO|TICK|ALL",
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "symbol": "EURUSD",
+        "timeframe": "TICK",
+        "status": 3,
+        "statusReason": "Market-data heartbeat received.",
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastHeartbeatUtc": "2026-11-23T13:45:48.7780749Z",
+        "lastEventTimeUtc": "2026-11-23T13:45:48Z",
+        "receiveLagMilliseconds": 777,
+        "heartbeatTimeoutSeconds": 60,
+        "consecutiveFailures": 0,
+        "reconnectCount": 0,
+        "gapFillCount": 0,
+        "lastGapFillStartUtc": null,
+        "lastGapFillEndUtc": null,
+        "lastGapFillBars": 0,
+        "lastError": "",
+        "updatedAtUtc": "2026-11-23T13:45:48.7780749Z"
+      }
+    ]
+  },
+  "postDeploymentSmoke": {
+    "capturedUtc": "2026-11-23T13:48:26.7787510Z",
+    "tick": [
+      {
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastEventTimeUtc": "2026-11-23T13:48:24Z",
+        "reconnectCount": 0,
+        "consecutiveFailures": 0
+      }
+    ],
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 0,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 0,
+      "persistedStreamUpdates": 352,
+      "lastFlushUtc": "2026-11-23T13:48:26.4566636Z",
+      "lastFlushMilliseconds": 10.3004,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 1600.4177,
+      "maximumObservedPendingMilliseconds": 2507.1777
+    }
+  },
+  "database": {
+    "migrationApplied": true,
+    "postTradeIndexes": [
+      [
+        "IX_PostTradeAnalysisRecords_ExitManagementId"
+      ],
+      [
+        "IX_PostTradeAnalysisRecords_AutomaticSourceTrade"
+      ]
+    ],
+    "counts": {
+      "Trades": 0,
+      "OrderRecords": 0,
+      "ExecutionRecords": 0,
+      "PostTradeAnalysisRecords": 0,
+      "NumericalModelRecords": 0
+    },
+    "quickCheck": "ok"
+  },
+  "artifacts": [
+    {
+      "localPath": "TestResults/n4-20261123/n4-release.trx",
+      "sha256": "A6C841D08FE14F3B1D1B1F8BC024238507243140C5EE99FBD2497E30F236B979"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/ibkr-release.log",
+      "sha256": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/parity.json",
+      "sha256": "03A7CDEEC4F96C0F4B2B4B8C47853F9DA5F1B7628809B7E80099FE5484C68720"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/startup.json",
+      "sha256": "A0428CC646C4F09099FE7B1A4559698C76DD8FE3ABEFE0B1A1A344FE3D864AAC"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/database-check.json",
+      "sha256": "7F29B7926C6C7EA92386016F0E6916199957D7D73C375F00538BC7FC2DBD0BFF"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/smoke.json",
+      "sha256": "59F472740D452C25E1AC701CD11CB4EB2136BCD1B3C2C9FE1633C3456536CFC2"
+    },
+    {
+      "localPath": "TestResults/n4-20261123/pre-migration.db",
+      "sha256": "9DEB51C3284A6440BB35D08FD02E8C37FC55AF428CD0D1762D08972CECE22E4D"
+    }
+  ],
+  "limitations": [
+    "Fake broker and stub numerical prediction are not IBKR fills.",
+    "Only supported long USD-quoted executions; incomplete/non-USD commissions remain provisional.",
+    "N5 representative dataset, N6/N7 economics/model, model shadow and real paper lifecycle remain open.",
+    "Full shared-portfolio replay remains N10; FX-12 and 25/30/31 not closed.",
+    "Background SQLite maximum 1600 ms persists; paper per-event durability unchanged.",
+    "Planned deployment restart interrupts collection; short smoke is not a new N3 acceptance session.",
+    "Startup logged IBKR 366 (historical query no longer found); tick subscription healthy with zero reconnects/failures at smoke check."
+  ]
+}

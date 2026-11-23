@@ -17,6 +17,38 @@ namespace TradingBot.Tests
     public class MarketSnapshotServiceTests
     {
         [Fact]
+        public async Task ExplicitAsOfFiltersBeforeWindowLimitAndExcludesFutureQuotesAndLateCandles()
+        {
+            using var fixture = new ForexResearchFixture();
+            var at = new DateTime(2026, 11, 23, 12, 0, 0, DateTimeKind.Utc);
+            using (var db = fixture.CreateDbContext())
+            {
+                foreach (var timeframe in new[] { Timeframe.OneMinute, Timeframe.FiveMinutes, Timeframe.FifteenMinutes })
+                {
+                    for (var i = -30; i <= 30; i++)
+                        db.Candles.Add(new TradingBot.Persistence.Candle { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", Timeframe = timeframe,
+                            TimestampUtc = at.AddMinutes(i), ReceivedTimeUtc = at.AddMinutes(i), IsFinal = true,
+                            QualityStatus = MarketDataQualityStatus.Healthy, Open = 100, High = 101, Low = 99, Close = 100, Volume = 100 });
+                    db.Candles.Add(new TradingBot.Persistence.Candle { InstrumentId = "US-STK-SPY-SMART", Symbol = "SPY", Timeframe = timeframe,
+                        TimestampUtc = at.AddSeconds(-1), ReceivedTimeUtc = at.AddMinutes(2), IsFinal = true,
+                        QualityStatus = MarketDataQualityStatus.Healthy, Open = 200, High = 201, Low = 199, Close = 200, Volume = 100 });
+                }
+                await db.SaveChangesAsync();
+            }
+            var history = new CandleHistoryService(fixture);
+            var window = await history.GetCandlesAsOfAsync("SPY", Timeframe.OneMinute, 3, at);
+            Assert.Equal(new[] { at.AddMinutes(-2), at.AddMinutes(-1), at }, window.Select(x => x.TimestampUtc));
+            var latest = new LatestMarketDataService();
+            latest.Apply(Tick(MarketDataEventKind.Bid, 999m, at.AddMinutes(1)));
+            latest.Apply(Tick(MarketDataEventKind.Ask, 1000m, at.AddMinutes(1)));
+            var service = new MarketSnapshotService(history, new FeatureEngine(), new FakePatternDetector(), latestMarketData: latest);
+            var snapshot = await service.BuildSnapshotAsOfAsync("SPY", at);
+            Assert.Equal(at, snapshot.CreatedAtUtc); Assert.Equal(100m, snapshot.CurrentPrice); Assert.Null(snapshot.Spread);
+            foreach (var series in new[] { snapshot.OneMinute, snapshot.FiveMinutes, snapshot.FifteenMinutes })
+                Assert.All(series.RecentCandles, x => { Assert.True(x.TimestampUtc <= at); Assert.True(x.ReceivedTimeUtc <= at); Assert.Equal(100m, x.Close); });
+        }
+
+        [Fact]
         public async Task BuildSnapshotAsync_CombinesOneFiveAndFifteenMinuteContexts()
         {
             var history = new FakeCandleHistoryService();

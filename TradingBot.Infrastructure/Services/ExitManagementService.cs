@@ -136,6 +136,9 @@ namespace TradingBot.Infrastructure.Services
                         plan.AiCriticAnalysis,
                         plan.StrategyDecision,
                         plan.RiskDecision,
+                        plan.Snapshot,
+                        plan.Context,
+                        plan.ApprovedAtUtc,
                         exitStrategy = _settings
                     }, JsonOptions)
                 });

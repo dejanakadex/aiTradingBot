@@ -113,13 +113,14 @@ namespace TradingBot.Infrastructure.Background
                     $"Fetching recent candles for {candle.Symbol} {candle.Timeframe}.",
                     candle.Symbol);
 
-                var candles = await _candleHistoryService.GetLastNCandlesAsync(candle.Symbol, candle.Timeframe, HistoryCandles, cancellationToken).ConfigureAwait(false);
+                var decisionAtUtc = candle.ReceivedTimeUtc;
+                var candles = await _candleHistoryService.GetCandlesAsOfAsync(candle.Symbol, candle.Timeframe, HistoryCandles, decisionAtUtc, cancellationToken).ConfigureAwait(false);
                 if (candles.Count == 0 || candles[^1].TimestampUtc != candle.TimestampUtc)
                 {
                     candles = candles.Concat(new[] { candle }).OrderBy(c => c.TimestampUtc).ToList();
                 }
                 candles = candles
-                    .Where(item => item.TimestampUtc <= candle.TimestampUtc)
+                    .Where(item => item.TimestampUtc <= candle.TimestampUtc && item.ReceivedTimeUtc <= decisionAtUtc)
                     .GroupBy(item => item.TimestampUtc)
                     .Select(group => group.OrderBy(item => item.ReceivedTimeUtc).ThenBy(item => item.Source, StringComparer.Ordinal).Last())
                     .OrderBy(item => item.TimestampUtc)
@@ -137,7 +138,7 @@ namespace TradingBot.Infrastructure.Background
                 var features = _featureEngine.ComputeFeatures(new CanonicalFeatureInput
                 {
                     Candles = candles,
-                    AsOfUtc = candle.TimestampUtc,
+                    AsOfUtc = decisionAtUtc,
                     Bid = latest?.Bid,
                     BidTimeUtc = latest?.BidTimeUtc,
                     Ask = latest?.Ask,
@@ -168,10 +169,18 @@ namespace TradingBot.Infrastructure.Background
                     if (_candidateResearchService != null)
                     {
                         var sourceEventId = $"LIVE-BAR|{candle.InstrumentId}|{candle.Timeframe}|{candle.TimestampUtc:O}".ToUpperInvariant();
-                        var evaluationContext = new CandidateEvaluationContext(features.Regime, features.NormalizedLiquidity, features.AtrToPriceRatio);
+                        var evaluationContext = new CandidateEvaluationContext(features.Regime, features.NormalizedLiquidity, features.AtrToPriceRatio, decisionAtUtc);
                         await _candidateResearchService.PersistBatchAsync(batch, sourceEventId, evaluationContext: evaluationContext, cancellationToken: cancellationToken).ConfigureAwait(false);
                     }
-                    detectedPatterns.AddRange(batch.Candidates);
+                    detectedPatterns.AddRange(batch.Candidates.Select(candidate =>
+                    {
+                        var metadata = candidate.Metadata.ToDictionary(x => x.Key, x => x.Value);
+                        metadata["decisionAtUtc"] = decisionAtUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+                        metadata["featureSnapshotJson"] = System.Text.Json.JsonSerializer.Serialize(features);
+                        return new PatternCandidate(candidate.PatternType, candidate.Symbol, candidate.Timeframe, candidate.DetectedAtUtc,
+                            candidate.Confidence, candidate.RelevantPriceLevels, metadata, candidate.Context, candidate.Direction,
+                            candidate.HardConditions, candidate.ScoreComponents, candidate.EvaluationReasons);
+                    }));
                 }
                 var patterns = detectedPatterns
                     .DistinctBy(pattern => pattern.PatternKey, StringComparer.Ordinal)

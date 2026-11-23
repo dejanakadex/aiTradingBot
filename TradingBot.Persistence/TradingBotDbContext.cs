@@ -84,6 +84,9 @@ namespace TradingBot.Persistence
             {
                 b.HasKey(x => x.Id);
                 b.HasIndex(x => x.SourceTradeId).IsUnique(false);
+                b.HasIndex(x => x.ExitManagementId).IsUnique();
+                b.HasIndex(x => x.SourceTradeId, "IX_PostTradeAnalysisRecords_AutomaticSourceTrade").IsUnique()
+                    .HasFilter("\"ExitManagementId\" IS NOT NULL");
                 b.HasIndex(x => x.Symbol);
                 b.HasIndex(x => x.Pattern);
                 b.HasIndex(x => x.ClosedUtc);

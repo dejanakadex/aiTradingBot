@@ -19,10 +19,22 @@ namespace TradingBot.Infrastructure.Services
         }
 
         public async Task<IReadOnlyList<Candle>> GetLastNCandlesAsync(string symbol, Timeframe timeframe, int n, CancellationToken cancellationToken = default)
+            => await ReadAsync(symbol, timeframe, n, null, cancellationToken);
+
+        public Task<IReadOnlyList<Candle>> GetCandlesAsOfAsync(string symbol, Timeframe timeframe, int n, DateTime asOfUtc, CancellationToken cancellationToken = default)
+        {
+            if (asOfUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("UTC as-of required.", nameof(asOfUtc));
+            return ReadAsync(symbol, timeframe, n, asOfUtc, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<Candle>> ReadAsync(string symbol, Timeframe timeframe, int n, DateTime? asOfUtc, CancellationToken cancellationToken)
         {
             await using var ctx = _dbFactory.CreateDbContext();
-            var rows = await ctx.Candles
-                .Where(c => c.Symbol == symbol && c.Timeframe == timeframe)
+            var query = ctx.Candles.Where(c => c.Symbol == symbol && c.Timeframe == timeframe);
+            // Filter before Take: later rows must not evict the decision's historical window.
+            if (asOfUtc.HasValue) query = query.Where(c => c.TimestampUtc <= asOfUtc.Value && c.ReceivedTimeUtc <= asOfUtc.Value
+                && c.IsFinal && c.QualityStatus == MarketDataQualityStatus.Healthy);
+            var rows = await query
                 .OrderByDescending(c => c.TimestampUtc)
                 .Take(n)
                 .AsNoTracking()

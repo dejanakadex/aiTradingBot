@@ -186,6 +186,10 @@ namespace TradingBot.Infrastructure.Services
 
         private static IQueryable<PostTradeAnalysisRecord> ApplyFilter(IQueryable<PostTradeAnalysisRecord> query, PatternAnalysisFilter? filter)
         {
+            // Incomplete/unsupported execution fees must not appear as final strategy performance.
+            var allRecords = query;
+            query = query.Where(x => x.FeesComplete != false && (x.ExitManagementId != null || x.SourceTradeId == null
+                || !allRecords.Any(automatic => automatic.ExitManagementId != null && automatic.SourceTradeId == x.SourceTradeId)));
             if (filter is null)
                 return query;
 

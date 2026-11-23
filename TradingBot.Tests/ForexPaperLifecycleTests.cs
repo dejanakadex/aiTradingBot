@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TradingBot.Application.Configuration;
 using TradingBot.Application.DTOs;
@@ -19,6 +20,46 @@ namespace TradingBot.Tests;
 
 public sealed class ForexPaperLifecycleTests
 {
+    [Fact]
+    public async Task QuotesToFeatureSignalModelRiskFillExitAndPostTradeRetainOneDecisionIdentity()
+    {
+        await using var f = await Flow.Create(ExitStrategyMode.FixedBracket);
+        using var research = new ForexResearchFixture(); research.Trading = f.Trading; research.Limits = f.Limits;
+        research.Costs.StrategyId = research.Profile.StrategyId = research.Patterns.Profiles[0].StrategyId = research.Signals.Profiles[0].Selection.StrategyId = "fx";
+        research.Profile.HoldingSeconds = 60; research.Profile.Exit = f.ExitSettings;
+        var latest = new LatestMarketDataService(Options.Create(research.Aggregates), Options.Create(f.Trading));
+        foreach (var row in ForexResearchFixture.Records()) latest.Apply(new()
+        {
+            EventId = row.EventId, InstrumentId = row.InstrumentId, Symbol = row.Symbol, Source = row.Source,
+            Kind = row.DataType == "bid" ? MarketDataEventKind.Bid : MarketDataEventKind.Ask,
+            EventTimeUtc = row.EventTimeUtc, ReceivedTimeUtc = row.ReceivedTimeUtc, Price = row.Price, Size = row.Size
+        });
+        f.Clock.UtcNow = ForexResearchFixture.Start.AddSeconds(192); latest.AdvanceTo(f.Clock.UtcNow);
+        var inputs = new ForexFeatureService(latest, research.Features, Options.Create(f.Trading), Options.Create(research.Aggregates));
+        var contract = research.Contract(); var versions = contract.Get("EURUSD", "fx");
+        var profile = research.Signals.Profiles[0]; profile.ApprovedFeatureVersion = versions.Feature;
+        profile.ApprovedSignalVersion = profile.Version; profile.ApprovedPatternVersion = research.Patterns.Profiles[0].Version;
+        var sink = new CandidateResearchService(research.Dataset, f.Factory, f.Clock, Options.Create(new CandidateLabelingSettings()), NullLogger<CandidateResearchService>.Instance);
+        var trigger = new ForexSignalTriggerService(Options.Create(research.Signals), Options.Create(research.Patterns), Options.Create(f.Trading),
+            Options.Create(research.Aggregates), latest, inputs, research.Features, sink, f.Factory, NullLoggerFactory.Instance);
+        var candidate = Assert.Single(await trigger.ProcessAsync("EURUSD", f.Clock.UtcNow));
+        Assert.Contains("featureSnapshotJson", candidate.Metadata.Keys);
+        var model = new ForexPredictionStub();
+        var decision = new ForexModelDecisionService(contract, model, f.Quotes, Options.Create(f.Trading), Options.Create(f.ExitSettings), Options.Create(new ForexExecutionSettings()), f.Clock);
+        var plan = await f.Prepare.PrepareAsync(await decision.CreateProposalAsync(candidate));
+        await f.Executor.ExecutePlanAsync(plan, default);
+        await f.Broker.FillOpenOrderAsync((await f.Entry()).BrokerOrderId, plan.RiskDecision.ApprovedQuantity, 1.10002m);
+        await f.Broker.FillOpenOrderAsync((await f.State()).TakeProfitBrokerOrderId, plan.RiskDecision.ApprovedQuantity, 1.104m);
+        await f.Broker.PublishPendingCancellationsAsync(); await f.Analysis().SynchronizeBatchAsync();
+        using var db = f.Factory.CreateDbContext(); var result = Assert.Single(db.PostTradeAnalysisRecords);
+        Assert.Equal(candidate.Context.SignalId, result.SignalId);
+        Assert.Equal(candidate.Context.SignalId, (await db.PortfolioRiskReservationRecords.SingleAsync()).SignalId);
+        Assert.Contains("featureSnapshotJson", result.EntryContextJson); Assert.Contains("modelInputJson", result.EntryContextJson);
+        using var context = System.Text.Json.JsonDocument.Parse(result.EntryContextJson);
+        Assert.Equal(candidate.PatternKey, context.RootElement.GetProperty("lifecycleContext").GetProperty("pattern").GetProperty("patternKey").GetString());
+        Assert.Equal(2, db.ExecutionRecords.Count()); Assert.True(result.FeesComplete);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -47,6 +88,14 @@ public sealed class ForexPaperLifecycleTests
         var entry = await f.Entry(); Assert.Equal(20000, entry.RequestedQuantity);
         await f.Broker.FillOpenOrderAsync(entry.BrokerOrderId, 20000, 1.10002m);
         Assert.Equal(f.Clock.UtcNow.AddSeconds(60), (await f.State()).ExitDeadlineUtc);
+        await f.Broker.FillOpenOrderAsync((await f.State()).ProtectiveStopBrokerOrderId, 20000, 1.099m);
+        await f.Broker.PublishPendingCancellationsAsync();
+        await f.Analysis().SynchronizeBatchAsync();
+        using var completed = f.Factory.CreateDbContext();
+        var result = Assert.Single(completed.PostTradeAnalysisRecords);
+        Assert.Contains("modelInputJson", result.EntryContextJson);
+        Assert.Contains("executionQuoteJson", result.EntryContextJson);
+        Assert.Contains("proofs", result.EntryContextJson);
     }
 
     private sealed class TestFxChannel(bool accept) : ITradePipelineChannel
@@ -91,6 +140,12 @@ public sealed class ForexPaperLifecycleTests
         Assert.Equal(2, await db.ExecutionRecords.CountAsync());
         Assert.Equal(SignalArbitrationStatus.Closed, (await db.SignalArbitrationRecords.SingleAsync()).Status);
         Assert.Single(await db.ForexExecutionProofRecords.ToArrayAsync());
+        Assert.True(await f.Analysis().SynchronizeAsync(state.Id));
+        Assert.False(await f.Analysis().SynchronizeAsync(state.Id));
+        var analysis = Assert.Single(await db.PostTradeAnalysisRecords.ToArrayAsync());
+        Assert.Equal(20000m, analysis.Quantity);
+        Assert.Equal((exitKind == "stop" ? 1.099m : 1.104m) * 20000m - 1.10002m * 20000m, analysis.GrossProfitLoss);
+        Assert.True(analysis.FeesComplete); Assert.Equal(plan.Context.SignalId, analysis.SignalId);
     }
 
     [Theory]
@@ -109,6 +164,54 @@ public sealed class ForexPaperLifecycleTests
         Assert.Equal(ExitManagementState.Closed, (await f.State()).State);
         Assert.Equal(PortfolioReservationStatus.Released, (await f.Reservation()).Status);
         Assert.Equal(0, (await f.Broker.GetPositionsAsync("DU123")).Single().Quantity);
+        await f.Analysis().SynchronizeBatchAsync();
+        using var complete = f.Factory.CreateDbContext();
+        Assert.Equal(1234.56m, Assert.Single(complete.PostTradeAnalysisRecords).Quantity);
+    }
+
+    [Fact]
+    public async Task AutomaticAnalysisRecoversAfterClosureAndLateFeesUpdateExactlyOneWeightedResult()
+    {
+        await using var f = await Flow.Create(ExitStrategyMode.FixedBracket);
+        await f.Executor.ExecutePlanAsync(await f.Prepare.PrepareAsync(f.Proposal()), default);
+        var buy = await f.Broker.FillOpenOrderAsync((await f.Entry()).BrokerOrderId, 20000m, 1.10002m);
+        var state = await f.State();
+        var first = await f.Broker.FillOpenOrderAsync(state.TakeProfitBrokerOrderId, 5000m, 1.104m);
+        var second = await f.Broker.FillOpenOrderAsync(state.TakeProfitBrokerOrderId, 15000m, 1.105m);
+        await f.Broker.PublishPendingCancellationsAsync();
+        var committed = new ProjectionLogger();
+        var analysisService = new CompletedTradeAnalysisService(f.Factory, f.Clock, committed, Options.Create(f.Trading));
+        using (var host = new CompletedTradeAnalysisHostedService(analysisService, NullLogger<CompletedTradeAnalysisHostedService>.Instance))
+        {
+            await host.StartAsync(default);
+            // The fixture shares one in-memory connection; wait for the post-commit signal, not an uncommitted row.
+            await committed.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await host.StopAsync(default);
+        }
+        using var db = f.Factory.CreateDbContext();
+        var before = Assert.Single(await db.PostTradeAnalysisRecords.AsNoTracking().ToArrayAsync());
+        Assert.Equal(1.10475m, before.ExitPrice);
+        await f.Broker.PublishCommissionAsync(buy.BrokerExecutionId!, 2m);
+        await f.Broker.PublishCommissionAsync(first.BrokerExecutionId!, 1m);
+        await f.Broker.PublishCommissionAsync(second.BrokerExecutionId!, 2m);
+        Assert.True(await f.Analysis().SynchronizeAsync(state.Id));
+        Assert.False(await f.Analysis().SynchronizeAsync(state.Id));
+        var after = Assert.Single(await db.PostTradeAnalysisRecords.AsNoTracking().ToArrayAsync());
+        Assert.Equal(before.Id, after.Id); Assert.Equal(before.GrossProfitLoss - 5m, after.NetProfitLoss);
+        await f.Broker.PublishCommissionAsync(second.BrokerExecutionId!, 3m, "EUR");
+        await f.Analysis().SynchronizeAsync(state.Id);
+        Assert.False((await db.PostTradeAnalysisRecords.AsNoTracking().SingleAsync()).FeesComplete);
+        Assert.Equal(0, (await new PostTradeAnalysisService(f.Factory).GetPatternPerformanceAsync(after.Pattern)).Trades);
+        Assert.Equal(3, await db.ExecutionRecords.CountAsync());
+    }
+
+    private sealed class ProjectionLogger : ILogger<CompletedTradeAnalysisService>
+    {
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        { if (logLevel == LogLevel.Information) Completed.TrySetResult(); }
     }
 
     [Fact]
@@ -147,6 +250,13 @@ public sealed class ForexPaperLifecycleTests
         await f.Exit.ProcessExpiredPositionsAsync(f.Clock.UtcNow);
         await f.Broker.PublishPendingCancellationsAsync();
         Assert.Equal(4, f.Broker.SubmittedRequests.Count);
+        await f.Broker.FillOpenOrderAsync((await f.State()).ExitBrokerOrderId, 20000, 1.1005m);
+        await f.Broker.ReplayExecutionCallbacksAsync();
+        await f.Analysis().SynchronizeBatchAsync();
+        await f.Analysis().SynchronizeBatchAsync();
+        using var completed = f.Factory.CreateDbContext();
+        Assert.Single(completed.PostTradeAnalysisRecords);
+        Assert.Equal(PortfolioReservationStatus.Released, (await f.Reservation()).Status);
     }
 
     [Theory]
@@ -287,6 +397,7 @@ public sealed class ForexPaperLifecycleTests
         public ExitStrategySettings ExitSettings => _exitSettings;
         public SignalArbitrationService Arbitration => _arbitration;
         public ExitManagementService Exit;
+        public CompletedTradeAnalysisService Analysis() => new(Factory, Clock, NullLogger<CompletedTradeAnalysisService>.Instance, Options.Create(Trading));
 
         private Flow(SqliteConnection connection, IDbContextFactory<TradingBotDbContext> factory, ExitStrategyMode exitMode)
         {

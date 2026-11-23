@@ -417,6 +417,8 @@ namespace TradingBot.Tests
 
         private sealed class FakeSnapshotService : IMarketSnapshotService
         {
+            public Task<MarketSnapshot> BuildSnapshotAsOfAsync(string symbol, DateTime asOfUtc, CancellationToken cancellationToken = default)
+                => BuildSnapshotAsync(symbol, cancellationToken: cancellationToken);
             public Task<MarketSnapshot> BuildSnapshotAsync(string symbol, decimal? currentPrice = null, decimal? spread = null, CancellationToken cancellationToken = default)
             {
                 return Task.FromResult(new MarketSnapshot

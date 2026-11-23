@@ -130,6 +130,20 @@ namespace TradingBot.Tests.Fakes
             }
         }
 
+        public Task PublishCommissionAsync(string executionId, decimal commission, string currency = "USD")
+        {
+            OrderStatusDto fill;
+            lock (_sync) fill = _executions.Single(x => x.BrokerExecutionId == executionId);
+            return RaiseFillAsync(new OrderStatusDto
+            {
+                OrderId = fill.OrderId, BrokerOrderId = fill.BrokerOrderId, BrokerExecutionId = executionId,
+                Symbol = fill.Symbol, Side = fill.Side, Status = fill.Status, TimestampUtc = fill.TimestampUtc,
+                FilledQuantity = fill.FilledQuantity, RemainingQuantity = fill.RemainingQuantity,
+                AverageFillPrice = fill.AverageFillPrice, LastFillPrice = fill.LastFillPrice,
+                Commission = commission, CommissionCurrency = currency, IsCommissionUpdate = true
+            });
+        }
+
         public Task<AccountInfo> GetAccountInfoAsync(string accountId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new AccountInfo

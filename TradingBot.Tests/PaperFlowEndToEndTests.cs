@@ -193,6 +193,9 @@ public sealed class PaperFlowEndToEndTests
         await flow.Broker.FillOpenOrderAsync(exit.ExitBrokerOrderId, plan.RiskDecision.ApprovedQuantity, 100m);
         Assert.Equal(ExitManagementState.Closed, (await flow.ExitAsync()).State);
         Assert.Equal(PortfolioReservationStatus.Released, (await flow.ReservationAsync()).Status);
+        await flow.AnalyzeAsync();
+        await using var analysisDb = flow.Factory.CreateDbContext();
+        Assert.Single(await analysisDb.PostTradeAnalysisRecords.ToArrayAsync());
     }
 
     [Fact]
@@ -231,6 +234,8 @@ public sealed class PaperFlowEndToEndTests
 
     private sealed class Flow : IAsyncDisposable
     {
+        public Task<int> AnalyzeAsync() => new CompletedTradeAnalysisService(Factory, _clock,
+            NullLogger<CompletedTradeAnalysisService>.Instance, Options.Create(_trading)).SynchronizeBatchAsync();
         private readonly SqliteConnection _connection;
         private readonly ServiceProvider _services;
         private readonly TradingSettings _trading;
