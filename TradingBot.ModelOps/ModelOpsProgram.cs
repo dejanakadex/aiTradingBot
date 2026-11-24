@@ -30,7 +30,7 @@ internal static class ModelOpsProgram
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
             if (command == "fx-collection-audit") return await AuditForexCollectionAsync(options);
-            if (command == "fx-dataset-review")
+            if (command is "fx-dataset-review" or "fx-collection-stream-audit")
             {
                 var output = Required(options, "output");
                 var dataset = Required(options, "dataset");
@@ -46,14 +46,23 @@ internal static class ModelOpsProgram
                 var profile = config.GetSection("ForexResearch").Get<ForexResearchSettings>()!.Profiles.Single(x => x.InstrumentId == plan.InstrumentId && x.StrategyId == plan.StrategyId);
                 var costs = config.GetSection("ForexRisk").Get<ForexRiskSettings>()!.Profiles.Single(x => x.InstrumentId == plan.InstrumentId && x.StrategyId == plan.StrategyId);
                 var reviewAggregates = config.GetSection("ShortAggregates").Get<ShortAggregateSettings>() ?? new();
+                reviewAggregates.IntervalsSeconds = config.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>() ?? reviewAggregates.IntervalsSeconds;
                 var reviewEvaluation = config.GetSection("ResearchEvaluation").Get<ResearchEvaluationSettings>() ?? new();
                 reviewEvaluation.ConfidenceThresholds = config.GetSection("ResearchEvaluation:ConfidenceThresholds").Get<decimal[]>() ?? reviewEvaluation.ConfidenceThresholds;
                 reviewEvaluation.CostStressMultipliers = config.GetSection("ResearchEvaluation:CostStressMultipliers").Get<decimal[]>() ?? reviewEvaluation.CostStressMultipliers;
                 var store = new ParquetMarketDatasetStore(Options.Create(new DatasetStorageSettings { RootPath = dataset }),
                     new SystemClock(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ParquetMarketDatasetStore>.Instance);
-                var review = await ForexDatasetReview.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
-                    reviewAggregates, profile, costs, plan, reviewEvaluation,
-                    ParseUtc(Required(options, "from")), ParseUtc(Required(options, "to")));
+                var from = ParseUtc(Required(options, "from")); var to = ParseUtc(Required(options, "to"));
+                plan.Validate(reviewEvaluation, profile);
+                if (to > plan.HoldoutFromUtc || (await store.GetManifestAsync()).Files.Any(x => x.InstrumentId == plan.InstrumentId
+                    && x.DataType is "bid" or "ask" && x.MaximumEventTimeUtc >= plan.HoldoutFromUtc))
+                    throw new InvalidDataException("Review snapshot/range must exclude reserved holdout.");
+                var review = command == "fx-dataset-review"
+                    ? await ForexDatasetReview.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
+                        reviewAggregates, profile, costs, plan, reviewEvaluation, from, to)
+                    : await ForexCollectionStreamAudit.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
+                        reviewAggregates, config.GetSection("CanonicalFeatures").Get<CanonicalFeatureSettings>() ?? new(), plan.InstrumentId,
+                        from, to, await ReadForexCoverageAsync(options), int.Parse(Optional(options, "batch-size") ?? "4096", CultureInfo.InvariantCulture));
                 var report = new { configSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(configRaw)),
                     planSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(planRaw)), review };
                 await using var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -355,6 +364,7 @@ internal static class ModelOpsProgram
         fx-prepare --config COLLECTION_JSON [--rules RULES_REPORT] --equity-usd DECIMAL --output NEW_ABSOLUTE_CONFIG
         fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
         fx-dataset-review --dataset FROZEN_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON
+        fx-collection-stream-audit --dataset FROZEN_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON [--coverage JSON] [--batch-size 4096]
         fx-contract --instrument-id ID --strategy-id ID
         fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
         fx-collection-audit --config ABSOLUTE_JSON_PATH --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --from UTC --to UTC [--output NEW_ABSOLUTE_REPORT_PATH]

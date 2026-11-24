@@ -81,8 +81,10 @@ public sealed class ForexDatasetReviewTests
         Assert.Contains("holdout", ex.Message);
     }
 
-    [Fact]
-    public async Task CliWritesBoundReportWithoutOperationalDatabaseAndRefusesOverwrite()
+    [Theory]
+    [InlineData("fx-dataset-review")]
+    [InlineData("fx-collection-stream-audit")]
+    public async Task CliWritesBoundReportWithoutOperationalDatabaseAndRefusesOverwrite(string command)
     {
         using var f = new ForexResearchFixture();
         await f.Dataset.WriteBatchAsync(ForexResearchFixture.Records());
@@ -94,12 +96,22 @@ public sealed class ForexDatasetReviewTests
             TradingSettings = f.Trading, ShortAggregates = f.Aggregates, ResearchEvaluation = Evaluation,
             ForexResearch = new { Profiles = new[] { f.Profile } }, ForexRisk = new { Profiles = new[] { f.Costs } }
         }));
-        string[] args = ["fx-dataset-review", "--dataset", f.DatasetPath, "--config", f.ConfigPath, "--plan", planPath,
+        string[] args = [command, "--dataset", f.DatasetPath, "--config", f.ConfigPath, "--plan", planPath,
             "--from", Start.ToString("O"), "--to", Start.AddMinutes(4).ToString("O"), "--output", output];
         Assert.Equal(0, await ModelOpsProgram.RunAsync(args));
         var original = await File.ReadAllTextAsync(output);
         Assert.Contains("planSha256", original);
         Assert.NotEqual(0, await ModelOpsProgram.RunAsync(args));
         Assert.Equal(original, await File.ReadAllTextAsync(output));
+        args[^1] = Path.Combine(directory, "holdout-review.json");
+        args[10] = Plan.HoldoutFromUtc.AddSeconds(1).ToString("O");
+        Assert.NotEqual(0, await ModelOpsProgram.RunAsync(args));
+        Assert.False(File.Exists(args[^1]));
+        args[10] = Start.AddMinutes(4).ToString("O");
+        var holdout = ForexResearchFixture.Records();
+        foreach (var row in holdout) { row.EventTimeUtc += TimeSpan.FromDays(3); row.ReceivedTimeUtc += TimeSpan.FromDays(3); }
+        await f.Dataset.WriteBatchAsync(holdout);
+        Assert.NotEqual(0, await ModelOpsProgram.RunAsync(args));
+        Assert.False(File.Exists(args[^1]));
     }
 }

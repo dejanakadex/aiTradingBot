@@ -48,6 +48,22 @@ Izvještaj povezuje hash konfiguracije, plana, manifesta i kanonskog sadržaja. 
 
 ## Što još treba za prihvat N5
 
+### Kontinuirani audit agregata za cijelu sesiju
+
+Od 24.11. dostupan je dodatni offline alat bez ograničenja starog audita na 200.000 događaja:
+
+```powershell
+dotnet TradingBot.ModelOps/bin/Release/net10.0/TradingBot.ModelOps.dll fx-collection-stream-audit --dataset ABSOLUTE_FROZEN_DIR --config ABSOLUTE_RESEARCH_JSON --plan ABSOLUTE_PLAN_JSON --from 2026-11-24T08:00:00Z --to 2026-11-24T16:00:00Z --coverage ABSOLUTE_COVERAGE_JSON --output NEW_ABSOLUTE_REPORT_JSON
+```
+
+Ulaz se čita u blokovima kroz privremeni diskovni indeks, uz isti agregator i izračun indikatora kao u botu. Stanje se ne resetira na granici datoteke, bloka ili ponoći. Namjerno se resetira kod promjene callback sesije, evidentiranog prekida ili poznatog odbijenog dijagnostičkog para. Coverage intervali potiskuju kotacije zaključno sa svojim krajem. Završni prekid bez sljedećeg ticka također se obrađuje. Izvještaj uključuje hash konfiguracije, rezervacije, manifesta, kanonskih događaja, izuzetih zapisa i featurea; provjera integriteta ponavlja se nakon obrade.
+
+Sirovi `CanPersist=false` zapisi ostaju u izvorniku. Samo izričito prepoznata odbijanja s razlogom ulaze u brojčanu i hash evidenciju dijagnostike; prikazuje se najviše 1.000 primjera, uz oznaku skraćenja. Nepotpun zdrav par, konfliktni duplikat, nepoznata ocjena ili neispravna zdrava strana uz odbijenog para prekidaju audit. Ovo **ne stvara očišćen izvršni dataset** i ne slabi strogi trade replay: `CanUseAsExecutionDataset=false`, `CanSendOrders=false`, `N5Complete=false`.
+
+Raspon je najviše sedam dana; memorija sadrži blok događaja i ograničene sažetke prozora, a ne cijeli niz kotacija. Broj uzastopnih feature barova ograničen je konfiguriranim retentionom (trenutačno 512), pa maksimum 512 nije mjerenje neograničenog trajanja niza. `UsableQuoteMinutes` broji minute s barem jednom potpunom, pravodobnom kotacijom izvan coverage prekida, ne dokazuje cijelu minutu neprekinute likvidnosti. Dnevni prihvat zasebno koristi pokrivenost finalnim barovima. CLI odbija raspon ili snapshot koji zadire u rezervirani holdout; nema novog treninga niti čitanja završnih ishoda.
+
+### Preostali koraci
+
 1. Prikupiti buduće prozore uz uključen kolektor/TWS i zabilježiti prekide i promjene verzije.
 2. Pravodobno osvježavati stvarna pravila; razdoblja bez pravila ostaju neizvršiva u simulaciji.
 3. Zamrznuti svaki skup s nepromjenjivim manifestom i provjeriti kvalitetu/pokrivenost, bez tihog brisanja problematičnih razdoblja.
@@ -137,3 +153,45 @@ Noć ne prolazi sve N3 pragove: queue i dataset storage imaju repove, a jutarnji
 Ponovno pregledana [IBKR tablica veličina](https://gdcdyn.interactivebrokers.com/en/trading/forexOrderSize.php); [novi read-only TWS dokaz](evidence/n5-rules-2026-11-24.json) opažen je **24.11. u 09:25:48 Zagreb**, prije isteka prethodnog. Novi offline config zadržava sva tri opažanja 19./23./24.11., s izvornim vremenima. Novi prozor valjanosti završava najkasnije **25.11. oko 09:25:47 Zagreb**. Nema retroaktivnog pokrivanja praznina.
 
 Ostaviti paper TWS i kolektor aktivne; sljedeći dnevni pregled ima smisla **24.11. nakon 17:00 Zagreb**, kada završava prvi planirani dnevni prozor. Tada ponovno provjeriti kvalitetu/barove, odvojiti dokumentirane odbijene dijagnostičke zapise i osvježiti pravila prije idućeg dana. N5 se ne zatvara nakon jednog dana. Lokalna puna regresija nije ponavljana jer nema izmjene koda; postojeći N5 commit ima 816 prolaznih testova i zeleni CI, a sada su stvarno izvršeni snapshot/review/audit/latency alati i read-only TWS probe.
+
+## Cijela prva dnevna sesija — 24.11.2026.
+
+**Dnevni kriterij pokrivenosti prolazi; N5 ostaje otvoren.** [Strukturirani dokaz](evidence/n5-day-session-2026-11-24.json) obuhvaća fiksni trening prozor **09:00–17:00 Zagreb**, bez odabira povoljnih odsječaka. Nema novih strateških ishoda, treninga, approvala ili naloga. Završni holdout nije otvoren.
+
+Snapshot sadrži **10.289 datoteka / 1.025.341 manifest redak**. Hashovi su provjereni prije/poslije audita. Naknadna usporedba u 17:02 s aktivnim manifestom potvrđuje identičnih 10.289 datoteka za isti raspon: nema naknadno zapisane datoteke koja bi nedostajala kopiji. Točno filtrirani ulaz ima **1.025.267 događaja: 512.633 potpuna para označena Healthy i jedan izričito odbijeni dijagnostički bid**. Healthy oznaka prikupljanja nije automatski prihvat strožeg 2s agregacijskog praga.
+
+| Interval | Zdravi finalni barovi / očekivani | Pokrivenost | Price-feature-ready frameovi |
+| --- | ---: | ---: | ---: |
+| 5s | 5.745 / 5.759 | 99,76% | 5.520 |
+| 15s | 1.914 / 1.919 | 99,74% | 1.789 |
+
+Kotacije upotrebljive prema vremenskom i coverage filtru opažene su u **480 različitih minuta**, prvi primitak 08:00:00.0379587 UTC, posljednji 15:59:59.5100513 UTC. Kriterij najmanje 360 opaženih minuta i 95% zdravih finalnih 5s prozora prolazi. To nije dokaz da u svakoj sekundi postoji izvršiva likvidnost. Zadnji prozor koji još nije dostupan do as-of granice ne ulazi u nazivnik; ne dodaje se umjetni završni bar. Od 14 nedostajućih 5s prozora, devet nema opažene kotacije, a pet nema prihvatljiv finalni bar. Najdulji potpuno prazni niz ima pet 5s prozora.
+
+### Prekid, kvaliteta i sirovi ulaz
+
+Zabilježene su dvije faze jednog incidenta **11:17:35–11:18:08 Zagreb**. Odbijeni bid nosi izvorno vrijeme **10:17:37 UTC**, primitak **10:17:53.1513568 UTC**, `Stale/CanPersist=false`; ask nije izmišljen. Jedan potpuni par na granici coverage prekida također je potisnut iz agregacije. Prekidi, originalni raw zapisi i hash izuzetog sadržaja ostaju sačuvani. Novi audit ne proizvodi izvršni dataset; potpuni derivacijski ledger i vezanje coveragea uz kasniji replay ostaju otvoreni.
+
+FX agregator je odbio još **394 događaja / 197 parova** starijih od svojeg 2s praga. Nema događaja iznad dopuštenog budućeg odstupanja; 2.586 događaja tolerirano je unutar konfigurirane granice, najveće opaženo vodstvo 94,59 ms. Tri odvojena NTP uzorka u 16:48 daju +46,36 do +46,64 ms. Sat/tolerancija nisu mijenjani. Ovo ne dokazuje trajnu sinkronizaciju ni uzrok svakog kašnjenja.
+
+Kontrolna noćna obrada istim novim alatom evidentira **1.359.228 događaja, 679.613 potpunih parova i dva poznata odbijena dijagnostička bida**, uz pet coverage-potisnutih parova. Ima 11.392/12.719 zdravih 5s barova i 8.934 zagrijana framea. Veliki noćni prekid ostaje u nazivniku; noć nije proglašena neprekinutom kvalitetnom sesijom. Sedam callback identiteta uključuje identitet koji je dao samo odbijeni zapis, zato nije isto što i šest identiteta s potpunim zdravim parovima iz ranijeg pregleda.
+
+### Performanse: novi dokaz o manifestu
+
+Cijeli dnevni log ima 477 mjernih prozora / 1.025.197 obrađenih događaja, nula processing/storage iznimaka i nula negativnih queue clock delta. Log prozori i točno filtrirani snapshot imaju različite rubove brojanja. Nema ERROR/FATAL poruka; quality odbijanja i WARN reconnect nisu time izbrisani.
+
+- Pipeline maksimum **111,02 ms**, najviši p99 gornji rub pojedinog prozora **0,232 ms**.
+- Queue maksimum i najviši p99 gornji rub **434,80 ms**: potonji prelazi N3 prag 100 ms.
+- Dataset flush maksimum **12.110,25 ms**, enqueue → durable maksimum **23.502,03 ms**: oba prelaze postojeće pragove. To nisu mjere SQLite commita.
+- Najsporiji flush u **15:23:08 Zagreb**: manifest read **2.496,94 ms**, manifest write **8.587,56 ms**, Parquet serialize **145,68 ms**, write-gate čekanje **0,0023 ms**. To locira sporu fazu, ne dokazuje samostalno SSD, antivirus ili scheduler kao uzrok.
+
+Odvojeni raspon 09:00–16:35, prije ovog offline rada, ima iste vršne zastoje. Zato ih nije opravdano pripisati ovom auditu/testovima. Manifest u 16:57 ima **27.051.579 bajtova**. Kod pri promjeni ponovno čita cijeli manifest i zapisuje ga uz `WriteThrough`, izračun hasha i zamjenu datoteke. Sljedeći prioritet performansi je mjerena optimizacija rasta/zapisa manifesta uz očuvanje integriteta i oporavka; nema opravdanja za slabljenje trajnosti ili zamjenu praga većom brojkom. Runtime nije mijenjan tijekom sesije. Prethodni ograničeni N3 prihvat ne prenosi se na ovaj dan ili paper naloge.
+
+### Pravila, provjere i nastavak
+
+[Read-only dokaz u 16:46](evidence/n5-rules-afternoon-2026-11-24.json) zadržan je u konfiguraciji korištenoj za audit. Nakon završetka dnevnog prozora dodatno je snimljen [dokaz u 17:03](evidence/n5-rules-next-day-2026-11-24.json); nova offline konfiguracija zadržava svih pet izvornih opažanja 19./23./24.11. i njihove stvarne vremenske granice. Novo opažanje vrijedi najdulje do **25.11.2026. 17:03:22 Zagreb**, pokrivajući sutrašnji fiksni dnevni prozor. Potvrđuje ugovor/cjenovna pravila i zasebno pregledane standardne veličine, ne račun, marginu, provizije ili fill. Nema retroaktivnog popunjavanja pravila.
+
+**828/828 Release testova prolazi**, bez preskočenih; obvezni IBKR DLL, publish sadržaj i missing/changed-DLL guardovi prolaze. Stvarni jutarnji kontrolni uzorak ima potpuno jednake intervalne statistike u starom i novom auditu (45.914 događaja, 238 zdravih 5s barova, 188 zagrijanih frameova). Testovi pokrivaju više od 200.000 događaja, različite blokove, ponoć, promjenu callback sesije, trailing coverage prekid, zatvorenu sesiju, odbijeni orphan, neispravni zdravi ulaz, konfliktne datoteke, holdout i zabranu prepisivanja izlaza.
+
+Kolektor PID 14584 ostaje na postojećem N4 runtimeu; u 17:01 spojen je i prima svježe kotacije, reconnectCount=7, consecutiveFailures=0, failed quality streams=0. Četiri provjerene zabrane naloga ostaju aktivne; baza ima **0 tradeova, 0 naloga, 0 executiona i 0 numeričkih modela**. Promjene ove točke su offline alat i dokumentirani dokazi, bez deploya/restarta kolektora.
+
+Ostaviti paper TWS i kolektor aktivne. Potvrda lokalne postavke Auto restart još je zatražena, nije pretpostavljena ili promijenjena. Sljedeći pregled **25.11. oko 16:30 Zagreb** omogućuje osvježavanje pravila prije isteka i završni pregled drugog trening dana nakon 17:00. Za N5 još trebaju validacija 26.11., rezervirani završni uzorak 27.11., eksplicitna izvršna derivacija te pravilno vezanje labela/podjela prije N6/N7. Jedan prolaz dnevne pokrivenosti nije prihvat cijelog N5, FX-12 ili paper spremnosti.

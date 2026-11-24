@@ -41,6 +41,15 @@ internal sealed class ForexReplayIndex : IDisposable
     public async Task LoadAsync(IMarketDatasetStore source, ReplayStartRequest request, string symbol,
         ShortAggregateSettings aggregates, CancellationToken token)
     {
+        await LoadRawAsync(source, request, token);
+        await ValidateReplayAsync(request, symbol, aggregates, token);
+    }
+
+    // Diagnostic reader only. This does not populate executable Quotes or relax LoadAsync's replay contract.
+    public Task LoadAuditAsync(IMarketDatasetStore source, ReplayStartRequest request, CancellationToken token) => LoadRawAsync(source, request, token);
+
+    private async Task LoadRawAsync(IMarketDatasetStore source, ReplayStartRequest request, CancellationToken token)
+    {
         await foreach (var batch in source.ReadBatchesAsync(new(request.InstrumentId, request.FromUtc, request.ToUtc, ["bid", "ask"]),
             request.ForexBatchSize, token).WithCancellation(token))
         {
@@ -73,19 +82,21 @@ internal sealed class ForexReplayIndex : IDisposable
             transaction.Commit();
         }
         if (EventCount == 0) throw new InvalidDataException("No FX paired quote data.");
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var command = _connection.CreateCommand(); command.CommandText = "SELECT Json FROM Events ORDER BY Received,Id";
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) { token.ThrowIfCancellationRequested(); hash.AppendData(Encoding.UTF8.GetBytes(reader.GetString(0) + "\n")); }
+        CanonicalSha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    private Task ValidateReplayAsync(ReplayStartRequest request, string symbol, ShortAggregateSettings aggregates, CancellationToken token)
+    {
         using (var incomplete = _connection.CreateCommand())
         {
             incomplete.CommandText = "SELECT COUNT(*),MIN(Received),MAX(Received) FROM (SELECT PairId,MIN(Received) Received FROM Events GROUP BY PairId HAVING COUNT(*)<>2)";
             using var reader = incomplete.ExecuteReader(); reader.Read();
             if (reader.GetInt64(0) > 0)
                 throw new InvalidDataException($"Incomplete FX quote pairs: {reader.GetInt64(0)}; first received {new DateTime(reader.GetInt64(1), DateTimeKind.Utc):O}, last received {new DateTime(reader.GetInt64(2), DateTimeKind.Utc):O}. Preserve the source and review coverage; do not infer missing sides.");
-        }
-        using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
-        {
-            using var command = _connection.CreateCommand(); command.CommandText = "SELECT Json FROM Events ORDER BY Received,Id";
-            using var reader = command.ExecuteReader();
-            while (reader.Read()) { token.ThrowIfCancellationRequested(); hash.AppendData(Encoding.UTF8.GetBytes(reader.GetString(0) + "\n")); }
-            CanonicalSha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         }
         using var tx = _connection.BeginTransaction();
         using var pairs = _connection.CreateCommand(); pairs.Transaction = tx;
@@ -110,6 +121,54 @@ internal sealed class ForexReplayIndex : IDisposable
         }
         if ((long)quoteCount * 2 != EventCount) throw new InvalidDataException("Incomplete FX quote pair or invalid side.");
         tx.Commit();
+        return Task.CompletedTask;
+    }
+
+    public IEnumerable<(MarketDatasetRecord[] Rows, bool Rejected)> ReadAuditPairs(string instrumentId, string symbol,
+        ShortAggregateSettings aggregates, CancellationToken token)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT b.Json,a.Json,b.Received AS R,b.PairId AS P FROM Events b
+            LEFT JOIN Events a ON a.PairId=b.PairId AND a.Side='ask' WHERE b.Side='bid'
+            UNION ALL
+            SELECT NULL,a.Json,a.Received AS R,a.PairId AS P FROM Events a
+            LEFT JOIN Events b ON b.PairId=a.PairId AND b.Side='bid' WHERE a.Side='ask' AND b.Id IS NULL
+            ORDER BY R,P
+            """;
+        using var reader = command.ExecuteReader();
+        DateTime? previous = null; long examined = 0;
+        while (reader.Read())
+        {
+            token.ThrowIfCancellationRequested();
+            var rows = Enumerable.Range(0, 2).Where(i => !reader.IsDBNull(i))
+                .Select(i => JsonSerializer.Deserialize<MarketDatasetRecord>(reader.GetString(i))!).ToArray();
+            examined += rows.Length;
+            if (rows.Any(r => r.InstrumentId != instrumentId || r.Symbol != symbol || r.Source != ForexQuoteAggregator.QuoteSource
+                || r.EventTimeUtc.Kind != DateTimeKind.Utc || r.ReceivedTimeUtc.Kind != DateTimeKind.Utc
+                || !r.EventId.StartsWith("IBKR:FXQ:", StringComparison.Ordinal))
+                || rows.Select(r => r.EventTimeUtc).Distinct().Count() != 1 || rows.Select(r => r.ReceivedTimeUtc).Distinct().Count() != 1)
+                throw new InvalidDataException("Invalid audit pair provenance or mismatched timestamps.");
+            var rejected = rows.Any(r => !r.CanPersist || r.QualityStatus != "Healthy");
+            if (rejected)
+            {
+                if (rows.Any(r => r.CanPersist && r.QualityStatus == "Healthy"
+                    && (!r.IsFinal || r.Price is not > 0m || ForexQuoteTimePolicy.IsTooFarAhead(r.EventTimeUtc, r.ReceivedTimeUtc, aggregates))))
+                    throw new InvalidDataException("Malformed healthy side cannot be hidden by a rejected mate.");
+                if (rows.Any(r => (r.QualityStatus != "Healthy" || !r.CanPersist)
+                    && (r.CanPersist || string.IsNullOrWhiteSpace(r.QualityReason)
+                        || r.QualityStatus is not ("Stale" or "Future" or "Invalid" or "OutOfOrder" or "Duplicate" or "NonFinal"))))
+                    throw new InvalidDataException("Unrecognized diagnostic rejection; refusing implicit filtering.");
+            }
+            else
+            {
+                var quote = ForexTradeSimulator.ReadQuotes(rows, instrumentId, symbol, aggregates).Single();
+                if (previous.HasValue && quote.EventUtc < previous) throw new InvalidDataException("Out-of-order healthy audit quote times.");
+                previous = quote.EventUtc;
+            }
+            yield return (rows, rejected);
+        }
+        if (examined != EventCount) throw new InvalidDataException("Unrecognized event sides in audit.");
     }
 
     public IEnumerable<IReadOnlyList<MarketDatasetRecord>> ReadEventBatches(int batchSize, CancellationToken token)

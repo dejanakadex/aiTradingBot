@@ -14,7 +14,7 @@ The local end-to-end suite drives onboarding through protected exit with SQLite 
 Ongoing work uses one branch: `trading-bot-v2`.
 
 - [Current completion audit and next steps (20 November 2026)](docs/NEXT_STEPS_2026-11-20.md) — remaining FX-12/replay/shadow/paper work, research acceptance criteria and deferred strategy/UI work. Implemented features do not establish profitability or real broker execution.
-- [N5 dataset preparation](docs/N5_DATASET_READINESS.md) — frozen development evidence, streaming quality review and predeclared future splits. Representative-session acceptance remains open; no orders or model approval.
+- [N5 dataset preparation](docs/N5_DATASET_READINESS.md) — frozen evidence, continuous full-session aggregate/feature audit (`fx-collection-stream-audit`), explicit rejected-diagnostic accounting and predeclared future splits. Representative-session acceptance remains open; no orders or model approval.
 
 - [Detailed project review](docs/PROJECT_REVIEW.md) — code findings, evidence, test gaps and verification limits (Croatian).
 - [Proposed v2 plan](docs/V2_PLAN.md) — implementation phases and acceptance criteria, pending confirmation (Croatian).
