@@ -1,0 +1,50 @@
+{
+  "Passed": true,
+  "CanSendOrders": false,
+  "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+  "Snapshot": {
+    "Contract": {
+      "Status": "Confirmed",
+      "ContractId": 12087792,
+      "PrimaryExchange": null,
+      "ErrorCode": null,
+      "MatchCount": 1,
+      "Metadata": {
+        "Contract": {
+          "Symbol": "EUR",
+          "SecurityType": "CASH",
+          "Exchange": "IDEALPRO",
+          "Currency": "USD"
+        },
+        "LocalSymbol": "EUR.USD",
+        "ValidExchanges": "IDEALPRO",
+        "MinimumTick": 0.00005,
+        "MinimumSize": 0.01,
+        "SizeIncrement": 0.01,
+        "SuggestedSizeIncrement": 0.01,
+        "MarketRuleIds": "3188",
+        "TimeZoneId": "US/Eastern",
+        "TradingHours": "20261122:1715-20261123:1700;20261123:1715-20261124:1700;20261124:1715-20261125:1700;20261125:1715-20261126:1700;20261126:1715-20261127:1700",
+        "LiquidHours": "20261122:1715-20261123:1700;20261123:1715-20261124:1700;20261124:1715-20261125:1700;20261125:1715-20261126:1700;20261126:1715-20261127:1700"
+      }
+    },
+    "ObservedUtc": "2026-11-24T08:25:48.1605562Z",
+    "Rules": {
+      "ContractId": 12087792,
+      "VerifiedAtUtc": "2026-11-24T08:25:47.7492947Z",
+      "EvidenceSource": "Standard EUR IDEALPRO size table reviewed 2026-11-24: https://gdcdyn.interactivebrokers.com/en/trading/forexOrderSize.php ; EUR minimum 20000 maximum 6000000; no odd-lot/account/margin/fill approval.",
+      "MinimumBaseUnits": 20000,
+      "MaximumBaseUnits": 6000000,
+      "BaseUnitIncrement": 0.01,
+      "MarketRuleId": 3188,
+      "PriceBands": [
+        {
+          "LowEdge": 0,
+          "Increment": 0.00005
+        }
+      ]
+    }
+  },
+  "Failure": null,
+  "Scope": "Contract and market-rule observations plus independently reviewed size limits; no order, account, margin, fill or odd-lot execution proof."
+}

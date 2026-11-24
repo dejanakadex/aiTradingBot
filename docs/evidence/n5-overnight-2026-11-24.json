@@ -1,0 +1,779 @@
+{
+  "date": "2026-11-24",
+  "baseCommit": "0be01d497adce6b89d754688b3f3807636428d67",
+  "n5Complete": false,
+  "canSendOrders": false,
+  "scope": "Operational checkpoint using existing N5 tools; no strategy results, training, approvals, runtime change or orders.",
+  "snapshotNight": {
+    "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T14:05:00Z",
+    "toUtc": "2026-11-24T08:00:00Z",
+    "files": 19922,
+    "manifestRows": 1360144,
+    "sourceManifestSha256": "19EBD3AAA6F84E87A1BBAA9049AE0E521E8C9E6F31DBF3EEFD5F7CDD7F77F5CF",
+    "snapshotManifestSha256": "06F83984E54AFE28CA2B77938E7CEE8EE7876B5F15428F05AB927B94339E0965",
+    "canSendOrders": false
+  },
+  "snapshotTrainingStart": {
+    "scope": "Derived immutable quote-file subset; original entry hashes preserved. Audit/replay filter range edges. No broker or database access.",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-24T08:00:00Z",
+    "toUtc": "2026-11-24T08:20:00Z",
+    "files": 428,
+    "manifestRows": 46002,
+    "sourceManifestSha256": "C489823F1AB4BCA028D615B6211CD8C6EB3456388FCE29275A6AD075FD5C1072",
+    "snapshotManifestSha256": "82BE777185E4DDDC8B8B81B7E6209D7556274CAC24F8A16A123E1750872A363D",
+    "canSendOrders": false
+  },
+  "nightReview": {
+    "passed": false,
+    "error": "ModelOps: Incomplete FX quote pairs: 2; first received 2026-11-23T22:42:54.4925111Z, last received 2026-11-24T07:12:39.2444708Z. Preserve the source and review coverage; do not infer missing sides.",
+    "rejectedRecords": [
+      {
+        "EventId": "IBKR:FXQ:7ed4b49e305e4b63890645cfbef4ed4e:1:bid",
+        "DataType": "bid",
+        "EventTimeUtc": "2026-11-23T22:42:40Z",
+        "ReceivedTimeUtc": "2026-11-23T22:42:54.4925111Z",
+        "CanPersist": false,
+        "QualityStatus": "Stale",
+        "QualityReason": "Event is stale at receipt."
+      },
+      {
+        "EventId": "IBKR:FXQ:c1eed082b4d249eb8d74876bc89fe3a7:108679:bid",
+        "DataType": "bid",
+        "EventTimeUtc": "2026-11-24T07:12:23Z",
+        "ReceivedTimeUtc": "2026-11-24T07:12:39.2444708Z",
+        "CanPersist": false,
+        "QualityStatus": "Stale",
+        "QualityReason": "Event is stale at receipt."
+      }
+    ],
+    "explanation": "Raw diagnostic bids were explicitly Stale/CanPersist=false; MarketDataPipeline enqueues the assessment, then TickMarketDataHostedService aborts/reconnects before processing the matching ask. Raw quote snapshot is not a clean execution dataset. No synthetic ask or silent filtering applied."
+  },
+  "trainingReview": {
+    "configSha256": "D0C64959D443FD6D65CBB2FE36578EB701D5976E3F91E86E154CC072BEFA4DAA",
+    "planSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+    "review": {
+      "version": "fx-dataset-review-v1",
+      "canSendOrders": false,
+      "n5Complete": false,
+      "fromUtc": "2026-11-24T08:00:00Z",
+      "toUtc": "2026-11-24T08:20:00Z",
+      "manifestSha256": "82BE777185E4DDDC8B8B81B7E6209D7556274CAC24F8A16A123E1750872A363D",
+      "canonicalSha256": "88217abcf1813b28aba45b58f6c1472d3ed1f58813c2060101d4054d3df2dbe3",
+      "eventCount": 45914,
+      "duplicateEvents": 0,
+      "days": [
+        {
+          "dayUtc": "2026-11-24T00:00:00Z",
+          "pairs": 22957,
+          "stalePairs": 52,
+          "rulesUnavailablePairs": 0,
+          "gapsOverMaximum": 6,
+          "maximumGapSeconds": 6.428528,
+          "spreadSumPips": 3366.3,
+          "maximumSpreadPips": 0.4,
+          "meanSpreadPips": 0.14663501328570805,
+          "spreadBuckets": [
+            22957,
+            0,
+            0,
+            0,
+            0
+          ],
+          "firstQuoteUtc": "2026-11-24T08:00:00.0379587Z",
+          "lastQuoteUtc": "2026-11-24T08:19:59.3818644Z",
+          "observedMinutes": 20,
+          "meanObservedMinuteRangePips": 2.4275
+        }
+      ],
+      "plan": {
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "strategyId": "eurusd-patterns",
+        "reservedUtc": "2026-11-23T14:05:42.7236065Z",
+        "trainingFromUtc": "2026-11-24T08:00:00Z",
+        "validationFromUtc": "2026-11-26T08:00:00Z",
+        "holdoutFromUtc": "2026-11-27T08:00:00Z",
+        "holdoutToUtc": "2026-11-28T08:00:00Z",
+        "boundaryBufferSeconds": 120
+      },
+      "spreadBucketUpperBoundsPips": [
+        0.5,
+        1,
+        2,
+        5,
+        null
+      ],
+      "limitations": [
+        "Integrity and quote quality only; no labels, strategy returns, training or holdout prices read.",
+        "Observed minutes and quote-weighted spread are not continuous session coverage or feature-ready bars.",
+        "Minute high-low is an observed range proxy, not an unbiased volatility estimate.",
+        "Gaps include closed sessions and planned interruptions; they are not automatically broker data loss.",
+        "Rules availability counts check observation/expiry only, not all execution risk or account conditions.",
+        "Review does not certify N5: multiple representative sessions, rules, exclusions and untouched final data still require acceptance.",
+        "Plan label membership must be applied to actual completed labels in subsequent research; other CLI commands do not enforce this reservation."
+      ]
+    }
+  },
+  "trainingAudit": {
+    "verification": {
+      "isValid": true,
+      "fileCount": 428,
+      "rowCount": 46002,
+      "manifestSha256": "82BE777185E4DDDC8B8B81B7E6209D7556274CAC24F8A16A123E1750872A363D",
+      "errors": []
+    },
+    "quoteEvents": 45914,
+    "completePairs": 22957,
+    "incompletePairs": 0,
+    "callbackSessions": 1,
+    "staleEvents": 104,
+    "futureEventsWithinTolerance": 44,
+    "maximumFutureLeadMilliseconds": 33.3718,
+    "intervals": [
+      {
+        "intervalSeconds": 5,
+        "expectedFinalWindows": 239,
+        "windowsWithoutQuotes": 0,
+        "observedWindowsWithoutFinalBar": 1,
+        "missingBarsWithFutureQuotes": 0,
+        "missingBarsWithStaleQuotes": 1,
+        "finalBars": 238,
+        "maximumConsecutiveFeatureBars": 210,
+        "framesWithAtLeast26Bars": 188,
+        "priceFeatureReadyFrames": 188,
+        "longestEmptyRun": 0
+      },
+      {
+        "intervalSeconds": 15,
+        "expectedFinalWindows": 79,
+        "windowsWithoutQuotes": 0,
+        "observedWindowsWithoutFinalBar": 1,
+        "missingBarsWithFutureQuotes": 0,
+        "missingBarsWithStaleQuotes": 1,
+        "finalBars": 78,
+        "maximumConsecutiveFeatureBars": 70,
+        "framesWithAtLeast26Bars": 45,
+        "priceFeatureReadyFrames": 45,
+        "longestEmptyRun": 0
+      }
+    ]
+  },
+  "coverage": {
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T14:05:00Z",
+    "toUtc": "2026-11-24T08:20:00Z",
+    "source": "Read-only TickCoverageGapRecords snapshot; SHA256=00a087b6ed534b7d1120b9720be0ac869ce6849580b7359a3e170606ec652902",
+    "interruptions": [
+      {
+        "startUtc": "2026-11-23T17:50:50.1660257Z",
+        "endUtc": "2026-11-23T17:51:35.2461113Z",
+        "reason": "IBKR connection lost."
+      },
+      {
+        "startUtc": "2026-11-23T17:51:35.2461113Z",
+        "endUtc": "2026-11-23T17:51:50.3044199Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-23T22:41:38.7155883Z",
+        "endUtc": "2026-11-23T22:42:38.8464661Z",
+        "reason": "Tick heartbeat timeout."
+      },
+      {
+        "startUtc": "2026-11-23T22:42:38.8464661Z",
+        "endUtc": "2026-11-23T22:42:53.8761184Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-23T22:42:53.8761184Z",
+        "endUtc": "2026-11-23T22:42:54.5186068Z",
+        "reason": "Tick quality rejected: Stale Event is stale at receipt."
+      },
+      {
+        "startUtc": "2026-11-23T22:42:54.5186068Z",
+        "endUtc": "2026-11-23T22:43:09.5262437Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-23T22:45:00.6213473Z",
+        "endUtc": "2026-11-23T22:45:01.004604Z",
+        "reason": "IBKR exception callback."
+      },
+      {
+        "startUtc": "2026-11-23T22:45:01.004604Z",
+        "endUtc": "2026-11-24T00:03:51.0243428Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-24T05:27:43.8502755Z",
+        "endUtc": "2026-11-24T05:27:48.8607438Z",
+        "reason": "IBKR connection lost."
+      },
+      {
+        "startUtc": "2026-11-24T05:27:48.8607438Z",
+        "endUtc": "2026-11-24T05:33:15.6223422Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      },
+      {
+        "startUtc": "2026-11-24T07:12:23.424108Z",
+        "endUtc": "2026-11-24T07:12:39.2571658Z",
+        "reason": "Tick quality rejected: Stale Event is stale at receipt."
+      },
+      {
+        "startUtc": "2026-11-24T07:12:39.2571658Z",
+        "endUtc": "2026-11-24T07:12:54.2705378Z",
+        "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+      }
+    ]
+  },
+  "latencyNight": {
+    "version": "n3-report-v1",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-23T14:05:00+00:00",
+    "toUtc": "2026-11-24T08:20:00+00:00",
+    "scope": "Offline log report; window quantiles are approximate upper bounds, not global percentiles. Does not approve N3 or trading.",
+    "tickWindows": 1001,
+    "events": 1408570,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 130,
+    "worstWindowPipelineP99UpperMs": 25.1364,
+    "maxPipelineMs": 86.2725,
+    "worstWindowQueueP99UpperMs": 137.8061233982238,
+    "maxQueueMonotonicMs": 759.3467,
+    "maxQualityReadMs": null,
+    "maxQualitySaveMs": 24.587,
+    "storageWindows": 950,
+    "maxFlushMs": 3613.1751,
+    "maxEnqueueToDurableMs": 8859.2087,
+    "storageFailures": 0,
+    "maxProcessCpuPercent": 0.7917743699163793,
+    "maxWorkingSetBytes": 475660288,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": false,
+    "minimum60TickWindowsPresent": true,
+    "processIds": [
+      14584
+    ],
+    "remainingChecks": [
+      "Gap/drop/reconnect evidence from collection status and SQLite",
+      "Explain outliers and compare equivalent market/load sessions",
+      "Source timestamp resolution and Windows clock synchronization",
+      "Feature/signal parity and repeat after restart"
+    ]
+  },
+  "latencyTrainingStart": {
+    "version": "n3-report-v1",
+    "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "fromUtc": "2026-11-24T08:00:00+00:00",
+    "toUtc": "2026-11-24T08:20:00+00:00",
+    "scope": "Offline log report; window quantiles are approximate upper bounds, not global percentiles. Does not approve N3 or trading.",
+    "tickWindows": 20,
+    "events": 45818,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 104,
+    "worstWindowPipelineP99UpperMs": 0.10834705943388395,
+    "maxPipelineMs": 52.5398,
+    "worstWindowQueueP99UpperMs": 53.0242,
+    "maxQueueMonotonicMs": 53.4062,
+    "maxQualityReadMs": null,
+    "maxQualitySaveMs": null,
+    "storageWindows": 19,
+    "maxFlushMs": 1895.0164,
+    "maxEnqueueToDurableMs": 7654.1081,
+    "storageFailures": 0,
+    "maxProcessCpuPercent": 0.6745293905938434,
+    "maxWorkingSetBytes": 451076096,
+    "thresholdsMs": {
+      "worstWindowPipelineP99UpperMs": 50,
+      "maxPipelineMs": 250,
+      "worstWindowQueueP99UpperMs": 100,
+      "maxQueueMonotonicMs": 500,
+      "maxFlushMs": 2000,
+      "maxEnqueueToDurableMs": 7500
+    },
+    "localLatencyThresholdsMet": false,
+    "minimum60TickWindowsPresent": false,
+    "processIds": [
+      14584
+    ],
+    "remainingChecks": [
+      "Gap/drop/reconnect evidence from collection status and SQLite",
+      "Explain outliers and compare equivalent market/load sessions",
+      "Source timestamp resolution and Windows clock synchronization",
+      "Feature/signal parity and repeat after restart"
+    ]
+  },
+  "latencyDetails": {
+    "worstQueueWindows": [
+      {
+        "localTime": "2026-11-23 19:16:02.828",
+        "maxQueueMs": 759.3467,
+        "event": {
+          "EventId": "IBKR:FXQ:c22ff89c51ae4f919345101d299bf3f8:67540:ask",
+          "EventUtc": "2026-11-23T18:15:02Z",
+          "ReceivedUtc": "2026-11-23T18:15:02.2651926Z",
+          "DequeuedUtc": "2026-11-23T18:15:03.0245502Z",
+          "SourceAgeMs": 265.1926,
+          "QueueWallMs": 759.3576,
+          "QueueMonotonicMs": 759.3467,
+          "PipelineMs": 0.0296,
+          "Phases": {
+            "Quality": 0.0124,
+            "QualityGate": 0.0002,
+            "QualityAssess": 0.0085,
+            "DatasetEnqueue": 0.0025,
+            "Aggregates": 0.006
+          }
+        }
+      },
+      {
+        "localTime": "2026-11-24 05:23:37.979",
+        "maxQueueMs": 504.6418,
+        "event": {
+          "EventId": "IBKR:FXQ:11a08c01b2cb4e5492f03b9327c1db8c:260404:ask",
+          "EventUtc": "2026-11-24T04:22:34Z",
+          "ReceivedUtc": "2026-11-24T04:22:34.8086452Z",
+          "DequeuedUtc": "2026-11-24T04:22:35.3133254Z",
+          "SourceAgeMs": 808.6452,
+          "QueueWallMs": 504.6802,
+          "QueueMonotonicMs": 504.6418,
+          "PipelineMs": 0.0577,
+          "Phases": {
+            "Quality": 0.0124,
+            "QualityGate": 0.0008,
+            "QualityAssess": 0.0036,
+            "DatasetEnqueue": 0.0146,
+            "Aggregates": 0.01
+          }
+        }
+      },
+      {
+        "localTime": "2026-11-24 05:50:07.298",
+        "maxQueueMs": 86.5365,
+        "event": {
+          "EventId": "IBKR:FXQ:11a08c01b2cb4e5492f03b9327c1db8c:273223:ask",
+          "EventUtc": "2026-11-24T04:49:50Z",
+          "ReceivedUtc": "2026-11-24T04:49:50.55529Z",
+          "DequeuedUtc": "2026-11-24T04:49:50.6418282Z",
+          "SourceAgeMs": 555.29,
+          "QueueWallMs": 86.5382,
+          "QueueMonotonicMs": 86.5365,
+          "PipelineMs": 0.0189,
+          "Phases": {
+            "Quality": 0.0061,
+            "QualityGate": 0.0001,
+            "QualityAssess": 0.0041,
+            "DatasetEnqueue": 0.0008,
+            "Aggregates": 0.0063
+          }
+        }
+      }
+    ],
+    "staleWindows": [
+      {
+        "localTime": "2026-11-23 23:43:34.567",
+        "eventsOverTwoSeconds": 1,
+        "maxSourceAgeMs": 14492.5111,
+        "oldestEventUtc": "2026-11-23T22:42:40Z",
+        "oldestReceivedUtc": "2026-11-23T22:42:54.4925111Z",
+        "oldestQueueMs": 0.0382
+      },
+      {
+        "localTime": "2026-11-24 01:27:05.434",
+        "eventsOverTwoSeconds": 2,
+        "maxSourceAgeMs": 2446.4045,
+        "oldestEventUtc": "2026-11-24T00:26:29Z",
+        "oldestReceivedUtc": "2026-11-24T00:26:31.4464045Z",
+        "oldestQueueMs": 0.0409
+      },
+      {
+        "localTime": "2026-11-24 03:57:04.219",
+        "eventsOverTwoSeconds": 12,
+        "maxSourceAgeMs": 2013.1736,
+        "oldestEventUtc": "2026-11-24T02:56:52Z",
+        "oldestReceivedUtc": "2026-11-24T02:56:54.0131736Z",
+        "oldestQueueMs": 0.2921
+      },
+      {
+        "localTime": "2026-11-24 06:02:20.343",
+        "eventsOverTwoSeconds": 10,
+        "maxSourceAgeMs": 3803.664,
+        "oldestEventUtc": "2026-11-24T05:01:51Z",
+        "oldestReceivedUtc": "2026-11-24T05:01:54.803664Z",
+        "oldestQueueMs": 0.1757
+      },
+      {
+        "localTime": "2026-11-24 08:13:20.047",
+        "eventsOverTwoSeconds": 1,
+        "maxSourceAgeMs": 16244.4708,
+        "oldestEventUtc": "2026-11-24T07:12:23Z",
+        "oldestReceivedUtc": "2026-11-24T07:12:39.2444708Z",
+        "oldestQueueMs": 0.0379
+      },
+      {
+        "localTime": "2026-11-24 09:17:47.506",
+        "eventsOverTwoSeconds": 104,
+        "maxSourceAgeMs": 4008.8891,
+        "oldestEventUtc": "2026-11-24T08:17:29Z",
+        "oldestReceivedUtc": "2026-11-24T08:17:33.0088891Z",
+        "oldestQueueMs": 0.1213
+      }
+    ],
+    "worstStorageWindows": [
+      {
+        "localTime": "2026-11-24 08:27:24.296",
+        "metrics": {
+          "Version": "collection-timing-v2",
+          "ProcessId": 14584,
+          "ElapsedSeconds": 60.3980066,
+          "WrittenRows": 1643,
+          "Failures": 0,
+          "QueueDepth": 4,
+          "Flush": {
+            "Count": 11,
+            "P50UpperMs": 357.4335935197535,
+            "P95UpperMs": 406.4017,
+            "P99UpperMs": 406.4017,
+            "MaxMs": 406.4017
+          },
+          "EnqueueToDurable": {
+            "Count": 1643,
+            "P50UpperMs": 2909.6077235726098,
+            "P95UpperMs": 8301.450404351708,
+            "P99UpperMs": 8859.2087,
+            "MaxMs": 8859.2087
+          },
+          "Phases": {
+            "DatasetWriteGate": {
+              "Count": 11,
+              "P50UpperMs": 0.0016,
+              "P95UpperMs": 0.0016,
+              "P99UpperMs": 0.0016,
+              "MaxMs": 0.0016
+            },
+            "ManifestRead": {
+              "Count": 11,
+              "P50UpperMs": 94.12343651268613,
+              "P95UpperMs": 153.8756,
+              "P99UpperMs": 153.8756,
+              "MaxMs": 153.8756
+            },
+            "ParquetSerialize": {
+              "Count": 11,
+              "P50UpperMs": 18.621820132595264,
+              "P95UpperMs": 22.5035,
+              "P99UpperMs": 22.5035,
+              "MaxMs": 22.5035
+            },
+            "ManifestWrite": {
+              "Count": 11,
+              "P50UpperMs": 183.41995024303594,
+              "P95UpperMs": 188.947,
+              "P99UpperMs": 188.947,
+              "MaxMs": 188.947
+            }
+          },
+          "SlowestFlush": {
+            "AtUtc": "2026-11-24T07:26:51.9526314Z",
+            "Milliseconds": 406.4017,
+            "Rows": 200,
+            "Failed": false,
+            "Phases": {
+              "DatasetWriteGate": 0.0009,
+              "ManifestRead": 153.8756,
+              "ParquetSerialize": 18.4252,
+              "ManifestWrite": 169.1456
+            }
+          }
+        }
+      },
+      {
+        "localTime": "2026-11-24 08:26:23.897",
+        "metrics": {
+          "Version": "collection-timing-v2",
+          "ProcessId": 14584,
+          "ElapsedSeconds": 62.8147362,
+          "WrittenRows": 2195,
+          "Failures": 0,
+          "QueueDepth": 116,
+          "Flush": {
+            "Count": 11,
+            "P50UpperMs": 393.1769528717289,
+            "P95UpperMs": 3557.5431,
+            "P99UpperMs": 3557.5431,
+            "MaxMs": 3557.5431
+          },
+          "EnqueueToDurable": {
+            "Count": 2195,
+            "P50UpperMs": 3872.687880075144,
+            "P95UpperMs": 7546.773094865188,
+            "P99UpperMs": 8783.0649,
+            "MaxMs": 8783.0649
+          },
+          "Phases": {
+            "DatasetWriteGate": {
+              "Count": 11,
+              "P50UpperMs": 0.0019,
+              "P95UpperMs": 0.0019,
+              "P99UpperMs": 0.0019,
+              "MaxMs": 0.0019
+            },
+            "ManifestRead": {
+              "Count": 11,
+              "P50UpperMs": 113.88935818035024,
+              "P95UpperMs": 157.9137,
+              "P99UpperMs": 157.9137,
+              "MaxMs": 157.9137
+            },
+            "ParquetSerialize": {
+              "Count": 11,
+              "P50UpperMs": 20.48400214585479,
+              "P95UpperMs": 233.441,
+              "P99UpperMs": 233.441,
+              "MaxMs": 233.441
+            },
+            "ManifestWrite": {
+              "Count": 11,
+              "P50UpperMs": 183.41995024303594,
+              "P95UpperMs": 2414.7213,
+              "P99UpperMs": 2414.7213,
+              "MaxMs": 2414.7213
+            }
+          },
+          "SlowestFlush": {
+            "AtUtc": "2026-11-24T07:26:23.8986015Z",
+            "Milliseconds": 3557.5431,
+            "Rows": 324,
+            "Failed": false,
+            "Phases": {
+              "DatasetWriteGate": 0.001,
+              "ManifestRead": 157.9137,
+              "ParquetSerialize": 233.441,
+              "ManifestWrite": 2414.7213
+            }
+          }
+        }
+      },
+      {
+        "localTime": "2026-11-23 17:36:46.626",
+        "metrics": {
+          "Version": "collection-timing-v2",
+          "ProcessId": 14584,
+          "ElapsedSeconds": 61.8016466,
+          "WrittenRows": 3461,
+          "Failures": 0,
+          "QueueDepth": 0,
+          "Flush": {
+            "Count": 11,
+            "P50UpperMs": 151.5867357380462,
+            "P95UpperMs": 3613.1751,
+            "P99UpperMs": 3613.1751,
+            "MaxMs": 3613.1751
+          },
+          "EnqueueToDurable": {
+            "Count": 3461,
+            "P50UpperMs": 3872.687880075144,
+            "P95UpperMs": 7546.773094865188,
+            "P99UpperMs": 8301.450404351708,
+            "MaxMs": 8623.2994
+          },
+          "Phases": {
+            "DatasetWriteGate": {
+              "Count": 11,
+              "P50UpperMs": 0.0017,
+              "P95UpperMs": 0.0017,
+              "P99UpperMs": 0.0017,
+              "MaxMs": 0.0017
+            },
+            "ManifestRead": {
+              "Count": 11,
+              "P50UpperMs": 24.7856425964843,
+              "P95UpperMs": 66.266,
+              "P99UpperMs": 66.266,
+              "MaxMs": 66.266
+            },
+            "ParquetSerialize": {
+              "Count": 11,
+              "P50UpperMs": 10.511531995000599,
+              "P95UpperMs": 15.165500000000002,
+              "P99UpperMs": 15.165500000000002,
+              "MaxMs": 15.165500000000002
+            },
+            "ManifestWrite": {
+              "Count": 11,
+              "P50UpperMs": 64.2875736033646,
+              "P95UpperMs": 3527.9522,
+              "P99UpperMs": 3527.9522,
+              "MaxMs": 3527.9522
+            }
+          },
+          "SlowestFlush": {
+            "AtUtc": "2026-11-23T16:36:09.6139151Z",
+            "Milliseconds": 3613.1751,
+            "Rows": 313,
+            "Failed": false,
+            "Phases": {
+              "DatasetWriteGate": 0.0014,
+              "ManifestRead": 21.0981,
+              "ParquetSerialize": 14.0435,
+              "ManifestWrite": 3527.9522
+            }
+          }
+        }
+      }
+    ]
+  },
+  "connection": {
+    "errorCountsByLogger": {
+      "TradingBot.Infrastructure.Services.IbkrBrokerService": 152
+    },
+    "shutdownLocal": "2026-11-23T23:45:01+01:00",
+    "reconnectedLocal": "2026-11-24T01:03:50+01:00",
+    "observedSocketErrors": [
+      10054,
+      10061
+    ],
+    "userConfirmation": "TWS shut down unexpectedly; user noticed and restarted it.",
+    "autoLogoffHypothesis": "23:45 matches documented default TWS auto logoff; local setting has not been inspected or changed.",
+    "reference": "https://www.interactivebrokers.com/support/faq/content/29091366"
+  },
+  "clock": {
+    "observedLocal": "2026-11-24T09:25:48+01:00",
+    "lastSuccessfulSyncLocal": "2026-11-24T08:50:10+01:00",
+    "leapIndicator": 0,
+    "source": "time.windows.com,0x8",
+    "offsetSeconds": [
+      0.0561163,
+      0.0554625,
+      0.0557448
+    ],
+    "note": "Read-only w32tm status/stripchart; no clock settings changed."
+  },
+  "rulesEvidence": "n5-rules-2026-11-24.json",
+  "reservedPlanSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+  "collector": {
+    "capturedUtc": "2026-11-24T08:37:20.6510789Z",
+    "processId": 14584,
+    "readOnly": true,
+    "tradingDisabled": true,
+    "forexExecutionDisabled": true,
+    "automaticSignalsDisabled": true,
+    "tick": [
+      {
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastEventTimeUtc": "2026-11-24T08:37:20Z",
+        "reconnectCount": 6,
+        "consecutiveFailures": 0
+      }
+    ],
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 2,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 478.7329,
+      "persistedStreamUpdates": 94934,
+      "lastFlushUtc": "2026-11-24T08:37:19.6768854Z",
+      "lastFlushMilliseconds": 10.4532,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 2006.1212,
+      "maximumObservedPendingMilliseconds": 3003.0394
+    }
+  },
+  "operationalCounts": {
+    "Trades": 0,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "validation": {
+    "productionCodeChanged": false,
+    "toolsExecuted": [
+      "read-only IBKR rules probe",
+      "fx-snapshot",
+      "fx-dataset-review",
+      "fx-collection-audit",
+      "analyze-collection-latency.py"
+    ],
+    "previousFullSuitePassed": 816,
+    "previousCi": "https://github.com/dejanakadex/aiTradingBot/actions/runs/45193171467",
+    "newFullLocalSuiteRun": false
+  },
+  "remaining": [
+    "Collect and accept complete representative training/validation/holdout sessions; first 20 minutes are not daily acceptance.",
+    "Check TWS Auto restart setting; it has not been changed by this checkpoint.",
+    "Refresh broker rules before expiry on 2026-11-25T08:25:47.7492947Z; no retrospective changes.",
+    "Prepare explicit quality/quarantine derivation with retained raw evidence and coverage before using a raw dataset containing rejected diagnostic events in strict replay.",
+    "Night queue and dataset durability thresholds exceeded; do not generalize prior N3 acceptance to this night or paper execution."
+  ],
+  "artifacts": [
+    {
+      "localPath": "TestResults/n5-20261124/quotes-night/snapshot-provenance.json",
+      "sha256": "A6359BA0179030D63DDC74F0FC53B8344FDC8CE5B1697483AE39ACE306522BD5"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/quotes-training-start/snapshot-provenance.json",
+      "sha256": "1356C7E1ECBA1860360EA3201DF225CCD031FAC4C78A5A0F625DF4D567CF1BC2"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/coverage.json",
+      "sha256": "53C4DB05ADFD7AF4117B85B6E05B003B0E3FD116C3513950FEB12CBD121166E2"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/recorded-gaps.json",
+      "sha256": "0262C3229A47EA3EBAF24D35B9623141344ACCC3E211178EEA61D10A1F6E3E48"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/operational-counts.json",
+      "sha256": "F242DC3DFC870B31C2DCCB80A99201CE0EA18D32ED777CC9CA8E32520598A3F4"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/research-100.json",
+      "sha256": "D0C64959D443FD6D65CBB2FE36578EB701D5976E3F91E86E154CC072BEFA4DAA"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/review-night.log",
+      "sha256": "43315A25E7C922F4540E8E21E25FC827B2CA041AE13F570051371D4CFD1BF2E1"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/review-training-start.json",
+      "sha256": "595E0CC48AD4054DB69A4AA70BEAE28C71322E43798D45FE7060245CE741574E"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/audit-training-start.json",
+      "sha256": "EBC65E99F6F2943D30F00F45A7714AEBDA201B1B77111074FCAFB2CC25AEFD96"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/latency-night.json",
+      "sha256": "D81AC9C41F8E79DF9631563C45C637D22FF9E4F72BB6E7962A80FC2991DDA43D"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/latency-training-start.json",
+      "sha256": "0CEC33A52BC91861F3B2E53FB197B6BF019B92E0B4B7316DF041EEC530402F81"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/latency-details.json",
+      "sha256": "74FF993EF41E4158EFEA523A7FD139D8FB10ADE8F27F055B04631407BD72BEAA"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/rejected-pairs.json",
+      "sha256": "385D41FC44B9E53EB91F8DA7A1487986812DE854281FCD298456B3A6F20FB071"
+    },
+    {
+      "localPath": "TestResults/n5-20261124/collector.json",
+      "sha256": "BD15826350454440798268AE0ED1BA74F4E33A34A4993EDCF0D3159DC3A577E0"
+    }
+  ]
+}
