@@ -1,0 +1,26 @@
+{
+  "stoppedLocal": "2026-11-25T13:29:11+01:00",
+  "stoppedUtc": "2026-11-25T12:29:11Z",
+  "reason": "User requested shutdown to move computer to another location. Planned pause; do not restart automatically.",
+  "gracefulShutdownConfirmed": true,
+  "datasetQueueDepthAtShutdown": 0,
+  "datasetStorageFailuresInFinalWindow": 0,
+  "sqliteQuickCheck": "Deferred full integrity scan for requested imminent shutdown; graceful flush and backup checked separately.",
+  "operationalCounts": {
+    "Trades": 0,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "manifestSha256": "95FD381BC4B8DF1F95F5ED9A792003FCB89929E284F0629E9392EBF33A553058",
+  "manifestFiles": 68006,
+  "latestFxEventUtc": "2026-11-25T12:29:10Z",
+  "sqliteBackupLocal": "TestResults/pause-20261125/trading-backup.db",
+  "sqliteBackupBytes": 4045361152,
+  "sqliteBackupSha256": "D26FCEED8D081F5C30705EDA78F785B14549112138C4A743F92C84F1D4A5CCA2",
+  "runtimePath": "C:\\PrivateGit\\aiTradingBot\\data\\eurusd-collection",
+  "codeCommit": "89d86e4aad7b68a49443ec770ee2b8f861351708",
+  "n5Complete": false,
+  "canSendOrders": false,
+  "next": "Restart paper TWS and collector only when user is ready; retain this planned interruption in coverage. Reassess the interrupted second training day against the unchanged fixed-window criteria; do not silently move split dates or approve it as a full day."
+}

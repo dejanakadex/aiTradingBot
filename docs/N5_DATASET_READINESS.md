@@ -195,3 +195,9 @@ Odvojeni raspon 09:00–16:35, prije ovog offline rada, ima iste vršne zastoje.
 Kolektor PID 14584 ostaje na postojećem N4 runtimeu; u 17:01 spojen je i prima svježe kotacije, reconnectCount=7, consecutiveFailures=0, failed quality streams=0. Četiri provjerene zabrane naloga ostaju aktivne; baza ima **0 tradeova, 0 naloga, 0 executiona i 0 numeričkih modela**. Promjene ove točke su offline alat i dokumentirani dokazi, bez deploya/restarta kolektora.
 
 Ostaviti paper TWS i kolektor aktivne. Potvrda lokalne postavke Auto restart još je zatražena, nije pretpostavljena ili promijenjena. Sljedeći pregled **25.11. oko 16:30 Zagreb** omogućuje osvježavanje pravila prije isteka i završni pregled drugog trening dana nakon 17:00. Za N5 još trebaju validacija 26.11., rezervirani završni uzorak 27.11., eksplicitna izvršna derivacija te pravilno vezanje labela/podjela prije N6/N7. Jedan prolaz dnevne pokrivenosti nije prihvat cijelog N5, FX-12 ili paper spremnosti.
+
+## Planirana pauza — 25.11.2026.
+
+Na zahtjev korisnika radi promjene lokacije kolektor je **uredno zaustavljen u 13:29 Zagreb**. Završni dataset red je prazan, završni flush nema grešaka, napravljena je lokalna kontrolna kopija baze. Potpuna SQLite integrity analiza odgođena je radi zatraženog brzog gašenja. Izvorni SQLite, Parquet, manifest i logovi ostaju na svojoj lokaciji. [Dokaz zaustavljanja](evidence/n5-planned-pause-2026-11-25.json). Nema naloga niti promjene izvršnih odobrenja.
+
+Ne pokretati kolektor automatski dok korisnik ne potvrdi spremnost nakon preseljenja. Pri nastavku provjeriti sat, paper TWS, brokerska pravila i coverage prekida. Današnji drugi trening prozor je prekinut; nije proglašen punom prihvaćenom sesijom. Ponovno izmjeriti fiksne kriterije i po potrebi unaprijed rezervirati novi budući plan, bez prepisivanja stare rezervacije ili biranja dana prema rezultatima. N5 ostaje otvoren.
