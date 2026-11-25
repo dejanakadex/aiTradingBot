@@ -1,6 +1,6 @@
 # N5 — zamrznuti podaci i unaprijed rezervirane vremenske podjele
 
-23.11.2026. **N5 je u tijeku.** Implementirana je dodatna offline provjera i priprema istraživačkog skupa. Buduće reprezentativne sesije i završni uzorak još ne postoje; prolaz tehničkih testova nije završetak N5. Kolektor ostaje AnalysisOnly/read-only, bez naloga i model approvala. SPY i postojeći FX put ostaju sačuvani.
+25.11.2026. **N5 je u tijeku.** Najnoviji nastavak i otvoreni problemi opisani su na kraju dokumenta. Implementirana je dodatna offline provjera i priprema istraživačkog skupa. Buduće reprezentativne sesije i završni uzorak još ne postoje; prolaz tehničkih testova nije završetak N5. Kolektor ostaje AnalysisOnly/read-only, bez naloga i model approvala. SPY i postojeći FX put ostaju sačuvani.
 
 ## Razvojni podaci i dokazi
 
@@ -201,3 +201,51 @@ Ostaviti paper TWS i kolektor aktivne. Potvrda lokalne postavke Auto restart jo�
 Na zahtjev korisnika radi promjene lokacije kolektor je **uredno zaustavljen u 13:29 Zagreb**. Završni dataset red je prazan, završni flush nema grešaka, napravljena je lokalna kontrolna kopija baze. Potpuna SQLite integrity analiza odgođena je radi zatraženog brzog gašenja. Izvorni SQLite, Parquet, manifest i logovi ostaju na svojoj lokaciji. [Dokaz zaustavljanja](evidence/n5-planned-pause-2026-11-25.json). Nema naloga niti promjene izvršnih odobrenja.
 
 Ne pokretati kolektor automatski dok korisnik ne potvrdi spremnost nakon preseljenja. Pri nastavku provjeriti sat, paper TWS, brokerska pravila i coverage prekida. Današnji drugi trening prozor je prekinut; nije proglašen punom prihvaćenom sesijom. Ponovno izmjeriti fiksne kriterije i po potrebi unaprijed rezervirati novi budući plan, bez prepisivanja stare rezervacije ili biranja dana prema rezultatima. N5 ostaje otvoren.
+
+## Nastavak i izvedeni skup — 25.11.2026.
+
+**N5 ostaje otvoren.** Na zahtjev korisnika nastavljen je rad nakon preseljenja računala. [Strukturirani dokaz](evidence/n5-resume-2026-11-25.json) sadrži hashove lokalnih izvještaja, provjere i preostale uvjete. Kolektor je ponovno pokrenut oko **22:20 Zagreb**, PID 18164, na postojećem commitu `0a38bf4`; nove offline izmjene nisu deployane u aktivni proces. U 22:45 TWS je spojen, kotacije su svježe, reconnectCount=0, consecutiveFailures=0. ReadOnly API, isključeno trgovanje, isključeno FX izvršavanje i isključeni automatski paper signali potvrđeni su na procesu; operativna baza ima 0 tradeova/naloga/executiona/numeričkih modela.
+
+Tri NTP uzorka u 22:19 pokazuju +6,10 do +7,44 ms, Leap Indicator=0; sat nije mijenjan. [Novo stvarno opažanje ugovora i pravila](evidence/n5-rules-2026-11-25.json) nastalo je u **22:22:34 Zagreb**, uz zaseban pregled standardnih veličina. Lokalna konfiguracija zadržava svih šest izvornih opažanja; novo vrijedi najdulje do **26.11. oko 22:22:33 Zagreb**. Ne popunjava prošlost i nije dokaz računa, margine ili filla.
+
+### Eksplicitna derivacija i obvezni prekidi
+
+Dovršen je offline alat:
+
+```powershell
+dotnet TradingBot.ModelOps/bin/Release/net10.0/TradingBot.ModelOps.dll fx-derive --dataset RAW_FROZEN_ABSOLUTE_DIR --derived-dataset NEW_ABSOLUTE_DIR --config RESEARCH_JSON --plan RESERVED_SPLITS_JSON --coverage FROZEN_COVERAGE_JSON --from 2026-11-24T08:00:00Z --to 2026-11-24T16:00:00Z --output NEW_ABSOLUTE_REPORT_JSON
+```
+
+Izvor se ne mijenja. Izlaz je nova nepromjenjiva mapa s Parquetom, kompletnim `exclusions.jsonl`, `coverage.json` i `derivation.json`. Izuzima samo parove s poznatim izričito odbijenim dijagnostičkim zapisima; zdravi nepotpuni par, nepoznata ocjena, konflikt ili duplikat prekidaju derivaciju. Zadržava zdravo označene stale kotacije kako ih isti agregacijski prag naknadno odbija. Ne popravlja cijene, ne dodaje ask/bid ni umjetni fill.
+
+Uz originalne prekide dodaje konzervativni interval neizvjesnosti oko izuzetog zapisa, od ranijeg opažanja/izvornog vremena do sljedećeg potpunog para, odnosno do cutoffa. To nije tvrdnja o brokerskom prekidu. Manifest hashom veže metapodatke dokaza, konfiguraciju/plan, ledger i coverage. Replay i kontinuirani audit automatski preuzimaju vezane prekide; izmijenjen/nestao dokaz ili pokušaj njihove zamjene odbijaju se. Append i običan snapshot izvedenog skupa nisu dopušteni. Ovo je zaštita integriteta lokalnog artefakta, ne kriptografski potpis izdavatelja ni dovršeno vezanje stvarnih ML labela uz podjele.
+
+Raspon derivacije ograničen je na sedam dana, najviše 10.000 izuzetih parova i 10.000 ulaznih intervala. Memorija koristi blokove i ograničen popis izuzeća. Izlaz se objavljuje tek nakon provjere nepromijenjenog izvora i točnog zadržanog sadržaja; neuspjela `.incomplete-*` mapa ostaje za dijagnostiku. Nema prepisivanja postojećeg izlaza.
+
+Stvarni zamrznuti dan **24.11. 09–17 Zagreb** daje **1.025.267 → 1.025.266 događaja**, uz jedan izuzeti izričito odbijeni Stale bid. Strogi ulaz je provjeren. Naknadni kontinuirani audit pokrenut je **bez `--coverage`**, provjeravajući automatsko vezanje. Hash značajki ostaje `411CC96279E4D1080987659CD2CFE1818A297640A4F01071A700DB3A119F1A7F`; 5s ostaje 5.745/5.759 finalnih barova i 5.520 zagrijanih frameova, 15s 1.914/1.919 i 1.789, opaženih minuta 480. Pojedini dijagnostički brojači praznih/stale prozora razlikuju se zbog eksplicitnog izuzeća; ne tvrdi se jednakost cijelog izvještaja.
+
+**842/842 Release testa**, bez preskočenih, te obvezni IBKR DLL/publish/missing-and-changed-DLL guardovi prolaze. Pokriveni su ledger, konzervativni/trailing prekidi, neispravan ulaz, očuvanje stale parova, nepromjenjivost izvora/izlaza, batch paritet, izmjena dokaza/coveragea/ledgera, replay automatsko vezanje i CLI holdout zaštita. Ovo je implementacija i lokalna provjera, ne stvarni paper order test.
+
+### Zašto 25.11. nije prihvaćen
+
+Dnevni snapshot ima **2.373 datoteke / 257.425 manifest redaka**. Coverage bilježi 241 fazu: 120 heartbeat timeout faza i 121 fazu nepoznate pokrivenosti. Unija pokriva **21.616,60 od 28.800 sekundi** fiksnog prozora, uključujući planiranu pauzu od 13:29. Broj faza nije broj zasebnih brokerskih prekida. Problemi su počeli prije preseljenja; nije opravdano sve pripisati planiranom gašenju ili Auto logoutu.
+
+Strogi audit odbija par `IBKR:FXQ:1ab90870133843f1826a0fcbc4ad9449:12412`: postoji samo ask, primljen **09:46:14.814 Zagreb**, označen Healthy. Ne postoji dovršen pozitivan bar audit za taj dan. Adapter trenutačno filtrira neispravnu cijenu svake strane zasebno; obrazac identifikatora u okolini odgovara mogućem preskakanju jedne strane. Bez izvornog callback zapisa uzrok nije potvrđen. Nedostajući bid nije izmišljen niti je Healthy orphan prešutno uklonjen.
+
+Dodatni pregled našao je da **svih 257.425 događaja dnevnog snapshot-a 25.11. ima cijenu 0,00001–0,00120**. Taj skup nije prihvatljiv kao tržišni EUR/USD istraživački uzorak bez razjašnjenja izvora. Na odabranoj datoteci kanonski hash spremljen prije Parquet serijalizacije potpuno odgovara pročitanim redcima; četiri kontrolne cijene također prolaze numerički roundtrip. To opovrgava promjenu cijene tijekom spremanja u toj datoteci, ali ne dokazuje podrijetlo svih callbackova niti ispravnost SDK-a/brokerskog feeda. Potrebno je usporediti izvorne callbackove i TWS prikaz pri ponavljanju anomalije, uz eksplicitnu kontrolu cijelog para i zabilježenu neizvjesnost.
+
+Kontrolni 24.11. ima cijene **1,09047–1,09804**, a aktualni memorijski quote u 22:49 je **1,09752 / 1,09754**. Pregled cijena filtrira izvorno event vrijeme, pa 24.11. broji 1.025.301 događaj, uključujući primitke neposredno nakon cutoffa; as-of audit pravilno broji 1.025.267. Ti brojevi nisu kontradikcija. Normalan raspon nije nezavisna potvrda točnosti tržišne cijene.
+
+### Novi budući krug i operativni nastavak
+
+[Rezervacija v2](evidence/n5-reserved-splits-v2-2026-11-25.json) nastala je **25.11. u 22:27 Zagreb**, prije novih sesija. Stari plan ostaje nepromijenjen; stari završni uzorak još nije bio nastao niti je analiziran. Razlog novog kruga je neuspjela pokrivenost trening dana, ne strateški rezultat. Nova konfiguracija ima TrainingWindowDays=4 radi vikenda, uz nepromijenjene minimume 100/30/50 i buffer 120 s; konfiguracija/plan prošli su postojeću validaciju.
+
+| Namjena | Fiksne dnevne sesije 09–17 Zagreb | Puni interval Zagreb |
+| --- | --- | --- |
+| Trening | 26. i 27.11. | 26.11. 09:00 → 30.11. 09:00 |
+| Validacija | 30.11. | 30.11. 09:00 → 1.12. 09:00 |
+| Završni holdout | 1.12. | 1.12. 09:00 → 2.12. 09:00 |
+
+To je uvjetna rezervacija, ne obećanje završetka N5. U svakom dnevnom prozoru i dalje trebaju ≥360 opaženih minuta i ≥95% zdravih finalnih 5s prozora, pouzdane cijene/parovi te dostupna pravila. Novi podaci bez rješenja anomalija nisu automatski prihvaćeni. Prije N6/N7 ostaje povezati stvarne label intervale i replay/evaluation s planom. N3 repovi punog manifesta ostaju otvoreni; ova promjena nije optimizacija trajnog spremanja.
+
+Korisnik je potvrdio **Auto logout uključen, Auto restart isključen**. Zatražena je zamjena s Auto restart u TWS → Global Configuration → Lock and Exit, izvan dnevne sesije; promjena još nije potvrđena. [IBKR opis](https://www.interactivebrokers.com/support/faq/content/29091366). Kolektor ne može obnoviti zatvoren/odjavljen TWS bez prijave. Sljedeći dnevni pregled ima smisla 26.11. oko 16:30 radi provjere novih cijena i osvježenja pravila, pa nakon 17:00 za prihvat cijelog dana. Nema naloga, nove evaluacije ishoda ili model approvala.

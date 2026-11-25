@@ -77,6 +77,12 @@ namespace TradingBot.Application.DTOs
         public string SchemaVersion { get; set; } = string.Empty;
         public DateTime UpdatedAtUtc { get; set; }
         public List<DatasetFileManifestEntry> Files { get; set; } = new();
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? ForexDerivationVersion { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? RequiredForexCoverageSha256 { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? ForexDerivationProofSha256 { get; set; }
     }
 
     public sealed record DatasetQuery(

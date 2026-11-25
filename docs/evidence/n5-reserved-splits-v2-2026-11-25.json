@@ -1,0 +1,10 @@
+{
+  "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+  "strategyId": "eurusd-patterns",
+  "reservedUtc": "2026-11-25T21:27:10.174222Z",
+  "trainingFromUtc": "2026-11-26T08:00:00Z",
+  "validationFromUtc": "2026-11-30T08:00:00Z",
+  "holdoutFromUtc": "2026-12-01T08:00:00Z",
+  "holdoutToUtc": "2026-12-02T08:00:00Z",
+  "boundaryBufferSeconds": 120
+}

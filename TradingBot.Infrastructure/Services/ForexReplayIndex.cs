@@ -162,7 +162,12 @@ internal sealed class ForexReplayIndex : IDisposable
             }
             else
             {
-                var quote = ForexTradeSimulator.ReadQuotes(rows, instrumentId, symbol, aggregates).Single();
+                ForexReplayQuote quote;
+                try { quote = ForexTradeSimulator.ReadQuotes(rows, instrumentId, symbol, aggregates).Single(); }
+                catch (InvalidDataException error)
+                {
+                    throw new InvalidDataException($"{error.Message} Audit pair {rows[0].EventId[..^4]}, sides={rows.Length}, received={rows[0].ReceivedTimeUtc:O}.", error);
+                }
                 if (previous.HasValue && quote.EventUtc < previous) throw new InvalidDataException("Out-of-order healthy audit quote times.");
                 previous = quote.EventUtc;
             }

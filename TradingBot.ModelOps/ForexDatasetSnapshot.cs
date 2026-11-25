@@ -20,6 +20,8 @@ internal static class ForexDatasetSnapshot
         if (!sourceHash.Equals((await File.ReadAllTextAsync(Path.Combine(source, "_manifest.sha256"))).Trim(), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Source manifest changed during capture or is corrupt. Retry with a new destination.");
         var manifest = JsonSerializer.Deserialize<DatasetManifest>(raw, Json) ?? throw new InvalidDataException("Missing manifest.");
+        if (manifest.ForexDerivationVersion != null || manifest.RequiredForexCoverageSha256 != null || manifest.ForexDerivationProofSha256 != null)
+            throw new InvalidDataException("Snapshot the raw source; derived FX datasets must retain their bound coverage and derivation evidence.");
         var files = manifest.Files.Where(x => x.InstrumentId == instrumentId && x.DataType is "bid" or "ask"
             && x.MaximumEventTimeUtc >= from && x.MinimumEventTimeUtc < to).ToList();
         if (files.Count == 0) throw new InvalidDataException("Snapshot needs a nonempty quote range.");

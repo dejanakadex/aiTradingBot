@@ -56,6 +56,8 @@ namespace TradingBot.Infrastructure.Services
                 DatasetManifest manifest;
                 using (CollectionTiming.Measure(CollectionPhase.ManifestRead))
                     manifest = await LoadManifestCoreAsync(cancellationToken).ConfigureAwait(false);
+                if (manifest.ForexDerivationVersion != null || manifest.RequiredForexCoverageSha256 != null || manifest.ForexDerivationProofSha256 != null)
+                    throw new InvalidOperationException("A derived FX dataset is immutable; create a new derivation instead of appending.");
                 if (manifest.Files.Count > 0
                     && !manifest.SchemaVersion.Equals(_settings.SchemaVersion, StringComparison.Ordinal))
                 {
@@ -169,6 +171,9 @@ namespace TradingBot.Infrastructure.Services
                 _gate.Release();
             }
         }
+
+        public Task<ForexReplayCoverageEvidence?> GetBoundForexCoverageAsync(CancellationToken cancellationToken = default)
+            => ForexDatasetDerivation.ReadBoundCoverageAsync(_rootPath, cancellationToken);
 
         public async Task<DatasetManifest> GetManifestAsync(CancellationToken cancellationToken = default)
         {

@@ -22,6 +22,14 @@ public static class ForexCollectionStreamAudit
         var instrument = trading.GetConfiguredInstruments().Single(x => x.InstrumentId == instrumentId);
         if (instrument.InstrumentType != InstrumentType.Forex) throw new ArgumentException("FX instrument required.");
         coverage = ForexReplayCoveragePolicy.FreezeEvidence(coverage, instrumentId, from, to);
+        var boundCoverage = await source.GetBoundForexCoverageAsync(token);
+        if (boundCoverage != null)
+        {
+            boundCoverage = ForexReplayCoveragePolicy.FreezeEvidence(boundCoverage, instrumentId, from, to);
+            if (coverage != null && JsonSerializer.Serialize(coverage) != JsonSerializer.Serialize(boundCoverage))
+                throw new InvalidDataException("Derived FX audit requires its bound coverage; overrides cannot discard gaps.");
+            coverage = boundCoverage;
+        }
         if (coverage?.Interruptions.Length > 10000) throw new ArgumentException("Too many coverage intervals.");
         var verification = await source.VerifyAsync(token);
         if (!verification.IsValid) throw new InvalidDataException("Frozen dataset integrity failed.");

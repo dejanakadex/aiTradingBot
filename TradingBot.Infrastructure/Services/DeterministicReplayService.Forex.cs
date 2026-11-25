@@ -26,6 +26,15 @@ public sealed partial class DeterministicReplayService
         if (request.ForexBatchSize is < 1 or > 16384) throw new ArgumentException("FX processing batch size must be between 1 and 16,384.");
         request = request with { FromUtc = from, ToUtc = to };
         var coverageEvidence = ForexReplayCoveragePolicy.FreezeEvidence(request.ForexCoverage, request.InstrumentId, from, to);
+        var boundCoverage = await _datasetStore.GetBoundForexCoverageAsync(cancellationToken);
+        if (boundCoverage != null)
+        {
+            boundCoverage = ForexReplayCoveragePolicy.FreezeEvidence(boundCoverage, request.InstrumentId, from, to);
+            if (coverageEvidence != null && JsonSerializer.Serialize(coverageEvidence) != JsonSerializer.Serialize(boundCoverage))
+                throw new InvalidDataException("Derived FX dataset requires its bound coverage; an override cannot discard or replace gaps.");
+            coverageEvidence = boundCoverage;
+            request = request with { ForexCoverage = boundCoverage };
+        }
         var contract = _forexContract.Get(request.InstrumentId, request.StrategyId);
         var p = contract.Profile;
         var instrument = _tradingSettings.GetConfiguredInstruments().Single(x => x.InstrumentId == p.InstrumentId);

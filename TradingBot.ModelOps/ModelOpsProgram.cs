@@ -30,7 +30,7 @@ internal static class ModelOpsProgram
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
             if (command == "fx-collection-audit") return await AuditForexCollectionAsync(options);
-            if (command is "fx-dataset-review" or "fx-collection-stream-audit")
+            if (command is "fx-dataset-review" or "fx-collection-stream-audit" or "fx-derive")
             {
                 var output = Required(options, "output");
                 var dataset = Required(options, "dataset");
@@ -57,7 +57,14 @@ internal static class ModelOpsProgram
                 if (to > plan.HoldoutFromUtc || (await store.GetManifestAsync()).Files.Any(x => x.InstrumentId == plan.InstrumentId
                     && x.DataType is "bid" or "ask" && x.MaximumEventTimeUtc >= plan.HoldoutFromUtc))
                     throw new InvalidDataException("Review snapshot/range must exclude reserved holdout.");
-                var review = command == "fx-dataset-review"
+                object review = command == "fx-derive"
+                    ? await ForexDatasetDerivation.DeriveAsync(dataset, Required(options, "derived-dataset"),
+                        config.GetSection("TradingSettings").Get<TradingSettings>()!, reviewAggregates, plan.InstrumentId, from, to,
+                        await ReadForexCoverageAsync(options) ?? throw new ArgumentException("Derivation requires explicit --coverage evidence."),
+                        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(configRaw)),
+                        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(planRaw)),
+                        int.Parse(Optional(options, "batch-size") ?? "4096", CultureInfo.InvariantCulture))
+                    : command == "fx-dataset-review"
                     ? await ForexDatasetReview.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
                         reviewAggregates, profile, costs, plan, reviewEvaluation, from, to)
                     : await ForexCollectionStreamAudit.AnalyzeAsync(store, config.GetSection("TradingSettings").Get<TradingSettings>()!,
@@ -294,6 +301,8 @@ internal static class ModelOpsProgram
         aggregates.IntervalsSeconds = config.GetSection("ShortAggregates:IntervalsSeconds").Get<int[]>() ?? aggregates.IntervalsSeconds;
         var store = new ParquetMarketDatasetStore(Options.Create(new DatasetStorageSettings { RootPath = dataset }),
             new SystemClock(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ParquetMarketDatasetStore>.Instance);
+        if (await store.GetBoundForexCoverageAsync() != null)
+            throw new InvalidDataException("Use fx-collection-stream-audit for a derived dataset; its bound coverage must be applied.");
         var verified = await store.VerifyAsync();
         if (!verified.IsValid) throw new InvalidDataException("Dataset integrity verification failed.");
         var manifest = await store.GetManifestAsync();
@@ -365,6 +374,7 @@ internal static class ModelOpsProgram
         fx-snapshot --dataset ABSOLUTE_DIR --output-dir NEW_ABSOLUTE_DIR --instrument-id ID --from UTC --to UTC
         fx-dataset-review --dataset FROZEN_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON
         fx-collection-stream-audit --dataset FROZEN_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON [--coverage JSON] [--batch-size 4096]
+        fx-derive --dataset RAW_FROZEN_DIR --derived-dataset NEW_ABSOLUTE_DIR --config JSON --plan RESERVED_SPLITS_JSON --coverage JSON --from UTC --to UTC --output NEW_ABSOLUTE_JSON [--batch-size 4096]
         fx-contract --instrument-id ID --strategy-id ID
         fx-paper-preflight --config JSON_PATH --instrument-id ID --strategy-id ID [--output NEW_ABSOLUTE_REPORT_PATH]
         fx-collection-audit --config ABSOLUTE_JSON_PATH --dataset ABSOLUTE_PARQUET_DIRECTORY --instrument-id ID --from UTC --to UTC [--output NEW_ABSOLUTE_REPORT_PATH]

@@ -84,6 +84,7 @@ public sealed class ForexDatasetReviewTests
     [Theory]
     [InlineData("fx-dataset-review")]
     [InlineData("fx-collection-stream-audit")]
+    [InlineData("fx-derive")]
     public async Task CliWritesBoundReportWithoutOperationalDatabaseAndRefusesOverwrite(string command)
     {
         using var f = new ForexResearchFixture();
@@ -98,6 +99,13 @@ public sealed class ForexDatasetReviewTests
         }));
         string[] args = [command, "--dataset", f.DatasetPath, "--config", f.ConfigPath, "--plan", planPath,
             "--from", Start.ToString("O"), "--to", Start.AddMinutes(4).ToString("O"), "--output", output];
+        if (command == "fx-derive")
+        {
+            var coverage = Path.Combine(directory, "coverage.json");
+            await File.WriteAllTextAsync(coverage, JsonSerializer.Serialize(new TradingBot.Application.DTOs.ForexReplayCoverageEvidence(
+                "EURUSD", Start, Start.AddMinutes(4), "Frozen test coverage", [])));
+            args = [.. args[..^2], "--coverage", coverage, "--derived-dataset", Path.Combine(directory, "derived"), "--output", output];
+        }
         Assert.Equal(0, await ModelOpsProgram.RunAsync(args));
         var original = await File.ReadAllTextAsync(output);
         Assert.Contains("planSha256", original);

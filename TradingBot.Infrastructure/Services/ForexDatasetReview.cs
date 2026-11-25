@@ -75,6 +75,7 @@ public static class ForexDatasetReview
         if (costs.PipSize <= 0 || costs.InstrumentId != profile.InstrumentId || costs.StrategyId != profile.StrategyId)
             throw new ArgumentException("Matching FX cost profile required.");
         var instrument = trading.GetConfiguredInstruments().Single(x => x.InstrumentId == profile.InstrumentId);
+        _ = ForexReplayCoveragePolicy.FreezeEvidence(await source.GetBoundForexCoverageAsync(token), profile.InstrumentId, from, to);
         var manifest = await source.GetManifestAsync(token);
         if (manifest.Files.Any(x => x.InstrumentId == profile.InstrumentId && x.DataType is "bid" or "ask"
             && x.MaximumEventTimeUtc >= plan.HoldoutFromUtc))

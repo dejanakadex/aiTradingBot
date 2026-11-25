@@ -1,0 +1,322 @@
+{
+  "scope": "N5 resume and immutable diagnostic derivation; no orders, model approval, strategy outcomes or N5 completion",
+  "date": "2026-11-25",
+  "sourceAndRuntimeCommit": "0a38bf43339d3d1ddfe3757e9f6b5b938739c495",
+  "n5Complete": false,
+  "canSendOrders": false,
+  "collectorAtObservation": {
+    "quality": {
+      "checkpointsEnabled": true,
+      "cachedStreams": 2,
+      "pendingStreams": 0,
+      "failedStreams": 0,
+      "oldestPendingMilliseconds": 0,
+      "persistedStreamUpdates": 1289,
+      "lastFlushUtc": "2026-11-25T21:45:11.8673733Z",
+      "lastFlushMilliseconds": 48.4069,
+      "acceptingEvents": true,
+      "maximumFlushMilliseconds": 2010.9237,
+      "maximumObservedPendingMilliseconds": 2170.1745
+    },
+    "tick": [
+      {
+        "brokerConnected": true,
+        "subscribed": true,
+        "lastEventTimeUtc": "2026-11-25T21:45:10Z",
+        "reconnectCount": 0,
+        "consecutiveFailures": 0
+      }
+    ],
+    "automaticSignalsDisabled": true,
+    "capturedUtc": "2026-11-25T21:45:14.6829762Z",
+    "readOnly": true,
+    "forexExecutionDisabled": true,
+    "processId": 18164,
+    "tradingDisabled": true
+  },
+  "operationalCounts": {
+    "Trades": 0,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "derivation": {
+    "configSha256": "2909E84FD172F7FD5934BF2897CE00C02133E8F05F6D6F79F2CAF8139A0886BE",
+    "planSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+    "review": {
+      "version": "fx-derivation-v1",
+      "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+      "fromUtc": "2026-11-24T08:00:00Z",
+      "toUtc": "2026-11-24T16:00:00Z",
+      "configSha256": "2909E84FD172F7FD5934BF2897CE00C02133E8F05F6D6F79F2CAF8139A0886BE",
+      "planSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+      "sourceManifestSha256": "6B6D5BD7A258F89702CC80B1352FDBE1F1420A17CCB121CC793488499B826147",
+      "sourceCanonicalSha256": "9453a59ac9421de3bc7c331ebe9d533f92aa368dd0a3bcbc88dd73c188a0bc97",
+      "outputManifestSha256": "CB22602F1C679EC0B0D288C396DF27D1154606F57B85A2609444FDFE9309624E",
+      "retainedCanonicalSha256": "493EF8DF26F9BD1C1FC8BA708D7C9E0706A8A1EAD501DD775CAECCA1DFF2CB31",
+      "ledgerSha256": "2FD5D0751A288BEE0E38AD81221701C7344AB4FB388F501EEA637D55DFB4EEF3",
+      "coverageSha256": "972FD579B4567A238FC89AAB68D26D434622FBD43CCF026AE5B02E3FA926C0FA",
+      "sourceEvents": 1025267,
+      "retainedEvents": 1025266,
+      "excludedEvents": 1,
+      "excludedPairs": 1,
+      "originalCoverage": {
+        "instrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+        "fromUtc": "2026-11-24T08:00:00Z",
+        "toUtc": "2026-11-24T16:00:00Z",
+        "source": "Read-only TickCoverageGapRecords snapshot; raw SHA256=f48b7b5c3b271a1c4e0da25bd70531c0effd82f5ddb4f0cdab268a1951f2eea1; intervals clipped to session; open interval conservatively ends at cutoff",
+        "interruptions": [
+          {
+            "startUtc": "2026-11-24T10:17:35.0286904Z",
+            "endUtc": "2026-11-24T10:17:53.1648174Z",
+            "reason": "Tick quality rejected: Stale Event is stale at receipt."
+          },
+          {
+            "startUtc": "2026-11-24T10:17:53.1648174Z",
+            "endUtc": "2026-11-24T10:18:08.170604Z",
+            "reason": "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks."
+          }
+        ]
+      },
+      "strictReplayInputVerified": true,
+      "n5Complete": false,
+      "canSendOrders": false
+    }
+  },
+  "parity": {
+    "rawFeatureSha256": "411CC96279E4D1080987659CD2CFE1818A297640A4F01071A700DB3A119F1A7F",
+    "derivedFeatureSha256": "411CC96279E4D1080987659CD2CFE1818A297640A4F01071A700DB3A119F1A7F",
+    "featureHashesEqual": true,
+    "usableQuoteMinutes": 480,
+    "intervals": [
+      {
+        "intervalSeconds": 5,
+        "finalBars": 5745,
+        "expectedFinalWindows": 5759,
+        "priceFeatureReadyFrames": 5520,
+        "changedFields": {
+          "windowsWithoutQuotes": {
+            "raw": 9,
+            "derived": 10
+          },
+          "observedWindowsWithoutFinalBar": {
+            "raw": 5,
+            "derived": 4
+          },
+          "missingBarsWithStaleQuotes": {
+            "raw": 4,
+            "derived": 3
+          },
+          "longestEmptyRun": {
+            "raw": 5,
+            "derived": 6
+          }
+        }
+      },
+      {
+        "intervalSeconds": 15,
+        "finalBars": 1914,
+        "expectedFinalWindows": 1919,
+        "priceFeatureReadyFrames": 1789,
+        "changedFields": {
+          "missingBarsWithStaleQuotes": {
+            "raw": 4,
+            "derived": 3
+          }
+        }
+      }
+    ]
+  },
+  "interruptedDay": {
+    "recordedPhases": 241,
+    "reasons": {
+      "Tick heartbeat timeout.": 120,
+      "Tick coverage unknown during process or broker interruption; minute bars do not repair ticks.": 121
+    },
+    "mergedUtcIntervals": [
+      [
+        "2026-11-25T08:00:00Z",
+        "2026-11-25T08:31:45.737783Z"
+      ],
+      [
+        "2026-11-25T08:31:47.121855Z",
+        "2026-11-25T08:41:48.094810Z"
+      ],
+      [
+        "2026-11-25T08:46:34.765575Z",
+        "2026-11-25T08:49:05.012683Z"
+      ],
+      [
+        "2026-11-25T09:02:50.374404Z",
+        "2026-11-25T09:04:05.490867Z"
+      ],
+      [
+        "2026-11-25T09:08:39.342409Z",
+        "2026-11-25T09:09:54.454589Z"
+      ],
+      [
+        "2026-11-25T09:12:21.149535Z",
+        "2026-11-25T09:13:36.257120Z"
+      ],
+      [
+        "2026-11-25T09:20:40.788918Z",
+        "2026-11-25T10:04:30.232728Z"
+      ],
+      [
+        "2026-11-25T10:57:17.339239Z",
+        "2026-11-25T11:11:03.830068Z"
+      ],
+      [
+        "2026-11-25T11:21:54.556224Z",
+        "2026-11-25T11:50:42.484538Z"
+      ],
+      [
+        "2026-11-25T11:51:20.376937Z",
+        "2026-11-25T12:06:21.948828Z"
+      ],
+      [
+        "2026-11-25T12:29:11.131882Z",
+        "2026-11-25T16:00:00Z"
+      ]
+    ],
+    "recordedUnknownSeconds": 21616.597036,
+    "fixedWindowSeconds": 28800,
+    "dayAccepted": false,
+    "auditFailed": true,
+    "auditError": "ModelOps: Incomplete, mismatched or crossed FX quote pair. Audit pair IBKR:FXQ:1ab90870133843f1826a0fcbc4ad9449:12412, sides=1, received=2026-11-25T08:46:14.8140318Z.",
+    "note": "Coverage union and confirmed planned pause; not a completed bar audit. At least one healthy orphan remains unresolved. No source rows were patched or silently excluded."
+  },
+  "priceInspection": {
+    "filter": "EventTimeUtc within fixed 08:00-16:00 UTC window; includes events received just after cutoff, unlike as-of stream audit",
+    "days": [
+      {
+        "name": "day24",
+        "count": 1025301,
+        "belowHalf": 0,
+        "min": 1.09047,
+        "max": 1.09804,
+        "originalCanonical": "C6BEC42E008B77E268200FBD63C7D61D67A980DC3786F3A9E3840BA222BC5F0E",
+        "readCanonical": "C6BEC42E008B77E268200FBD63C7D61D67A980DC3786F3A9E3840BA222BC5F0E"
+      },
+      {
+        "name": "day25",
+        "count": 257425,
+        "belowHalf": 257425,
+        "min": 1e-05,
+        "max": 0.0012,
+        "originalCanonical": "0EBB3449040E0C0B8F26E75A74273CA8DD28068F5AC656FDC6571EF44E51BEBC",
+        "readCanonical": "0EBB3449040E0C0B8F26E75A74273CA8DD28068F5AC656FDC6571EF44E51BEBC"
+      }
+    ],
+    "roundTrip": {
+      "roundtripInput": [
+        1.09752,
+        1.09754,
+        1e-05,
+        0.0001
+      ],
+      "roundtripOutput": [
+        1.09752,
+        1.09754,
+        1e-05,
+        0.0001
+      ]
+    },
+    "interpretation": "Selected file canonical hashes match pre-serialization metadata on both days. No numeric loss in four-price roundtrip. Does not establish broker origin or SDK correctness for all rows. Day25 not accepted; no source rows modified."
+  },
+  "twsSettings": {
+    "userConfirmedAutoLogout": true,
+    "userConfirmedAutoRestart": false,
+    "switchToAutoRestartRequested": true,
+    "changeConfirmed": false
+  },
+  "clock": {
+    "observedLocal": "2026-11-25 22:19 Europe/Zagreb",
+    "ntpOffsetMilliseconds": [
+      6.0983,
+      7.4414,
+      7.3175
+    ],
+    "leapIndicator": 0,
+    "settingsChanged": false
+  },
+  "tests": {
+    "passed": 842,
+    "failed": 0,
+    "skipped": 0,
+    "ibkrPublishAndGuardsPassed": true,
+    "newRuntimeDeployed": false
+  },
+  "plans": {
+    "oldSha256": "5A4CEFD00727F102DCF9EC2D8014A2089B714C2CC8FAC5F3DA1B4DCB9D1CCEA9",
+    "newSha256": "C9F25272147AA0CCD24D80B3AD484D7D3DEA426AFB6233519149B19C3D738EFB",
+    "newConfigValidated": true,
+    "trainingWindowDays": 4,
+    "daytimeDates": [
+      "2026-11-26",
+      "2026-11-27",
+      "2026-11-30",
+      "2026-12-01"
+    ],
+    "minimumsUnchanged": true,
+    "acceptanceConditional": true,
+    "holdoutOutcomesNotInspected": true
+  },
+  "artifacts": {
+    "derivation-training-final.json": {
+      "localPath": "TestResults/n5-resume-20261125/derivation-training-final.json",
+      "sha256": "40C3FDDA989F6A15121F6CABDE327E4496E755772BE09A30E5FE073E739EC4A3"
+    },
+    "audit-derived-training.json": {
+      "localPath": "TestResults/n5-resume-20261125/audit-derived-training.json",
+      "sha256": "BA2EDF2D34E663C5E61521502B70E0AEDBFC52961413AE045A475CFB6AE09303"
+    },
+    "derivation-parity.json": {
+      "localPath": "TestResults/n5-resume-20261125/derivation-parity.json",
+      "sha256": "0F765C213FE37BE33F5E2EF321D5B02916BAF2D67BC8000B77B34F01BFBC08C1"
+    },
+    "price-investigation.json": {
+      "localPath": "TestResults/n5-resume-20261125/price-investigation.json",
+      "sha256": "872E29D16ED28B5E1945D229966D24C739AB2A4354EEFD2C88269D438ED76506"
+    },
+    "interrupted-day-summary.json": {
+      "localPath": "TestResults/n5-resume-20261125/interrupted-day-summary.json",
+      "sha256": "97D46F41AAC3112C92F98B82A06C55AA91433B7C6E29014CE4BF9B95B1FA7EEE"
+    },
+    "coverage-interrupted-day.json": {
+      "localPath": "TestResults/n5-resume-20261125/coverage-interrupted-day.json",
+      "sha256": "8FA861175AB7E67CF628C3E2B72B764F84003B4CACFE295F68C1EC9FE731F6AD"
+    },
+    "healthy-orphan.json": {
+      "localPath": "TestResults/n5-resume-20261125/healthy-orphan.json",
+      "sha256": "0E7900AE4A7FBCDC4B1893FBD92AB21A6426079D3B8867DE81FD37B1315CA02A"
+    },
+    "full-final.trx": {
+      "localPath": "TestResults/n5-resume-20261125/full-final.trx",
+      "sha256": "BC524A0C2365068D0EA3D5C1509CAB372090496D247697EFBCB86DFEB2E5865F"
+    },
+    "ibkr-guard-final.log": {
+      "localPath": "TestResults/n5-resume-20261125/ibkr-guard-final.log",
+      "sha256": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E"
+    },
+    "plan-validation.log": {
+      "localPath": "TestResults/n5-resume-20261125/plan-validation.log",
+      "sha256": "C73BB4F33D34849E5136EC3D9759EFE070FDC41991A27E3B2843DF5161245F8A"
+    },
+    "research-100.json": {
+      "localPath": "TestResults/n5-resume-20261125/research-100.json",
+      "sha256": "2909E84FD172F7FD5934BF2897CE00C02133E8F05F6D6F79F2CAF8139A0886BE"
+    },
+    "research-next-round-100.json": {
+      "localPath": "TestResults/n5-resume-20261125/research-next-round-100.json",
+      "sha256": "6217EBBCCFEC7DD123685307C93E968BC54B65E5D93B83D5E545E50FF088E05E"
+    }
+  },
+  "remaining": [
+    "Identify source of day25 near-zero input prices and incomplete Healthy pairs; exclude that day from accepted research data.",
+    "Collect and accept future fixed sessions with contemporaneous rules; do not lower quality or sample thresholds.",
+    "Bind actual replay labels and evaluation partitions to reserved plan before N6/N7.",
+    "Resolve measured full-manifest persistence tails; derivation is not a storage performance fix.",
+    "Confirm TWS Auto restart change; Auto logout was still enabled at user observation."
+  ]
+}
