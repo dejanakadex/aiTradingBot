@@ -233,6 +233,33 @@ public sealed class IbkrFxContractTests
         finally { CultureInfo.CurrentCulture = previous; }
     }
 
+    [Theory]
+    [InlineData(1101, false)]
+    [InlineData(1102, false)]
+    [InlineData(1101, true)]
+    [InlineData(1102, true)]
+    public async Task UpstreamLossBlocksHandshakeReadinessUntilExplicitRecovery(int recovery, bool readOnly)
+    {
+        using var broker = Broker(readOnly: readOnly);
+        bool? ready = null;
+        ConnectionStatus? status = null;
+        broker.ReadinessChanged += value => { ready = value; return Task.CompletedTask; };
+        broker.ConnectionStatusChanged += value => { status = value; return Task.CompletedTask; };
+        broker.error(-1, 0, 1100, "Upstream unavailable", "");
+        broker.nextValidId(123);
+        Assert.False(ready);
+        // Late completion of socket/API startup must not override the upstream outage.
+        await (Task)typeof(IbkrBrokerService).GetMethod("PublishConnectionStatusAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(broker, [ConnectionStatus.Connected])!;
+        Assert.Equal(ConnectionStatus.Disconnected, status);
+        broker.error(-1, 0, recovery, "Upstream recovered", "");
+        Assert.Equal(ConnectionStatus.Connected, status);
+        Assert.Equal(!readOnly, ready);
+        broker.error(-1, 0, 1100, "Upstream lost again", "");
+        Assert.False(ready);
+        Assert.Equal(ConnectionStatus.Disconnected, status);
+    }
+
     [Fact]
     public void ReadOnlyDiagnosticsNeverPublishOrderReadiness()
     {

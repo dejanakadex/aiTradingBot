@@ -19,6 +19,49 @@ namespace TradingBot.Tests;
 
 public sealed class TickMarketDataTests
 {
+    [Theory]
+    [InlineData(0d, 1.1d)]
+    [InlineData(1.1d, 0d)]
+    [InlineData(double.NaN, 1.1d)]
+    [InlineData(1.1d, double.PositiveInfinity)]
+    [InlineData(1.2d, 1.1d)]
+    public async Task InvalidFxCallbackTerminatesStreamWithoutPublishingHealthyHalf(double bid, double ask)
+    {
+        var type = typeof(IbkrBrokerService).GetNestedType("TickSubscription", BindingFlags.NonPublic)!;
+        var subscription = (ITickMarketDataSubscription)Activator.CreateInstance(type,
+            ["EURUSD-ID", "EURUSD", 128, (Action)(() => { }), "IBKR.TickByTick.Forex.BidAsk.v2", false])!;
+        await using (subscription)
+        {
+            var publish = type.GetMethod("PublishQuote")!;
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            publish.Invoke(subscription, [timestamp, 1.1d, 1.1001d, 1m, 2m]);
+            publish.Invoke(subscription, [timestamp, bid, ask, 3m, 4m]);
+            // Previously queued valid data remains intact; neither side of the invalid pair is emitted.
+            Assert.True(subscription.Reader.TryRead(out var first));
+            Assert.True(subscription.Reader.TryRead(out var second));
+            Assert.Equal(MarketDataEventKind.Bid, first!.Kind);
+            Assert.Equal(MarketDataEventKind.Ask, second!.Kind);
+            Assert.False(subscription.Reader.TryRead(out _));
+            var error = await Assert.ThrowsAsync<IOException>(async () => await subscription.Reader.Completion);
+            Assert.Contains("Invalid FX BidAsk callback", error.Message);
+            Assert.Contains("bidSize=3, askSize=4", error.Message);
+            Assert.Contains("coverage is unknown", error.Message);
+        }
+    }
+
+    [Fact]
+    public async Task PositiveFxPricesAreNotSilentlyRewrittenOrFilteredByAnInventedFloor()
+    {
+        var type = typeof(IbkrBrokerService).GetNestedType("TickSubscription", BindingFlags.NonPublic)!;
+        await using var subscription = (ITickMarketDataSubscription)Activator.CreateInstance(type,
+            ["EURUSD-ID", "EURUSD", 128, (Action)(() => { }), "IBKR.TickByTick.Forex.BidAsk.v2", false])!;
+        type.GetMethod("PublishQuote")!.Invoke(subscription,
+            [DateTimeOffset.UtcNow.ToUnixTimeSeconds(), 0.00001d, 0.00002d, 0m, 0m]);
+        Assert.True(subscription.Reader.TryRead(out var bid));
+        Assert.True(subscription.Reader.TryRead(out var ask));
+        Assert.Equal(0.00001m, bid!.Price); Assert.Equal(0.00002m, ask!.Price);
+    }
+
     [Fact]
     public async Task RealAdapterBufferPreservesBrokerTimeSizesAndReportsOverflow()
     {

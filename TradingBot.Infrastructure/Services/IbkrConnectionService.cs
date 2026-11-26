@@ -17,6 +17,7 @@ namespace TradingBot.Infrastructure.Services
 
         private CancellationTokenSource? _cts;
         private Task? _reconnectTask;
+        private int _restartSocketRequested;
         private readonly object _sync = new();
 
         public ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
@@ -43,6 +44,7 @@ namespace TradingBot.Infrastructure.Services
         {
             _logger.LogInformation("IBKR adapter status: {Status}", status);
             Status = status;
+            if (status == ConnectionStatus.Failed) Interlocked.Exchange(ref _restartSocketRequested, 1);
             if (status is ConnectionStatus.Disconnected or ConnectionStatus.Failed)
             {
                 StartReconnectLoopIfNeeded(status);
@@ -121,13 +123,23 @@ namespace TradingBot.Infrastructure.Services
             {
                 try
                 {
-                    _logger.LogInformation("Attempting IBKR adapter start (reconnect)");
-                    await _adapter.StartAsync(cancellationToken).ConfigureAwait(false);
-                    if (_adapter.IsConnected)
+                    // A failed SDK reader is different from a recoverable TWS upstream interruption.
+                    if (Interlocked.Exchange(ref _restartSocketRequested, 0) != 0)
+                        await _adapter.StopAsync(cancellationToken).ConfigureAwait(false);
+                    // A live API socket does not prove TWS connectivity to IBKR (error 1100).
+                    // Keep the reader alive for 1101/1102; reopening the same socket cannot repair that outage.
+                    if (!_adapter.IsConnected)
+                    {
+                        _logger.LogInformation("Attempting IBKR adapter start (reconnect)");
+                        await _adapter.StartAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    if (_adapter.IsConnected && Status == ConnectionStatus.Connected)
                     {
                         _logger.LogInformation("IBKR adapter reconnected");
                         return;
                     }
+                    if (_adapter.IsConnected)
+                        _logger.LogWarning("IBKR API socket is open, but broker recovery is not confirmed. Status={Status}; waiting for the adapter recovery event.", Status);
                 }
                 catch (OperationCanceledException)
                 {

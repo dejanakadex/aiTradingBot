@@ -1,6 +1,6 @@
 # N5 — zamrznuti podaci i unaprijed rezervirane vremenske podjele
 
-25.11.2026. **N5 je u tijeku.** Najnoviji nastavak i otvoreni problemi opisani su na kraju dokumenta. Implementirana je dodatna offline provjera i priprema istraživačkog skupa. Buduće reprezentativne sesije i završni uzorak još ne postoje; prolaz tehničkih testova nije završetak N5. Kolektor ostaje AnalysisOnly/read-only, bez naloga i model approvala. SPY i postojeći FX put ostaju sačuvani.
+26.11.2026. **N5 je u tijeku.** Najnoviji nastavak i otvoreni problemi opisani su na kraju dokumenta. Implementirana je dodatna offline provjera i priprema istraživačkog skupa. Buduće reprezentativne sesije i završni uzorak još ne postoje; prolaz tehničkih testova nije završetak N5. Kolektor ostaje AnalysisOnly/read-only, bez naloga i model approvala. SPY i postojeći FX put ostaju sačuvani.
 
 ## Razvojni podaci i dokazi
 
@@ -249,3 +249,42 @@ Kontrolni 24.11. ima cijene **1,09047–1,09804**, a aktualni memorijski quote u
 To je uvjetna rezervacija, ne obećanje završetka N5. U svakom dnevnom prozoru i dalje trebaju ≥360 opaženih minuta i ≥95% zdravih finalnih 5s prozora, pouzdane cijene/parovi te dostupna pravila. Novi podaci bez rješenja anomalija nisu automatski prihvaćeni. Prije N6/N7 ostaje povezati stvarne label intervale i replay/evaluation s planom. N3 repovi punog manifesta ostaju otvoreni; ova promjena nije optimizacija trajnog spremanja.
 
 Korisnik je potvrdio **Auto logout uključen, Auto restart isključen**. Zatražena je zamjena s Auto restart u TWS → Global Configuration → Lock and Exit, izvan dnevne sesije; promjena još nije potvrđena. [IBKR opis](https://www.interactivebrokers.com/support/faq/content/29091366). Kolektor ne može obnoviti zatvoren/odjavljen TWS bez prijave. Sljedeći dnevni pregled ima smisla 26.11. oko 16:30 radi provjere novih cijena i osvježenja pravila, pa nakon 17:00 za prihvat cijelog dana. Nema naloga, nove evaluacije ishoda ili model approvala.
+
+## Provjera i zaštite povezivanja — 26.11.2026.
+
+**N5 ostaje otvoren.** [Strukturirani dokaz](evidence/n5-collection-recovery-2026-11-26.json) povezuje zamrznutu noćnu kopiju, izvorni manifest, logove povezivanja, audit, cijene, testove i runtime. Zajednički branch i radni checkout prije izmjena bili su čisti na `4afb370`.
+
+### Stvarni prekid i dnevni rezultat
+
+U provjeri nakon 18:00 Zagreb kolektor PID 18164 radio je, ali zadnji tick bio je od **06:27:42**, a zadnji minutni bar od 06:26. TWS proces 25800 nastao je prethodne večeri u 23:45:08 i port 7497 slušao je. Log prvi put u **06:27:41** bilježi `1100`, ponovljen kasnije tijekom jutra i u 18:03, bez zabilježenog oporavka u pregledanom nizu. Prema [IBKR dokumentaciji](https://www.interactivebrokers.com/docs/tws-api/doc/error/codes), to označava prekid TWS–IBKR, dok 1101/1102 potvrđuju povratak s izgubljenim/očuvanim pretplatama. Konkretan uzrok udaljenog prekida nije dokazan; nije opravdano sve pripisati Auto logoutu. Otvoren lokalni socket nije dokaz funkcionalnog feeda.
+
+Izvorni manifest zamrznut nakon dnevnog cutoffa ima **0 bid/ask datoteka i 0 redaka za 26.11. 09–17 Zagreb**. Taj dan ne prolazi kriterij. Minutni backfill ne popunjava tick podatke. Rezervacija v2 ostaje sačuvana, ali više ne može zadovoljiti dva prihvaćena trening dana u svom planiranom krugu. Nema zamjene dana prema strateškim ishodima niti otvaranja završnog uzorka. Novi budući krug treba rezervirati prije njegovih podataka, nakon uspostave pouzdanog prikupljanja.
+
+### Noćna kontrola
+
+Snapshot **25.11. 22:20 → 26.11. 06:30 Zagreb** ima 8.645 datoteka / **293.491 događaj**, 146.745 potpunih Healthy parova i jedan izričito odbijeni dijagnostički zapis. Audit uključuje izvorne coverage faze i eksplicitni završni interval nepoznate pokrivenosti od zadnjeg ticka do cutoffa; taj interval označen je kao dokaz iz statusa/logova, nije izmišljen redak baze. Tri para potisnuta su coverage filtrom.
+
+| Interval | Zdravi finalni barovi / očekivani | Price-feature-ready frameovi |
+| --- | ---: | ---: |
+| 5s | 5.152 / 5.699 (90,40%) | 2.978 |
+| 15s | 1.829 / 1.899 (96,31%) | 1.546 |
+
+Opaženo je 470 minuta. To nije zamjena za fiksni dnevni prozor, a 5s rezultat ni brojčano ne doseže dnevni prag 95%. Sve pregledane noćne cijene su **1,09572–1,09787**, bez događaja ispod dijagnostičke granice 0,5. Granica služi samo izvještaju; ništa nije izuzeto ili izmijenjeno. Anomalija od 25.11. nije ponovljena u ovoj kopiji, ali njezin izvor ostaje nepoznat. Normalan raspon nije nezavisna potvrda tržišne točnosti.
+
+Logovi daju 478 mjernih prozora / 293.124 obrađena događaja, bez processing/storage iznimaka ili negativnih queue clock delta. Različiti log/snapshot rubovi objašnjavaju različit broj događaja. Pipeline max **456,33 ms**, queue max i najviši prozorski p99 gornji rub **570,33 ms**, quality-save max **330,22 ms**, dataset flush max **3.835,64 ms**, enqueue → durable max **10.818,91 ms**. Postojeći N3 pragovi ne prolaze; ne tvrdi se da su uklonjeni repovi trajnog spremanja. Windows prijavljuje Leap Indicator=0 i zadnju uspješnu sinkronizaciju u 16:39; novi stripchart offset nije mjeren niti je sat mijenjan.
+
+### Izmjene i razina provjere
+
+- Reconnect monitor više ne zaključuje da je veza oporavljena samo zato što `IsConnected` potvrđuje lokalni socket. Čeka stvarni status Connected, uz ograničeni backoff i jasnu poruku; ne šalje ponovne Start zahtjeve kroz isti otvoreni socket. Pravi pad SDK čitača (Failed) i dalje zatvara i ponovno pokreće adapter. Zaustavljanje prekida i čekanje oporavka.
+- Adapter pamti prijavljenu nedostupnost prema IBKR-u. Zakašnjeli `nextValidId` ili završetak Start handshaka ne vraćaju spremnost tijekom prijavljenog prekida. 1101/1102 uklanjaju tu blokadu; read-only i dalje nikada ne dobiva order readiness. To nije nova dozvola za naloge niti zamjena za provjere svježine tržišnih podataka.
+- FX BidAsk callback provjerava obje cijene prije objave ijedne strane. Nula, nebrojčana/nedopuštena cijena ili crossed par zatvaraju pretplatu s izvornim epoch/bid/ask/size vrijednostima u dijagnostičkom razlogu. Postojeći collector bilježi prekid i ponovno pretplaćuje. Prethodni valjani događaji ostaju u redu; ne nastaje jednostrani Healthy zapis zbog pojedinačnog filtriranja. Prelijevanje reda i dalje se zasebno detektira. Nije uveden proizvoljni EUR/USD cjenovni prag, pa problem pozitivnih anomalnih cijena nije proglašen riješenim.
+
+**855/855 Release testova** prolazi bez preskočenih, uz obvezni IBKR DLL/publish i missing/changed-DLL guardove. Testirani su upstream prekid s otvorenim socketom, oporavak, kasniji socket pad, SDK reader failure, otkazivanje, zakašnjeli handshake, read-only ograničenje i pet varijanti neispravnog para. Prvi pokušaj builda pokrenut je dok je snapshot držao DLL datoteke otvorenima (MSB3021/MSB3027); nakon njegova dovršetka build i testovi uspješno su ponovljeni. To nije dokaz greške proizvoda ili potrebe za instalacijom ovisnosti.
+
+Kolektor je uredno zaustavljen **18:16:59**, završni red QueueDepth=0, Failures=0. Nova verzija pokrenuta je **18:17:15**, PID 23540, na istoj bazi i datasetu. Hash runtime Infrastructure DLL-a jednak je testiranom buildu. Potvrđeni su ReadOnlyApi=true, TradingSettings.Enabled=false, ForexPaperExecutionEnabled=false i AutomaticPaperSignalsEnabled=false. Pri opažanju 18:17:58 socket/pretplate su aktivni, ali novih kotacija još nema. Stvarni oporavak prikupljanja i ponašanje nove zaštite na brokerskom neispravnom callbacku stoga nisu potvrđeni; provedene su lokalne simulacije i provjera pokretanja, bez naloga.
+
+### Otvoreni ulazi
+
+Read-only proba osvježenja pravila vratila je `Passed=false`, `InvalidOperationException`, bez snapshota. Službena tablica veličina ponovno je pregledana, ali to samo ne osvježava brokersko opažanje. Prethodna pravila vrijede najdulje do **26.11. 22:22:33 Zagreb**; vrijeme nije pomaknuto, pravila nisu retroaktivno obnovljena.
+
+Od korisnika je zatražena provjera TWS statusa veze i po potrebi nova paper prijava te potvrda Auto restart postavke. Odgovor još nije zaprimljen pri spremanju ovog izvještaja. Slijede: potvrda svježih kotacija, uspješna nova read-only proba pravila, unaprijed rezerviran budući krug, dnevni prihvat po istim kriterijima i povezivanje stvarnih labela s podjelama prije N6/N7. Nema novih strateških ishoda, model approvala ili potvrde N5/FX-12/paper spremnosti.

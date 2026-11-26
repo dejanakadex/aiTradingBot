@@ -41,6 +41,12 @@ namespace TradingBot.Tests.Fakes
         }
 
         // Helper to simulate external reconnect
+        public Task SimulateUpstreamLossAsync() =>
+            ConnectionStatusChanged?.Invoke(ConnectionStatus.Disconnected) ?? Task.CompletedTask;
+
+        public Task SimulateReaderFailureAsync() =>
+            ConnectionStatusChanged?.Invoke(ConnectionStatus.Failed) ?? Task.CompletedTask;
+
         public Task SimulateReconnectAsync()
         {
             IsConnected = true;

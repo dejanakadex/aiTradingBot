@@ -43,6 +43,7 @@ namespace TradingBot.Infrastructure.Services
         private CancellationTokenSource? _readerLoopCts;
         private Task? _readerLoop;
         private int _nextOrderId;
+        private int _upstreamUnavailable;
         private TaskCompletionSource<bool> _apiHandshake = NewTcs<bool>();
         private int _nextRequestId = 10_000;
         private bool _managedAccountsReceived;
@@ -96,6 +97,7 @@ namespace TradingBot.Infrastructure.Services
                 _managedAccountsReceived = false;
                 _configuredAccountRecognized = null;
                 _nextOrderId = 0;
+                Volatile.Write(ref _upstreamUnavailable, 0);
                 _apiHandshake = NewTcs<bool>();
                 _marketDataErrors.Clear();
                 _fxSubmittedOrders.Clear();
@@ -512,6 +514,7 @@ namespace TradingBot.Infrastructure.Services
 
         public override void connectionClosed()
         {
+            Volatile.Write(ref _upstreamUnavailable, 1);
             foreach (var subscription in _tickSubscriptions.Values.Distinct()) subscription.Complete("IBKR connection closed.");
             _logger.LogWarning("IBKR connection closed.");
             _managedAccountsReceived = false;
@@ -522,6 +525,7 @@ namespace TradingBot.Infrastructure.Services
 
         public override void error(Exception e)
         {
+            Volatile.Write(ref _upstreamUnavailable, 1);
             foreach (var subscription in _tickSubscriptions.Values.Distinct()) subscription.Complete("IBKR exception callback.");
             _logger.LogError(e, "IBKR exception callback.");
             _ = PublishReadinessAsync(false);
@@ -574,12 +578,15 @@ namespace TradingBot.Infrastructure.Services
 
             if (errorCode is 1100 or 1300)
             {
+                Volatile.Write(ref _upstreamUnavailable, 1);
                 _ = PublishReadinessAsync(false);
                 _ = PublishConnectionStatusAsync(ConnectionStatus.Disconnected);
             }
             else if (errorCode is 1101 or 1102)
             {
+                Volatile.Write(ref _upstreamUnavailable, 0);
                 _ = PublishConnectionStatusAsync(ConnectionStatus.Connected);
+                _ = PublishReadinessAsync(!_options.ReadOnlyDiagnostics && _nextOrderId > 0);
             }
         }
 
@@ -1248,12 +1255,14 @@ namespace TradingBot.Infrastructure.Services
 
         private Task PublishConnectionStatusAsync(ConnectionStatus status)
         {
+            if (status == ConnectionStatus.Connected && Volatile.Read(ref _upstreamUnavailable) != 0)
+                status = ConnectionStatus.Disconnected;
             return ConnectionStatusChanged?.Invoke(status) ?? Task.CompletedTask;
         }
 
         private Task PublishReadinessAsync(bool ready)
         {
-            return ReadinessChanged?.Invoke(ready) ?? Task.CompletedTask;
+            return ReadinessChanged?.Invoke(ready && Volatile.Read(ref _upstreamUnavailable) == 0) ?? Task.CompletedTask;
         }
 
         private Task InvokeMarketBarReceivedAsync(MarketBar bar)
@@ -1499,6 +1508,13 @@ namespace TradingBot.Infrastructure.Services
             {
                 if (!_allowTrades)
                 {
+                    // Validate the callback as a pair before writing either side. Otherwise a zero/NaN
+                    // bid can be silently discarded while its ask enters the dataset as a healthy orphan.
+                    if (!ValidPrice(bidPrice) || !ValidPrice(askPrice) || bidPrice > askPrice)
+                    {
+                        Complete(FormattableString.Invariant($"Invalid FX BidAsk callback: epoch={epochSeconds}, bid={bidPrice:R}, ask={askPrice:R}, bidSize={bidSize}, askSize={askSize}. Neither side accepted; quote coverage is unknown."));
+                        return;
+                    }
                     var received = DateTime.UtcNow;
                     var pair = $"IBKR:FXQ:{_sessionId}:{Interlocked.Increment(ref _nextId)}";
                     PublishEvent(MarketDataEventKind.Bid, epochSeconds, bidPrice, bidSize, pair + ":bid", received);
@@ -1520,10 +1536,12 @@ namespace TradingBot.Infrastructure.Services
             public void Publish(MarketDataEventKind kind, long epochSeconds, double price, decimal size)
                 => PublishEvent(kind, epochSeconds, price, size, null, DateTime.UtcNow);
 
+            private static bool ValidPrice(double price) => double.IsFinite(price) && price > 0 && price < (double)decimal.MaxValue;
+
             private void PublishEvent(MarketDataEventKind kind, long epochSeconds, double price, decimal size, string? eventId, DateTime received)
             {
                 if (!_allowTrades && kind == MarketDataEventKind.Trade) return;
-                if (_disposed != 0 || !double.IsFinite(price) || price <= 0 || price >= (double)decimal.MaxValue || (_allowTrades && size < 0)) return;
+                if (_disposed != 0 || !ValidPrice(price) || (_allowTrades && size < 0)) return;
                 DateTime eventTime;
                 try { eventTime = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).UtcDateTime; }
                 catch (ArgumentOutOfRangeException) { return; }

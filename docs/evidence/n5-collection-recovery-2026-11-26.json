@@ -1,0 +1,203 @@
+{
+  "date": "2026-11-26",
+  "sourceCommit": "4afb37054b3edd5e5d72e60389e8d0fd1b2a3709",
+  "n5Complete": false,
+  "canSendOrders": false,
+  "daytime": {
+    "fromUtc": "2026-11-26T08:00:00Z",
+    "toUtc": "2026-11-26T16:00:00Z",
+    "sourceManifestSha256": "1B672614D03D70D765D72F990BFE54CFB79BD3BA01FCB34C42DE5AD0F97E790E",
+    "quoteFiles": 0,
+    "manifestRows": 0,
+    "dayAccepted": false,
+    "reason": "No tick files in the fixed daytime range; last live quote 05:27:42 UTC; TWS error 1100 with no recorded recovery."
+  },
+  "overnight": {
+    "fromUtc": "2026-11-25T21:20:00Z",
+    "toUtc": "2026-11-26T05:30:00Z",
+    "manifestSha256": "0B35652F9F08CDCD6919B304A5DFCBCF53CA42A4955645143424DDA72905B0B8",
+    "canonicalSha256": "4503d301f4983488a570e3a57a575ba71612d8ac1291ac12218fae432933f012",
+    "eventCount": 293491,
+    "completeHealthyPairs": 146745,
+    "rejectedDiagnosticPairs": 1,
+    "coverageSuppressedPairs": 3,
+    "usableQuoteMinutes": 470,
+    "featureSha256": "BEB5E64E1ECD7916663C04E8F21C4FC82C0AC5A9EA6A2D12FEBD41152F432D43",
+    "intervals": [
+      {
+        "intervalSeconds": 5,
+        "expectedFinalWindows": 5699,
+        "finalBars": 5152,
+        "priceFeatureReadyFrames": 2978
+      },
+      {
+        "intervalSeconds": 15,
+        "expectedFinalWindows": 1899,
+        "finalBars": 1829,
+        "priceFeatureReadyFrames": 1546
+      }
+    ],
+    "prices": {
+      "count": 293491,
+      "min": 1.09572,
+      "max": 1.09787,
+      "belowHalf": 0,
+      "hourlyEvents": {
+        "2026-11-25T21": 12574,
+        "2026-11-25T22": 1323,
+        "2026-11-25T23": 12918,
+        "2026-11-26T00": 43540,
+        "2026-11-26T01": 67588,
+        "2026-11-26T02": 60512,
+        "2026-11-26T03": 41264,
+        "2026-11-26T04": 36216,
+        "2026-11-26T05": 17556
+      },
+      "note": "Numeric inspection only; threshold is diagnostic, no records excluded or rewritten. Does not independently validate broker prices."
+    }
+  },
+  "latency": {
+    "tickWindows": 478,
+    "events": 293124,
+    "failedProcessing": 0,
+    "negativeQueueClockDeltas": 0,
+    "sourceAgeOverTwoSeconds": 55,
+    "maxPipelineMs": 456.3262,
+    "worstWindowQueueP99UpperMs": 570.3275,
+    "maxQueueMonotonicMs": 570.3275,
+    "maxQualitySaveMs": 330.2221,
+    "maxFlushMs": 3835.6372,
+    "maxEnqueueToDurableMs": 10818.9127,
+    "storageFailures": 0,
+    "localLatencyThresholdsMet": false
+  },
+  "rulesAttempt": {
+    "Passed": false,
+    "CanSendOrders": false,
+    "InstrumentId": "FX-CASH-EUR-USD-IDEALPRO",
+    "Snapshot": null,
+    "Failure": "Read-only rules capture failed (InvalidOperationException).",
+    "Scope": "Contract and market-rule observations plus independently reviewed size limits; no order, account, margin, fill or odd-lot execution proof."
+  },
+  "rulesRefreshed": false,
+  "priorRulesExpireUtc": "2026-11-26T21:22:33.1496193Z",
+  "tests": {
+    "passed": 855,
+    "failed": 0,
+    "skipped": 0,
+    "ibkrPublishAndGuardsPassed": true,
+    "initialBuildIssue": "Build attempted while snapshot CLI held DLLs open (MSB3021/MSB3027). Retried successfully after snapshot completed; no source data changes."
+  },
+  "runtime": {
+    "processId": 23540,
+    "readOnly": true,
+    "tradingDisabled": true,
+    "forexExecutionDisabled": true,
+    "automaticSignalsDisabled": true,
+    "infrastructureSha256": "F881905EC797C755B62F732E7451B9F7235AE3660D24D836289140F750CAAE47",
+    "builtInfrastructureSha256": "F881905EC797C755B62F732E7451B9F7235AE3660D24D836289140F750CAAE47"
+  },
+  "restart": {
+    "stoppedUtc": "2026-11-26T17:16:59.879Z",
+    "startedUtc": "2026-11-26T17:17:15.2862626Z",
+    "oldQueueDepthAtStop": 0,
+    "oldFlushFailures": 0,
+    "sameDatabaseAndDataset": true,
+    "statusAfterRestart": {
+      "capturedUtc": "2026-11-26T17:17:58.5584744Z",
+      "collection": [
+        {
+          "timeframe": "1m",
+          "statusReason": "Subscription is live; waiting for heartbeat.",
+          "brokerConnected": true,
+          "subscribed": true,
+          "lastEventTimeUtc": "2026-11-26T05:26:00Z",
+          "reconnectCount": 0
+        },
+        {
+          "timeframe": "TICK",
+          "statusReason": "Tick requests active; waiting for broker callbacks.",
+          "brokerConnected": true,
+          "subscribed": true,
+          "lastEventTimeUtc": null,
+          "reconnectCount": 0
+        }
+      ],
+      "quotes": []
+    },
+    "freshQuotesConfirmed": false
+  },
+  "operationalCounts": {
+    "Trades": 0,
+    "OrderRecords": 0,
+    "ExecutionRecords": 0,
+    "NumericalModelRecords": 0
+  },
+  "reservation": {
+    "version": "v2-2026-11-25",
+    "meetsFourDayAcceptance": false,
+    "reason": "First fixed training day has zero tick files. Existing reservation remains unchanged; no substitution of favorable windows. New reservation required before future data selection.",
+    "holdoutOutcomesRead": false
+  },
+  "limitations": [
+    "1100 confirms reported TWS-to-IBKR outage, not its root cause. API socket openness does not confirm upstream recovery.",
+    "No near-zero price in the overnight snapshot; day25 near-zero origin remains unresolved. Pair validation prevents invalid-side orphans but intentionally does not invent a positive-price floor.",
+    "Recovery and new pair guard are verified by tests; no real IBKR recovery event or fresh callback confirmed after deployment at report capture.",
+    "User confirmation of TWS server connectivity and Auto restart is pending.",
+    "No real paper orders, model approval, N5/FX-12 completion or profitability claim."
+  ],
+  "references": [
+    "https://www.interactivebrokers.com/docs/tws-api/doc/error/codes",
+    "https://gdcdyn.interactivebrokers.com/en/trading/forexOrderSize.php"
+  ],
+  "artifacts": {
+    "snapshot.log": {
+      "localPath": "TestResults/n5-day-20261126/snapshot.log",
+      "sha256": "4D13871A25BC54D23FA41FB2A0566809748D7FC0312221623820650300964174"
+    },
+    "audit-overnight.json": {
+      "localPath": "TestResults/n5-day-20261126/audit-overnight.json",
+      "sha256": "B0BFF6AA9DEE412A4C5315DECA50CD7927345260B1429E1F6F7382B217C68078"
+    },
+    "price-overnight.json": {
+      "localPath": "TestResults/n5-day-20261126/price-overnight.json",
+      "sha256": "A2BA57CDD2E9A25CC197D564AC19322654E600D4EA58DF709FEFBBFDB460AEDE"
+    },
+    "coverage-overnight.json": {
+      "localPath": "TestResults/n5-day-20261126/coverage-overnight.json",
+      "sha256": "4F05378518C5C052F1CABBE1AB0A9D4F23DC27953DD30F9CB9E0BAF8787A1D1A"
+    },
+    "daytime-rejection.json": {
+      "localPath": "TestResults/n5-day-20261126/daytime-rejection.json",
+      "sha256": "7CC48120A2F2FF056EBA697AB539CCC80BE155C27B5575134BB8232F5FA1E3F1"
+    },
+    "connection-events.json": {
+      "localPath": "TestResults/n5-day-20261126/connection-events.json",
+      "sha256": "81C31980630A75C2A153E2E86EFBB4EA6B97176443EF528582762BAF4CE7044F"
+    },
+    "latency-overnight.json": {
+      "localPath": "TestResults/n5-day-20261126/latency-overnight.json",
+      "sha256": "CB5DE147B2B4857FD154F4DCB8A0E039F3D54995778A781A6B5684205B4A71E5"
+    },
+    "rules-evidence.json": {
+      "localPath": "TestResults/n5-day-20261126/rules-evidence.json",
+      "sha256": "9F7C0DFBB6AC39127FB45C86495B382E7E2DD3554D4795FE7DB830BA79B0380F"
+    },
+    "verified.trx": {
+      "localPath": "TestResults/n5-day-20261126/verified.trx",
+      "sha256": "4451BE07DC7F545163A4C92E98368CBBA775ABE935B9BE7C2348AAED6DC4D9F7"
+    },
+    "ibkr-guard.log": {
+      "localPath": "TestResults/n5-day-20261126/ibkr-guard.log",
+      "sha256": "5BEC036455FBD217BA5638DDAE31CD2A3615D8D142DA16FC18BFF8CF8FC46E5E"
+    },
+    "runtime-guards.json": {
+      "localPath": "TestResults/n5-day-20261126/runtime-guards.json",
+      "sha256": "DA165A9A6D35D16BAE95FEECD282641E4C85EBB03284ECEAC2B611DF0A4AD680"
+    },
+    "after-restart.json": {
+      "localPath": "TestResults/n5-day-20261126/after-restart.json",
+      "sha256": "CB5162F3060FE8AE204BDF88D2C233A6FCEB2049DE5996EA2F71F49D9D43669C"
+    }
+  }
+}
